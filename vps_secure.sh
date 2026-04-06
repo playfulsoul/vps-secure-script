@@ -8,7 +8,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;36m'
 NC='\033[0m' # No Color
-VERSION_TAG="v3.0 Max"
+VERSION_TAG="v1.0.0"
 
 # ==========================================
 # 前置检测
@@ -346,8 +346,8 @@ view_sys_overview() {
 }
 
 run_yabs() {
-    echo -e "${YELLOW}【严重警告】综合跑分测试(Geekbench等)将长时间占据 100% 的 CPU 并进行大量的网络下行测速，部分 512MB 低配机器可能会失联卡死！${NC}"
-    read -p "确定要强行运行顶级综合跑分神棍 YABS 吗？(y/N): " CONFIRM
+    echo -e "${YELLOW}【系统负载警告】综合性能压测 (Geekbench等) 将长时间占据高比例的 CPU 算力，并进行大量网络吞吐测速，低配系统 (如 512MB 内存) 易发生卡死或 OOM。${NC}"
+    read -p "确认执行 YABS 性能评测脚本吗？(y/N): " CONFIRM
     if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
         curl -sL yabs.sh | bash
     fi
@@ -364,7 +364,7 @@ run_bench() {
 }
 
 run_media_unlock() {
-    echo -e "${BLUE}>>> 正在调取社区巅峰评测代码 RegionRestrictionCheck... <<<${NC}"
+    echo -e "${BLUE}>>> 正在调取流媒体解锁评测脚本 RegionRestrictionCheck... <<<${NC}"
     bash <(curl -L -s check.unlock.media)
     pause
 }
@@ -551,7 +551,7 @@ main_menu() {
             CMD_INSTALLED=" ${YELLOW}[提示: 随时敲入 'vps' 开启管家]${NC}"
         fi
         
-        echo -e "${GREEN}    🎯 VPS 安全与系统统筹管家 ${YELLOW}${VERSION_TAG}${NC}"
+        echo -e "${GREEN}    🎯 VPS 安全与系统统管平台 ${YELLOW}${VERSION_TAG}${NC}"
         echo -e "${GREEN}================================================${NC}"
         echo -e "${BLUE}OS: ${OS} (版本: ${VERSION}) ${NC}$CMD_INSTALLED"
         echo
