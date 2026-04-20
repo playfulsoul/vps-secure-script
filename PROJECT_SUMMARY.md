@@ -35,18 +35,4 @@
 ## 3. 本地待备份文件清单 (Local File Inventory)
 
 更换电脑前，请务必备份以下本地目录中的内容。本项目的所有代码及文档均存放在以下根目录：
-
-**项目根目录 (Root Directory):**
-> `C:\Users\nomad\.gemini\antigravity\scratch\vps-secure-script\`
-
-### 核心资产列表：
-1.  **`vps_secure.sh`** (核心逻辑脚本)
-    路径：`C:\Users\nomad\.gemini\antigravity\scratch\vps-secure-script\vps_secure.sh`
-2.  **`README.md`** (项目外发说明与使用教程)
-    路径：`C:\Users\nomad\.gemini\antigravity\scratch\vps-secure-script\README.md`
-3.  **`PROJECT_SUMMARY.md`** (即当前本总结文档)
-    路径：`C:\Users\nomad\.gemini\antigravity\scratch\vps-secure-script\PROJECT_SUMMARY.md`
-4.  **`.git/`** 隐藏文件夹 (版本控制历史)
-    路径：`C:\Users\nomad\.gemini\antigravity\scratch\vps-secure-script\.git\` (备份此目录以保留提交记录)
-
-> **温馨提示**：鉴于该项目已经同步至 GitHub（`github.com:playfulsoul/vps-secure-script.git`），如果您在新电脑上配置了正确的 Git 环境和 SSH 密钥，其实只需执行一句 `git clone git@github.com:playfulsoul/vps-secure-script.git` 就可以随时拉下所有最新资料，甚至无需手动使用 U 盘备份。
+略
