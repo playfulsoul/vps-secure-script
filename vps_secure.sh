@@ -58,6 +58,17 @@ pause() {
 }
 
 # ==========================================
+# 工具函数: 配置文件修改
+# ==========================================
+set_ssh_config() {
+    local key=$1
+    local value=$2
+    # 移除已有的配置行（无论是否被注释）并添加新配置，确保唯一性
+    sed -i "/^#*$key /d" /etc/ssh/sshd_config
+    echo "$key $value" >> /etc/ssh/sshd_config
+}
+
+# ==========================================
 # 模块 0: 全局快捷命令注入
 # ==========================================
 install_shortcut() {
@@ -102,8 +113,7 @@ change_ssh_port() {
     fi
     
     cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-    sed -i 's/^#*Port .*//g' /etc/ssh/sshd_config
-    echo "Port $NEW_PORT" >> /etc/ssh/sshd_config
+    set_ssh_config "Port" "$NEW_PORT"
     systemctl restart sshd || systemctl restart ssh
     
     echo -e "${GREEN}SSH 端口已成功修改为 $NEW_PORT !${NC}"
@@ -130,8 +140,14 @@ import_github_key() {
     read -p "是否立刻禁用 SSH 密码登录强行使用密钥？(y/N, 强烈推荐新手开个新窗口测试连通再说): " DISABLE_PW
     if [[ "$DISABLE_PW" =~ ^[Yy]$ ]]; then
         cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-        sed -i 's/^#*PasswordAuthentication .*/PasswordAuthentication no/g' /etc/ssh/sshd_config
-        echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+        
+        # 核心安全设置
+        set_ssh_config "PasswordAuthentication" "no"
+        set_ssh_config "PubkeyAuthentication" "yes"
+        set_ssh_config "KbdInteractiveAuthentication" "no"
+        # 兼容旧版本
+        set_ssh_config "ChallengeResponseAuthentication" "no"
+        
         systemctl restart sshd || systemctl restart ssh
         echo -e "${GREEN}密码登录已禁用 (终极安全形态)！${NC}"
     else
