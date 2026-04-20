@@ -66,13 +66,18 @@ wget -O vps_secure.sh https://raw.githubusercontent.com/playfulsoul/vps-secure-s
 ### 第一步：生成本地电脑的“钥匙”
 在你自己电脑的终端（Windows 请用 PowerShell）输入：
 ```bash
-ssh-keygen -t ed25519 -C "你的邮箱"
+ssh-keygen -t ed25519 -C "密钥备注 (例如：我的大别野电脑 / 公司电脑)"
 ```
-一路回车即可。这会在你的电脑里生成一个公钥（锁）和私钥（钥匙）。
+- **注意**：末尾引号里的内容是“密钥备注”，方便你在 GitHub 上区分这把锁是属于哪台电脑的。
+- **操作**：输入命令后一路敲回车即可。这会在你的电脑里生成一个公钥（锁）和私钥（钥匙）。
 
 ### 第二步：将“锁”挂到 GitHub 上
-1. 用记事本打开你电脑上的公钥文件（通常在 `~/.ssh/id_ed25519.pub` 或 `C:\Users\用户名\.ssh\id_ed25519.pub`）。
-2. 复制里面以 `ssh-ed25519` 开头的整行内容。
+1. 在终端输入以下命令直接查看并复制公钥内容：
+   ```bash
+   cat ~/.ssh/id_ed25519.pub
+   ```
+   *(Windows 用户如果命令无效，可手动打开 `C:\Users\用户名\.ssh\id_ed25519.pub` 文件)*
+2. 复制输出的以 `ssh-ed25519` 开头的整行内容。
 3. 进入 [GitHub SSH 设置页面](https://github.com/settings/keys)，点击 **New SSH key**，粘贴并保存。
 
 ### 第三步：运行本脚本一键换锁
