@@ -278,6 +278,7 @@ add_swap() {
 # 模块 5: 用户权限管理
 # ==========================================
 add_sudo_user() {
+    echo -e "${YELLOW}>>> 新增具备 Sudo 权限的普通用户 <<<${NC}"
     read -p "请输入要创建的新用户名: " NEW_USER
     if [ -z "$NEW_USER" ]; then echo -e "${RED}用户名不能为空！${NC}"; pause; return; fi
     if id "$NEW_USER" &>/dev/null; then
@@ -286,7 +287,13 @@ add_sudo_user() {
     fi
     
     echo -e "${BLUE}正在创建普通用户 $NEW_USER ...${NC}"
-    useradd -m -s /bin/bash "$NEW_USER"
+    # 增加 -m 创建家目录，-s 指定 shell
+    if ! useradd -m -s /bin/bash "$NEW_USER"; then
+        echo -e "${RED}用户创建失败，请检查系统日志。${NC}"
+        pause; return
+    fi
+    
+    echo -e "${BLUE}请为用户 $NEW_USER 设置登录密码:${NC}"
     passwd "$NEW_USER"
     
     if [ "$OS" == "ubuntu" ] || [ "$OS" == "debian" ]; then
@@ -299,6 +306,37 @@ add_sudo_user() {
     echo -e "${YELLOW}提示: 平日请使用该普通用户登录，需要系统级操作时再使用 'sudo' 命令。${NC}"
     pause
 }
+
+# 新增函数：列出普通用户（UID >= 1000 且非系统用户）
+list_normal_users() {
+    echo -e "${BLUE}当前系统普通用户列表:${NC}"
+    awk -F: '($3>=1000 && $1!="nobody") {print $1}' /etc/passwd
+    pause
+}
+
+# 新增函数：删除普通用户（安全提示）
+delete_normal_user() {
+    read -p "请输入要删除的普通用户名: " DEL_USER
+    if [ -z "$DEL_USER" ]; then echo -e "${RED}用户名不能为空！${NC}"; pause; return; fi
+    if ! id "$DEL_USER" &>/dev/null; then
+        echo -e "${RED}用户 $DEL_USER 不存在！${NC}"
+        pause; return
+    fi
+    if [ "$DEL_USER" == "root" ]; then
+        echo -e "${RED}不能删除 root 用户！${NC}"
+        pause; return
+    fi
+    echo -e "${YELLOW}警告：将删除用户 $DEL_USER 及其家目录。此操作不可恢复！${NC}"
+    read -p "确认删除吗？(y/N): " CONFIRM
+    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+        userdel -r "$DEL_USER"
+        echo -e "${GREEN}用户 $DEL_USER 已删除。${NC}"
+    else
+        echo -e "${BLUE}已取消删除。${NC}"
+    fi
+    pause
+}
+
 
 # ==========================================
 # 模块 6: 拓展应用部署 (Docker & 1Panel)
@@ -317,8 +355,61 @@ install_docker() {
 }
 
 install_1panel() {
+    if command -v 1pctl >/dev/null 2>&1; then
+        echo -e "${YELLOW}检测到系统已安装 1Panel，请确认是否重复安装。${NC}"
+    fi
     echo -e "${BLUE}>>> 正在调用 1Panel 官方通用极速安装剧本... <<<${NC}"
     curl -sSL https://resource.fit2cloud.com/1panel/package/quick_start.sh -o quick_start.sh && sudo bash quick_start.sh
+    pause
+}
+
+uninstall_1panel() {
+    if ! command -v 1pctl >/dev/null 2>&1; then
+        echo -e "${RED}系统未检测到 1Panel (1pctl 命令不存在)，无需卸载。${NC}"
+        pause; return
+    fi
+    echo -e "${RED}警告：即将卸载 1Panel 面板，此操作将停止相关容器。${NC}"
+    read -p "确认要执行卸载吗？(y/N): " CONFIRM
+    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+        1pctl uninstall
+        echo -e "${GREEN}1Panel 卸载脚本已执行。${NC}"
+    else
+        echo -e "${BLUE}已取消卸载。${NC}"
+    fi
+    pause
+}
+
+uninstall_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        echo -e "${RED}系统未检测到 Docker 环境，无法执行卸载。${NC}"
+        pause; return
+    fi
+    
+    echo -e "${RED}警告：卸载 Docker 将停止并删除所有正在运行的容器！${NC}"
+    read -p "确认要彻底移除 Docker 引擎吗？(y/N): " CONFIRM
+    if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}已取消操作。${NC}"; pause; return
+    fi
+
+    echo -e "${BLUE}正在停止 Docker 服务...${NC}"
+    systemctl stop docker 2>/dev/null
+    
+    echo -e "${BLUE}正在移除 Docker 核心组件...${NC}"
+    if [ "$OS" == "ubuntu" ] || [ "$OS" == "debian" ]; then
+        apt-get purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras
+        apt-get autoremove -y --purge
+    else
+        yum remove -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras
+    fi
+
+    read -p "是否同时删除所有 Docker 数据 (镜像、容器、卷、/var/lib/docker)？(y/N): " DELETE_DATA
+    if [[ "$DELETE_DATA" =~ ^[Yy]$ ]]; then
+        rm -rf /var/lib/docker
+        rm -rf /etc/docker
+        echo -e "${GREEN}Docker 及其数据已彻底移除。${NC}"
+    else
+        echo -e "${GREEN}Docker 引擎已卸载，数据已保留。${NC}"
+    fi
     pause
 }
 
@@ -370,18 +461,44 @@ run_media_unlock() {
 }
 
 run_nexttrace() {
-    read -p "请输入您要路由追踪的目标 IP、域名 (如为空则默认测试本机公网出口IP): " TARGET_IP
-    if [ -z "$TARGET_IP" ]; then
-        curl nxtrace.org/nt | bash
-    else
-        # 依赖检测
-        if ! command -v nexttrace >/dev/null 2>&1; then
-             echo -e "${BLUE}后台自动安装 Nexttrace 探针...${NC}"
-             curl nxtrace.org/nt | bash
-        fi
-        nexttrace "$TARGET_IP"
-    fi
-    pause
+    while true; do
+        clear
+        echo -e "${GREEN}===============================${NC}"
+        echo -e "${GREEN}    🛰️ 回程路由追踪工具箱     ${NC}"
+        echo -e "${GREEN}===============================${NC}"
+        echo -e "  ${YELLOW}1.${NC} 基础追踪 (自定义 IP/域名)"
+        echo -e "  ${YELLOW}2.${NC} 三网回程测速 (北京/上海/广州)"
+        echo -e "  ${YELLOW}0.${NC} 返回上一级"
+        echo
+        read -p "➜ 请选择测试模式 [0-2]: " NT_CHOICE
+        case $NT_CHOICE in
+            1)
+                read -p "请输入追踪目标 (IP 或域名): " TARGET_IP
+                if [ -z "$TARGET_IP" ]; then TARGET_IP=""; fi
+                # 依赖检测
+                if ! command -v nexttrace >/dev/null 2>&1; then
+                     echo -e "${BLUE}后台自动安装 Nexttrace 探针...${NC}"
+                     curl nxtrace.org/nt | bash
+                fi
+                if [ -z "$TARGET_IP" ]; then
+                    nexttrace --ipv4
+                else
+                    nexttrace "$TARGET_IP"
+                fi
+                pause
+                ;;
+            2)
+                echo -e "${BLUE}正在启动三网快速追踪 (Fast Trace)...${NC}"
+                if ! command -v nexttrace >/dev/null 2>&1; then
+                     curl nxtrace.org/nt | bash
+                fi
+                nexttrace --fast-trace
+                pause
+                ;;
+            0) break ;;
+            *) echo -e "${RED}输入无效${NC}"; sleep 1 ;;
+        esac
+    done
 }
 
 # ==========================================
@@ -484,12 +601,68 @@ menu_user_mgmt() {
         echo -e "${GREEN}===============================${NC}"
         echo -e "${GREEN}      👤 用户与权限管理层      ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 增加具备 sudo 权限的日常普通用户"
+        echo -e "  ${YELLOW}1.${NC} 增加具备 sudo 权限的普通用户"
+        echo -e "  ${YELLOW}2.${NC} 查看已添加的普通用户"
+        echo -e "  ${YELLOW}3.${NC} 删除普通用户"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
-        read -p "➜ 此层操作指示 [0-1]: " C5
-        case $C5 in
+        read -p "➜ 此层操作指示 [0-3]: " C5_INPUT
+        case $C5_INPUT in
             1) add_sudo_user ;;
+            2) list_normal_users ;;
+            3) delete_normal_user ;;
+            0) break ;;
+            *) echo -e "${RED}输入无效${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+menu_docker() {
+    while true; do
+        clear
+        echo -e "${GREEN}===============================${NC}"
+        echo -e "${GREEN}    🐳 Docker 引擎管理中心     ${NC}"
+        echo -e "${GREEN}===============================${NC}"
+        if command -v docker >/dev/null 2>&1; then
+            echo -e "状态: ${GREEN}已安装${NC}"
+        else
+            echo -e "状态: ${RED}未发现 Docker${NC}"
+        fi
+        echo
+        echo -e "  ${YELLOW}1.${NC} 安装 Docker 容器引擎 (官方源)"
+        echo -e "  ${YELLOW}2.${NC} 卸载 Docker 容器引擎"
+        echo -e "  ${YELLOW}0.${NC} 返回上一级"
+        echo
+        read -p "➜ 您的选择 [0-2]: " D_CHOICE
+        case $D_CHOICE in
+            1) install_docker ;;
+            2) uninstall_docker ;;
+            0) break ;;
+            *) echo -e "${RED}输入无效${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+menu_1panel() {
+    while true; do
+        clear
+        echo -e "${GREEN}===============================${NC}"
+        echo -e "${GREEN}    🛠️ 1Panel 面板管理中心     ${NC}"
+        echo -e "${GREEN}===============================${NC}"
+        if command -v 1pctl >/dev/null 2>&1; then
+            echo -e "状态: ${GREEN}已安装${NC}"
+        else
+            echo -e "状态: ${RED}未发现 1Panel${NC}"
+        fi
+        echo
+        echo -e "  ${YELLOW}1.${NC} 安装 1Panel 现代化运管面板"
+        echo -e "  ${YELLOW}2.${NC} 卸载 1Panel 现代化运管面板"
+        echo -e "  ${YELLOW}0.${NC} 返回上一级"
+        echo
+        read -p "➜ 您的选择 [0-2]: " P_CHOICE
+        case $P_CHOICE in
+            1) install_1panel ;;
+            2) uninstall_1panel ;;
             0) break ;;
             *) echo -e "${RED}输入无效${NC}"; sleep 1 ;;
         esac
@@ -500,16 +673,16 @@ menu_app_install() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}     📦 拓展应用与极简面板     ${NC}"
+        echo -e "${GREEN}     📦 拓展应用运行环境      ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 一键部署 Docker 容器引擎 (官方源)"
-        echo -e "  ${YELLOW}2.${NC} 一键部署 1Panel 现代化运管面板"
+        echo -e "  ${YELLOW}1.${NC} Docker 容器引擎 (安装/卸载)"
+        echo -e "  ${YELLOW}2.${NC} 1Panel 运管面板 (安装/卸载)"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
-        read -p "➜ 此层操作指示 [0-2]: " CA
-        case $CA in
-            1) install_docker ;;
-            2) install_1panel ;;
+        read -p "➜ 请选择应用 [0-2]: " CA_INPUT
+        case $CA_INPUT in
+            1) menu_docker ;;
+            2) menu_1panel ;;
             0) break ;;
             *) echo -e "${RED}输入无效${NC}"; sleep 1 ;;
         esac
