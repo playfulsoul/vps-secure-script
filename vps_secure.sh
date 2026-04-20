@@ -69,6 +69,23 @@ set_ssh_config() {
 }
 
 # ==========================================
+# 工具函数: 绘制进度条
+# ==========================================
+draw_bar() {
+    local label=$1
+    local percentage=$2
+    local color=""
+    if [ $percentage -lt 50 ]; then color=$GREEN; elif [ $percentage -lt 80 ]; then color=$YELLOW; else color=$RED; fi
+    local bar_len=25
+    local filled=$(( percentage * bar_len / 100 ))
+    local empty=$(( bar_len - filled ))
+    printf "  %-12s ${BLUE}[" "$label"
+    for ((i=0; i<filled; i++)); do printf "${color}■${NC}"; done
+    for ((i=0; i<empty; i++)); do printf " "; done
+    printf "${BLUE}] ${color}${percentage}%%${NC}\n"
+}
+
+# ==========================================
 # 模块 0: 全局快捷命令注入
 # ==========================================
 install_shortcut() {
@@ -149,7 +166,7 @@ import_github_key() {
         set_ssh_config "ChallengeResponseAuthentication" "no"
         
         systemctl restart sshd || systemctl restart ssh
-        echo -e "${GREEN}密码登录已禁用 (终极安全形态)！${NC}"
+        echo -e "${GREEN}SSH 密码登录已禁用。${NC}"
     else
         echo -e "${BLUE}未修改密码登录策略。${NC}"
     fi
@@ -430,31 +447,64 @@ uninstall_docker() {
 }
 
 # ==========================================
-# 模块 7: 综合评测与监控测速
+# 模块 7: 系统监控制与基准测试
 # ==========================================
 view_sys_overview() {
     clear
-    echo -e "${GREEN}=========================================${NC}"
-    echo -e "${GREEN}        📊 实时系统性能监控概览          ${NC}"
-    echo -e "${GREEN}=========================================${NC}"
-    echo -e "${BLUE}▶ 系统运行时间 (Uptime):${NC}"
-    uptime -p
+    echo -e "${BLUE}=========================================${NC}"
+    echo -e "${BLUE}        📊 系统实时状态监控屏            ${NC}"
+    echo -e "${BLUE}=========================================${NC}"
+    
+    # 系统运行时间
+    echo -e "${GREEN}▶ 系统运行时间 (Uptime):${NC} $(uptime -p)"
     echo ""
-    echo -e "${BLUE}▶ CPU 使用及系统负载 (Load Average):${NC}"
-    cat /proc/loadavg | awk '{print "近 1 分钟: "$1", 近 5 分钟: "$2", 近 15 分钟: "$3}'
+
+    # CPU 负载计算
+    echo -e "${GREEN}▶ 核心负载资源监控:${NC}"
+    local cpu_load=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}' | awk '{printf "%.0f", $1}')
+    draw_bar "CPU 负载" "$cpu_load"
+
+    # 内存使用率
+    local mem_total=$(free | grep Mem | awk '{print $2}')
+    local mem_used=$(free | grep Mem | awk '{print $3}')
+    local mem_per=$(( mem_used * 100 / mem_total ))
+    draw_bar "物理内存占有" "$mem_per"
+
+    # 磁盘占用率
+    local disk_per=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+    draw_bar "系统磁盘挂载" "$disk_per"
+
     echo ""
-    echo -e "${BLUE}▶ 内存与交换空间使用量 (Free -h):${NC}"
-    free -h
+    echo -e "${GREEN}▶ 系统平均负载 (Load Average):${NC}"
+    cat /proc/loadavg | awk '{print "  1min: "$1", 5min: "$2", 15min: "$3}'
+    
     echo ""
-    echo -e "${BLUE}▶ 磁盘剩余空间 (Disk Space):${NC}"
-    df -hT | grep -E '^/dev/sda|^/dev/vda|^/dev/nvme|^/dev/root' | awk '{print "分区: "$1", 格式: "$2", 总容量: "$3", 已用: "$4", 剩余: "$5", 挂载点: "$7}'
-    if [ $? -ne 0 ]; then df -hT | grep -v 'tmpfs' | grep -v 'devtmpfs'; fi
+    echo -e "${GREEN}▶ 网络接口统计:${NC}"
+    if command -v ip >/dev/null; then
+        ip -4 -br addr | grep -v "127.0.0.1" | awk '{print "  " $1 ": " $3}'
+    fi
+    pause
+}
+
+run_fusion_monster() {
+    echo -e "${YELLOW}警告：融合怪全能脚本将执行多项系统与网络基准测试，持续时间较长。${NC}"
+    read -p "确认执行该测试吗？(y/N): " CONFIRM
+    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+        curl -L https://gitlab.com/spiritysdx/za/-/raw/main/ecs.sh -o ecs.sh && chmod +x ecs.sh && bash ecs.sh
+    fi
+    pause
+}
+
+run_ip_check() {
+    echo -e "${BLUE}正在初始化 IP 地址质量与风险评分检测 (无广告版)...${NC}"
+    echo -e "${BLUE}正在初始化 IP 地址质量检测...${NC}"
+    bash <(curl -sL https://raw.githubusercontent.com/jake-is-dog/ip-check/main/ip.sh)
     pause
 }
 
 run_yabs() {
-    echo -e "${YELLOW}【系统负载警告】综合性能压测 (Geekbench等) 将长时间占据高比例的 CPU 算力，并进行大量网络吞吐测速，低配系统 (如 512MB 内存) 易发生卡死或 OOM。${NC}"
-    read -p "确认执行 YABS 性能评测脚本吗？(y/N): " CONFIRM
+    echo -e "${YELLOW}【系统负载警告】综合性能压测 (Geekbench等) 将产生高 CPU 负载与网络吞吐，低配机型可能卡死。${NC}"
+    read -p "确认执行 YABS 性能测试吗？(y/N): " CONFIRM
     if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
         curl -sL yabs.sh | bash
     fi
@@ -462,7 +512,7 @@ run_yabs() {
 }
 
 run_bench() {
-    echo -e "${YELLOW}【流量警告】全球网络节点测速将极大地消耗双向按 G 计算的流量！如果您是按量计费用户请三思！${NC}"
+    echo -e "${YELLOW}【流量提示】全球网络节点测速将消耗流量。${NC}"
     read -p "确定要运行 bench.sh 吗？(y/N): " CONFIRM
     if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
         curl -Lso- bench.sh | bash
@@ -471,7 +521,7 @@ run_bench() {
 }
 
 run_media_unlock() {
-    echo -e "${BLUE}>>> 正在调取流媒体解锁评测脚本 RegionRestrictionCheck... <<<${NC}"
+    echo -e "${BLUE}正在调用流媒体解锁检测脚本...${NC}"
     bash <(curl -L -s check.unlock.media)
     pause
 }
@@ -480,10 +530,10 @@ run_nexttrace() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}    🛰️ 回程路由追踪工具箱     ${NC}"
+        echo -e "${GREEN}      路由追踪管理           ${NC}"
         echo -e "${GREEN}===============================${NC}"
         echo -e "  ${YELLOW}1.${NC} 基础追踪 (自定义 IP/域名)"
-        echo -e "  ${YELLOW}2.${NC} 三网回程测速 (北京/上海/广州)"
+        echo -e "  ${YELLOW}2.${NC} 三网回程测速"
         echo -e "  ${YELLOW}0.${NC} 返回上一级"
         echo
         read -p "➜ 请选择测试模式 [0-2]: " NT_CHOICE
@@ -493,7 +543,7 @@ run_nexttrace() {
                 if [ -z "$TARGET_IP" ]; then TARGET_IP=""; fi
                 # 依赖检测
                 if ! command -v nexttrace >/dev/null 2>&1; then
-                     echo -e "${BLUE}后台自动安装 Nexttrace 探针...${NC}"
+                     echo -e "${BLUE}后台自动安装 Nexttrace...${NC}"
                      curl nxtrace.org/nt | bash
                 fi
                 if [ -z "$TARGET_IP" ]; then
@@ -504,7 +554,7 @@ run_nexttrace() {
                 pause
                 ;;
             2)
-                echo -e "${BLUE}正在启动三网快速追踪 (Fast Trace)...${NC}"
+                echo -e "${BLUE}正在执行三网快速路由追踪...${NC}"
                 if ! command -v nexttrace >/dev/null 2>&1; then
                      curl nxtrace.org/nt | bash
                 fi
@@ -525,10 +575,10 @@ menu_sys_ssh() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}     ⚙️ 系统与 SSH 管理层      ${NC}"
+        echo -e "${GREEN}       SSH 与 登录管理        ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 执行系统内核与库全套更新"
-        echo -e "  ${YELLOW}2.${NC} 修改 SSH 远程端口 (防扫描)"
+        echo -e "  ${YELLOW}1.${NC} 系统内核与库更新"
+        echo -e "  ${YELLOW}2.${NC} 修改 SSH 端口"
         echo -e "  ${YELLOW}3.${NC} 导入 GitHub 公钥并禁用密码登录"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
@@ -547,12 +597,12 @@ menu_firewall() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}   🛡️ 防火墙中心 ($FIREWALL_CMD)  ${NC}"
+        echo -e "${GREEN}       防火墙管理中心         ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 开启防火墙 (智能放行安全端口)"
-        echo -e "  ${YELLOW}2.${NC} 查看防火墙状态 (拦截/放行一览)"
-        echo -e "  ${YELLOW}3.${NC} 手动放行特定端口 (搭建业务必用)"
-        echo -e "  ${YELLOW}4.${NC} 重新加载/重启 防火墙"
+        echo -e "  ${YELLOW}1.${NC} 开启防火墙"
+        echo -e "  ${YELLOW}2.${NC} 查看防火墙状态"
+        echo -e "  ${YELLOW}3.${NC} 手动放行端口"
+        echo -e "  ${YELLOW}4.${NC} 重启防火墙"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
         read -p "➜ 此层操作指示 [0-4]: " C2
@@ -571,12 +621,12 @@ menu_fail2ban() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}      🚫 防暴力破解管理层      ${NC}"
+        echo -e "${GREEN}       Fail2Ban 安全防御      ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 植入底层防护规则 (防SSH爆破)"
-        echo -e "  ${YELLOW}2.${NC} 查看监控状态及被封禁 IP 列表"
-        echo -e "  ${YELLOW}3.${NC} 查阅最近非法试探被拒日志"
-        echo -e "  ${YELLOW}4.${NC} 重启防爆破服务后台"
+        echo -e "  ${YELLOW}1.${NC} 植入防护规则"
+        echo -e "  ${YELLOW}2.${NC} 查看监控状态及封禁 IP"
+        echo -e "  ${YELLOW}3.${NC} 查看非法试探日志"
+        echo -e "  ${YELLOW}4.${NC} 重启服务"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
         read -p "➜ 此层操作指示 [0-4]: " C3
@@ -595,9 +645,9 @@ menu_performance() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}      🧰 网络优化与性能层      ${NC}"
+        echo -e "${GREEN}       网络与性能优化         ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 开启 BBR 网速加速"
+        echo -e "  ${YELLOW}1.${NC} 开启 BBR 加速"
         echo -e "  ${YELLOW}2.${NC} 添加 1GB 虚拟内存 (Swap)"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
@@ -615,10 +665,10 @@ menu_user_mgmt() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}      👤 用户与权限管理层      ${NC}"
+        echo -e "${GREEN}       用户与权限管理         ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 增加具备 sudo 权限的普通用户"
-        echo -e "  ${YELLOW}2.${NC} 查看已添加的普通用户"
+        echo -e "  ${YELLOW}1.${NC} 增加 sudo 普通用户"
+        echo -e "  ${YELLOW}2.${NC} 查看普通用户"
         echo -e "  ${YELLOW}3.${NC} 删除普通用户"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
@@ -637,7 +687,7 @@ menu_docker() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}    🐳 Docker 引擎管理中心     ${NC}"
+        echo -e "${GREEN}       Docker 容器引擎管理    ${NC}"
         echo -e "${GREEN}===============================${NC}"
         if command -v docker >/dev/null 2>&1; then
             echo -e "状态: ${GREEN}已安装${NC}"
@@ -645,11 +695,11 @@ menu_docker() {
             echo -e "状态: ${RED}未发现 Docker${NC}"
         fi
         echo
-        echo -e "  ${YELLOW}1.${NC} 安装 Docker 容器引擎 (官方源)"
+        echo -e "  ${YELLOW}1.${NC} 安装 Docker 容器引擎"
         echo -e "  ${YELLOW}2.${NC} 卸载 Docker 容器引擎"
         echo -e "  ${YELLOW}0.${NC} 返回上一级"
         echo
-        read -p "➜ 您的选择 [0-2]: " D_CHOICE
+        read -p "➜ 请选择操作 [0-2]: " D_CHOICE
         case $D_CHOICE in
             1) install_docker ;;
             2) uninstall_docker ;;
@@ -663,7 +713,7 @@ menu_1panel() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}    🛠️ 1Panel 面板管理中心     ${NC}"
+        echo -e "${GREEN}       1Panel 运维面板管理    ${NC}"
         echo -e "${GREEN}===============================${NC}"
         if command -v 1pctl >/dev/null 2>&1; then
             echo -e "状态: ${GREEN}已安装${NC}"
@@ -671,11 +721,11 @@ menu_1panel() {
             echo -e "状态: ${RED}未发现 1Panel${NC}"
         fi
         echo
-        echo -e "  ${YELLOW}1.${NC} 安装 1Panel 现代化运管面板"
-        echo -e "  ${YELLOW}2.${NC} 卸载 1Panel 现代化运管面板"
+        echo -e "  ${YELLOW}1.${NC} 安装 1Panel 运维面板"
+        echo -e "  ${YELLOW}2.${NC} 卸载 1Panel 运维面板"
         echo -e "  ${YELLOW}0.${NC} 返回上一级"
         echo
-        read -p "➜ 您的选择 [0-2]: " P_CHOICE
+        read -p "➜ 请选择操作 [0-2]: " P_CHOICE
         case $P_CHOICE in
             1) install_1panel ;;
             2) uninstall_1panel ;;
@@ -709,22 +759,26 @@ menu_vps_test() {
     while true; do
         clear
         echo -e "${GREEN}===============================${NC}"
-        echo -e "${GREEN}     📈 机器全维评测与监控     ${NC}"
+        echo -e "${GREEN}       系统监控与基准测试      ${NC}"
         echo -e "${GREEN}===============================${NC}"
-        echo -e "  ${YELLOW}1.${NC} 📊 即时硬件调度监控仪 (CPU/内存负载追踪)"
-        echo -e "  ${YELLOW}2.${NC} 🥇 发烧级极限跑分与盘测 (集成 YABS 组件)"
-        echo -e "  ${YELLOW}3.${NC} 🌍 全球互联测速台 (集成 bench.sh 组件)"
-        echo -e "  ${YELLOW}4.${NC} 📺 顶级流媒体解锁探测仪 (检测 Netflix/Disney+等)"
-        echo -e "  ${YELLOW}5.${NC} 🛰️ 网段回程路由追踪器 (集成 NextTrace 组件)"
+        echo -e "  ${YELLOW}1.${NC} 📊 实时系统状态监控 (CPU/内存/磁盘)"
+        echo -e "  ${YELLOW}2.${NC} 🥇 CPU 与 磁盘性能基准测试 (YABS)"
+        echo -e "  ${YELLOW}3.${NC} 🌍 网络带宽基准测试 (Bench.sh)"
+        echo -e "  ${YELLOW}4.${NC} 📺 流媒体解锁能力检测"
+        echo -e "  ${YELLOW}5.${NC} 🛰️ 回程路由追踪 (NextTrace)"
+        echo -e "  ${YELLOW}6.${NC} 🏅 综合系统评测 (Fusion Monster)"
+        echo -e "  ${YELLOW}7.${NC} 🛡️ IP 地址质量检测"
         echo -e "  ${YELLOW}0.${NC} 返回主菜单"
         echo
-        read -p "➜ 此层操作指示 [0-5]: " CT
+        read -p "➜ 请选择测试项目 [0-7]: " CT
         case $CT in
             1) view_sys_overview ;;
             2) run_yabs ;;
             3) run_bench ;;
             4) run_media_unlock ;;
             5) run_nexttrace ;;
+            6) run_fusion_monster ;;
+            7) run_ip_check ;;
             0) break ;;
             *) echo -e "${RED}输入无效${NC}"; sleep 1 ;;
         esac
@@ -737,45 +791,45 @@ main_menu() {
         # 检测是否已经安装为简短命令 vps
         CMD_INSTALLED=""
         if [ -x /usr/local/bin/vps ]; then
-            CMD_INSTALLED=" ${YELLOW}[提示: 随时敲入 'vps' 开启管家]${NC}"
+            CMD_INSTALLED=" ${YELLOW}[提示: 输入 'vps' 即可唤起工具]${NC}"
         fi
         
-        echo -e "${GREEN}    🎯 VPS 安全与系统统管平台 ${YELLOW}${VERSION_TAG}${NC}"
+        echo -e "${GREEN}    🎯 VPS 安全与系统管理平台 ${YELLOW}${VERSION_TAG}${NC}"
         echo -e "${GREEN}================================================${NC}"
         echo -e "${BLUE}OS: ${OS} (版本: ${VERSION}) ${NC}$CMD_INSTALLED"
         echo
-        echo -e "  ${BLUE}============ 【 第一区：一键防护 / 初装向导 】 ============${NC}"
-        echo -e "  ${RED}1.${NC} 🚀 [新机首选] 零基础安全加固一次性拉满"
-        echo -e "      ${YELLOW}(含更新+防火墙+Fail2ban+Swap+BBR。老机若有历史配置请慎用以免冲突)${NC}"
+        echo -e "  ${BLUE}============ 【 第一区：一键配置 / 初始化 】 ============${NC}"
+        echo -e "  ${RED}1.${NC} 🚀 系统基础安全加固 (更新/防火墙/BBR/Swap)"
+        echo -e "      ${YELLOW}(适用于纯净系统，含内核优化、基本防护规则与虚拟内存配置)${NC}"
         echo
-        echo -e "  ${BLUE}============ 【 第二区：精细化单项管理 】 ==============${NC}"
-        echo -e "  ${YELLOW}2.${NC} 🔑 登录管理中心    ${YELLOW}(修改 SSH 端口 / 导入证书公钥)${NC}"
-        echo -e "  ${YELLOW}3.${NC} 🛡️  防火墙管理      ${YELLOW}(开/关/放行特定业务端口)${NC}"
-        echo -e "  ${YELLOW}4.${NC} 🚫 防暴力破解      ${YELLOW}(查看 Fail2ban 日志与封禁黑名单)${NC}"
-        echo -e "  ${YELLOW}5.${NC} 🧰 网络与性能优化  ${YELLOW}(手动装 BBR / 增加交换内存)${NC}"
-        echo -e "  ${YELLOW}6.${NC} 👤 用户与权限管理  ${YELLOW}(新增带 sudo 权限的日常普通用户)${NC}"
+        echo -e "  ${BLUE}============ 【 第二区：系统单项配置 】 ==============${NC}"
+        echo -e "  ${YELLOW}2.${NC} 🔑 SSH 与 登录管理"
+        echo -e "  ${YELLOW}3.${NC} 🛡️ 防火墙规则管理"
+        echo -e "  ${YELLOW}4.${NC} 🚫 Fail2Ban 安全拦截"
+        echo -e "  ${YELLOW}5.${NC} 🧰 网络与系统优化"
+        echo -e "  ${YELLOW}6.${NC} 👤 用户与权限管理"
         echo
-        echo -e "  ${BLUE}============ 【 第三区：拓展部署与机器评测 】 ===========${NC}"
-        echo -e "  ${YELLOW}7.${NC} 📦 建站应用部署中心 ${YELLOW}(一键安装 Docker 与 1Panel 面板)${NC}"
-        echo -e "  ${YELLOW}8.${NC} 📈 机器极限评测面板 ${YELLOW}(流媒体解锁/全网测速/YABS跑分)${NC}"
+        echo -e "  ${BLUE}============ 【 第三区：应用部署与性能评测 】 ===========${NC}"
+        echo -e "  ${YELLOW}7.${NC} 📦 应用环境部署 (Docker/1Panel)"
+        echo -e "  ${YELLOW}8.${NC} 📈 系统性能与网络评测"
         echo
-        echo -e "  ${BLUE}============ 【 脚本系统维护 】 =======================${NC}"
-        echo -e "  ${YELLOW}9.${NC} 🔁 注入全局命令 ${YELLOW}(安装后随时输入 'vps' 即可唤起本菜单)${NC}"
-        echo -e "  ${YELLOW}0.${NC} 退出管家"
+        echo -e "  ${BLUE}============ 【 工具维护 】 =======================${NC}"
+        echo -e "  ${YELLOW}9.${NC} 🔁 注入全局别名 (安装后直接输入 'vps' 启动)"
+        echo -e "  ${YELLOW}0.${NC} 退出程序"
         echo
-        read -p "➜ 首页指令召唤 [0-9]: " MAIN_CHOICE
+        read -p "➜ 请选择项目 [0-9]: " MAIN_CHOICE
         
         case $MAIN_CHOICE in
             1)
-                echo -e "${YELLOW}警告：一键防护会修改系统核心组件及防火墙，强烈建议仅在新开的 VPS 上执行。${NC}"
-                read -p "确认要继续执行全局一键防护吗？(y/N): " CONFIRM_ALL
+                echo -e "${YELLOW}警告：一键加固将修改防火墙与系统核心参数。${NC}"
+                read -p "确认执行系统安全加固吗？(y/N): " CONFIRM_ALL
                 if [[ "$CONFIRM_ALL" =~ ^[Yy]$ ]]; then
                     do_system_update
                     install_firewall
                     enable_bbr
                     add_swap
                     install_fail2ban
-                    echo -e "${GREEN}>>> 一键安全防护体系已全部署完毕！<<<${NC}"
+                    echo -e "${GREEN}系统基础安全防护配置完成。${NC}"
                     pause
                 fi
                 ;;
@@ -787,7 +841,7 @@ main_menu() {
             7) menu_app_install ;;
             8) menu_vps_test ;;
             9) install_shortcut ;;
-            0) clear; echo -e "${GREEN}再见！以后可直接在终端输入 'vps' 迅速重逢。${NC}"; exit 0 ;;
+            0) clear; echo -e "${GREEN}程序已退出。${NC}"; exit 0 ;;
             *) echo -e "${RED}输入错误！${NC}"; sleep 1 ;;
         esac
     done
