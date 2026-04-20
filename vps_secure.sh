@@ -8,7 +8,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;36m'
 NC='\033[0m' # No Color
-VERSION_TAG="v1.0.0"
+VERSION_TAG="v1.0.1"
+REPO_RAW_URL="https://raw.githubusercontent.com/playfulsoul/vps-secure-script/main/vps_secure.sh"
 
 # ==========================================
 # 前置检测
@@ -89,16 +90,52 @@ draw_bar() {
 # 模块 0: 全局快捷命令注入
 # ==========================================
 install_shortcut() {
+    # 检测是否已经存在
+    if [ -L /usr/local/bin/vps ] || [ -f /usr/local/bin/vps ]; then
+        echo -e "${YELLOW}警告：检测到已存在 'vps' 命令。正在尝试升级为软链接模式...${NC}"
+        rm -f /usr/local/bin/vps
+    fi
+    
+    echo -e "${BLUE}正在将此工具安装为全局快捷命令 (软链接模式)...${NC}"
+    ln -sf "$(readlink -f "$0")" /usr/local/bin/vps
+    chmod +x /usr/local/bin/vps
+    
     if [ -x /usr/local/bin/vps ]; then
-        echo -e "${GREEN}快捷命令 'vps' 已经安装过了！${NC}"
+        echo -e "${GREEN}安装成功！以后在终端任何地方直接输入 'vps' 即可唤起本界面。${NC}"
+        echo -e "${YELLOW}提示: 软链接模式下，只要你更新了此目录下的脚本文件，全局命令也会自动同步。${NC}"
+    else
+        echo -e "${RED}安装失败，请检查 /usr/local/bin 权限。${NC}"
+    fi
+    pause
+}
+
+# ==========================================
+# 模块 0.1: 自助检查更新
+# ==========================================
+check_update() {
+    echo -e "${BLUE}正在从 GitHub 检查最新版本...${NC}"
+    REMOTE_VERSION=$(curl -sL "$REPO_RAW_URL" | grep 'VERSION_TAG=' | head -n 1 | cut -d '"' -f 2)
+    
+    if [ -z "$REMOTE_VERSION" ]; then
+        echo -e "${RED}无法获取远程版本信息，请确认网络是否连通 GitHub。${NC}"
         pause
         return
     fi
-    echo -e "${BLUE}正在将此工具安装为全局命令 'vps' ...${NC}"
-    cp "$0" /usr/local/bin/vps
-    chmod +x /usr/local/bin/vps
-    echo -e "${GREEN}安装成功！以后在终端任何地方直接输入 'vps' 即可唤起本界面。${NC}"
-    pause
+
+    if [ "$VERSION_TAG" == "$REMOTE_VERSION" ]; then
+        echo -e "${GREEN}当前已是最新版本 ($VERSION_TAG)。${NC}"
+        pause
+    else
+        echo -e "${YELLOW}检测到新版本: $REMOTE_VERSION (当前: $VERSION_TAG)${NC}"
+        read -p "是否立即升级？(y/N): " CONFIRM_UPDATE
+        if [[ "$CONFIRM_UPDATE" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}正在下载并更新代码...${NC}"
+            curl -sL "$REPO_RAW_URL" -o "$0"
+            echo -e "${GREEN}升级成功！即将重新启动脚本...${NC}"
+            sleep 2
+            exec bash "$0"
+        fi
+    fi
 }
 
 # ==========================================
@@ -833,9 +870,10 @@ main_menu() {
         echo -e "  ${BLUE}============ 【 工具维护 】 =======================${NC}"
         echo -e "  ${YELLOW}9.${NC} 🔁 注入全局别名 (安装后直接输入 'vps' 启动)"
         echo -e "  ${YELLOW}10.${NC} ❌ 卸载本工具"
+        echo -e "  ${YELLOW}11.${NC} 🔄 检查更新与自助升级"
         echo -e "  ${YELLOW}0.${NC} 退出程序"
         echo
-        read -p "➜ 请选择项目 [0-10]: " MAIN_CHOICE
+        read -p "➜ 请选择项目 [0-11]: " MAIN_CHOICE
         
         case $MAIN_CHOICE in
             1)
@@ -860,6 +898,7 @@ main_menu() {
             8) menu_vps_test ;;
             9) install_shortcut ;;
             10) uninstall_script ;;
+            11) check_update ;;
             0) clear; echo -e "${GREEN}程序已退出。${NC}"; exit 0 ;;
             *) echo -e "${RED}输入错误！${NC}"; sleep 1 ;;
         esac
