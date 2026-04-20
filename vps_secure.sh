@@ -496,8 +496,8 @@ run_fusion_monster() {
 }
 
 run_ip_check() {
-    echo -e "${BLUE}正在执行 IP 地址质量与风险评分检测 (基于 IP.Check.Place)...${NC}"
-    bash <(curl -Ls IP.Check.Place)
+    echo -e "${BLUE}正在执行 IP 地址质量与风险评分检测 (基于个人纯净版)...${NC}"
+    bash <(curl -Ls https://raw.githubusercontent.com/playfulsoul/IPQuality/main/ip.sh)
     pause
 }
 
