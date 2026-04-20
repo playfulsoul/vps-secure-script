@@ -496,8 +496,8 @@ run_fusion_monster() {
 }
 
 run_ip_check() {
-    echo -e "${BLUE}正在执行 IP 地址质量与风险评分检测 (基于 cpp.la 纯净版)...${NC}"
-    bash <(curl -Ls https://cpp.la/ip.sh)
+    echo -e "${BLUE}正在执行 IP 地址质量与风险评分检测 (基于 IP.Check.Place)...${NC}"
+    bash <(curl -Ls IP.Check.Place)
     pause
 }
 
@@ -784,6 +784,24 @@ menu_vps_test() {
     done
 }
 
+# ==========================================
+# 模块 8: 卸载管理
+# ==========================================
+uninstall_script() {
+    echo -e "${RED}警告：即将卸载 VPS 安全与系统管理平台并将快捷命令 'vps' 移除。${NC}"
+    read -p "确认执行卸载吗？(y/N): " CONFIRM
+    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+        rm -f /usr/local/bin/vps
+        echo -e "${GREEN}快捷命令 'vps' 已成功移除。${NC}"
+        echo -e "${YELLOW}提示: 此操作仅删除了快捷命令，您原始下载的脚本文件仍保留在当前目录。${NC}"
+        pause
+        exit 0
+    else
+        echo -e "${BLUE}已取消卸载。${NC}"
+        pause
+    fi
+}
+
 main_menu() {
     while true; do
         clear
@@ -814,9 +832,10 @@ main_menu() {
         echo
         echo -e "  ${BLUE}============ 【 工具维护 】 =======================${NC}"
         echo -e "  ${YELLOW}9.${NC} 🔁 注入全局别名 (安装后直接输入 'vps' 启动)"
+        echo -e "  ${YELLOW}10.${NC} ❌ 卸载本工具"
         echo -e "  ${YELLOW}0.${NC} 退出程序"
         echo
-        read -p "➜ 请选择项目 [0-9]: " MAIN_CHOICE
+        read -p "➜ 请选择项目 [0-10]: " MAIN_CHOICE
         
         case $MAIN_CHOICE in
             1)
@@ -840,6 +859,7 @@ main_menu() {
             7) menu_app_install ;;
             8) menu_vps_test ;;
             9) install_shortcut ;;
+            10) uninstall_script ;;
             0) clear; echo -e "${GREEN}程序已退出。${NC}"; exit 0 ;;
             *) echo -e "${RED}输入错误！${NC}"; sleep 1 ;;
         esac
