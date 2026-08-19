@@ -9,7 +9,7 @@ vps_is_valid_port() {
 }
 
 vps_ssh_connection_port() {
-    local connection=${1:-${SSH_CONNECTION:-}}
+    local connection=${1:-}
     local server_port extra
 
     read -r _ _ _ server_port extra <<< "$connection"
@@ -57,7 +57,7 @@ vps_detect_ssh_ports() {
     local detected=''
     local current_port=''
 
-    current_port=$(vps_ssh_connection_port 2>/dev/null || true)
+    current_port=$(vps_ssh_connection_port "${SSH_CONNECTION:-}" 2>/dev/null || true)
     if [[ -n "$current_port" ]]; then
         detected+="$current_port"$'\n'
     fi

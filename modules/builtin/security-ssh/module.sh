@@ -17,7 +17,7 @@ ssh_status() {
 
     ssh_check || return $?
 
-    current_port=$(vps_ssh_connection_port 2>/dev/null || true)
+    current_port=$(vps_ssh_connection_port "${SSH_CONNECTION:-}" 2>/dev/null || true)
     ports=$(vps_require_ssh_ports 2>/dev/null || true)
 
     if [[ -n "$current_port" ]]; then

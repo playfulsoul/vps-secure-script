@@ -34,6 +34,7 @@ assert_contains "$actual" '不默认开放 22、80 或 443' "firewall plan follo
 
 actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     VPS_AUTH_LOG_FILE="$temporary_auth_log" \
+    VPS_SYSTEMD_RUNTIME_DIR="$temporary_auth_log.missing-systemd" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
     $CLI fail2ban plan)
 rm -f "$temporary_os_release" "$temporary_auth_log"

@@ -47,7 +47,7 @@ doctor_run() {
         warnings=$((warnings + 1))
     fi
 
-    current_port=$(vps_ssh_connection_port 2>/dev/null || true)
+    current_port=$(vps_ssh_connection_port "${SSH_CONNECTION:-}" 2>/dev/null || true)
     if [[ -n "$current_port" ]]; then
         printf '[OK]   当前 SSH 会话端口: %s\n' "$current_port"
     else

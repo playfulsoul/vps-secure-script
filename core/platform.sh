@@ -42,7 +42,8 @@ vps_platform_label() {
 }
 
 vps_has_systemd() {
-    command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]
+    local runtime_dir=${VPS_SYSTEMD_RUNTIME_DIR:-/run/systemd/system}
+    command -v systemctl >/dev/null 2>&1 && [[ -d "$runtime_dir" ]]
 }
 
 vps_package_manager() {
