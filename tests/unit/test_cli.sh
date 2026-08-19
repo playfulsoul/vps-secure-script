@@ -29,7 +29,8 @@ printf '%s\n' 'ID=debian' 'VERSION_ID="12"' > "$temporary_os_release"
 actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
     $CLI firewall plan)
-assert_contains "$actual" 'SSH 端口: 32876' "firewall plan preserves the current custom SSH port"
+assert_contains "$actual" '保持并放行 SSH 端口:' "firewall plan identifies the SSH allow-list"
+assert_contains "$actual" '32876' "firewall plan preserves the current custom SSH port"
 assert_contains "$actual" '不默认开放 22、80 或 443' "firewall plan follows least-privilege defaults"
 
 actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
@@ -38,7 +39,8 @@ actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
     $CLI fail2ban plan)
 rm -f "$temporary_os_release" "$temporary_auth_log"
-assert_contains "$actual" 'SSH 端口: 32876' "Fail2Ban plan uses the current custom SSH port"
+assert_contains "$actual" 'SSH 端口:' "Fail2Ban plan identifies the protected SSH ports"
+assert_contains "$actual" '32876' "Fail2Ban plan uses the current custom SSH port"
 assert_contains "$actual" '日志后端: logfile' "Fail2Ban plan selects an available Debian log backend"
 assert_contains "$actual" '不覆盖 /etc/fail2ban/jail.local' "Fail2Ban plan preserves user configuration"
 
