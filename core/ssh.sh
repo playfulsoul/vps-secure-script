@@ -10,9 +10,9 @@ vps_is_valid_port() {
 
 vps_ssh_connection_port() {
     local connection=${1:-${SSH_CONNECTION:-}}
-    local client_address client_port server_address server_port extra
+    local server_port extra
 
-    read -r client_address client_port server_address server_port extra <<< "$connection"
+    read -r _ _ _ server_port extra <<< "$connection"
     if [[ -n "${extra:-}" ]] || ! vps_is_valid_port "${server_port:-}"; then
         return 1
     fi

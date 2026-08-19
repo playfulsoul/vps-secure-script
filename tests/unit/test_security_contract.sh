@@ -9,6 +9,8 @@ SCRIPT="$PROJECT_ROOT/vps_secure.sh"
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
+# The pattern is intentionally literal; it detects the removed fallback expression.
+# shellcheck disable=SC2016
 if grep -q 'CUR_SSH_PORT=${CUR_SSH_PORT:-22}' "$SCRIPT"; then
     fail "security workflows must not fall back to SSH port 22"
 else

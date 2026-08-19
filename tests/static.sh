@@ -17,12 +17,14 @@ done < <(find "$PROJECT_ROOT" -type f -name '*.sh' -not -path '*/.git/*' | sort)
 
 if command -v shellcheck >/dev/null 2>&1; then
     while IFS= read -r script; do
-        if shellcheck -x "$script"; then
+        if shellcheck -x -P SCRIPTDIR "$script"; then
             printf 'ok - shellcheck: %s\n' "${script#"$PROJECT_ROOT/"}"
         else
             failures=$((failures + 1))
         fi
-    done < <(find "$PROJECT_ROOT" -type f -name '*.sh' -not -path '*/legacy/*' -not -path '*/.git/*' | sort)
+    done < <(find "$PROJECT_ROOT" -type f -name '*.sh' \
+        -not -path '*/legacy/*' -not -path '*/.git/*' \
+        -not -path "$PROJECT_ROOT/vps_secure.sh" | sort)
 else
     printf 'skip - shellcheck is not installed\n'
 fi

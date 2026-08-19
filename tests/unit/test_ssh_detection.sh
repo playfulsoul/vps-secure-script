@@ -19,15 +19,18 @@ else
     pass "invalid SSH session port is rejected"
 fi
 
+# ShellCheck cannot see that vps_detect_ssh_ports invokes these test doubles.
+# shellcheck disable=SC2329
 vps_active_sshd_ports() {
     printf '%s\n' 32876 44000
 }
 
+# shellcheck disable=SC2329
 vps_sshd_effective_ports() {
     printf '%s\n' 32876 44000
 }
 
-SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876'
+export SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876'
 actual=$(vps_detect_ssh_ports | paste -sd, -)
 assert_eq '32876,44000' "$actual" "all confirmed SSH ports are deduplicated and preserved"
 

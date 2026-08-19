@@ -42,12 +42,14 @@ monitor_arguments() {
         esac
     done
     monitor_target_valid "$target" || { printf '监控目标格式无效。\n' >&2; return 64; }
-    [[ "$interval" =~ ^[0-9]+$ ]] && (( interval >= 15 && interval <= 86400 )) || {
-        printf '采集间隔必须在 15 到 86400 秒之间。\n' >&2; return 64;
-    }
-    [[ "$retention" =~ ^[0-9]+$ ]] && (( retention >= 1 && retention <= 3650 )) || {
-        printf '保留天数必须在 1 到 3650 之间。\n' >&2; return 64;
-    }
+    if [[ ! "$interval" =~ ^[0-9]+$ ]] || (( interval < 15 || interval > 86400 )); then
+        printf '采集间隔必须在 15 到 86400 秒之间。\n' >&2
+        return 64
+    fi
+    if [[ ! "$retention" =~ ^[0-9]+$ ]] || (( retention < 1 || retention > 3650 )); then
+        printf '保留天数必须在 1 到 3650 之间。\n' >&2
+        return 64
+    fi
     printf '%s %s %s\n' "$target" "$interval" "$retention"
 }
 
