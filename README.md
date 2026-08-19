@@ -16,6 +16,29 @@
 
 架构和兼容性承诺分别记录在 `ARCHITECTURE.md`、`MODULE_SPEC.md` 与 `COMPATIBILITY.md`。
 
+## 模块化开发入口
+
+当前开发版本已经提供新的核心命令：
+
+```bash
+./bin/vps --version
+./bin/vps module list
+./bin/vps module info security.firewall
+./bin/vps doctor
+./bin/vps ssh status
+./bin/vps firewall plan
+./bin/vps fail2ban plan
+```
+
+会修改系统的操作需要 root，例如：
+
+```bash
+sudo ./bin/vps firewall apply
+sudo ./bin/vps fail2ban apply
+```
+
+当前属于开发版本。上述应用操作应先在带控制台与快照的临时 VPS 上验证，不应直接用于生产服务器。Debian 验收场景记录在 `docs/DEBIAN_TEST_PLAN.md`。
+
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
 

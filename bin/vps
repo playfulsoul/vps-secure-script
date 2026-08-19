@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+set -u
+
+BIN_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+VPS_PLATFORM_ROOT=$(cd -- "$BIN_DIR/.." && pwd)
+export VPS_PLATFORM_ROOT
+
+# shellcheck source=../core/modules.sh
+source "$VPS_PLATFORM_ROOT/core/modules.sh"
+
+VERSION=$(<"$VPS_PLATFORM_ROOT/VERSION")
+
+show_help() {
+    cat <<'EOF'
+VPS Secure Platform
+
+用法：
+  vps --version
+  vps module list
+  vps module info <模块ID>
+  vps module run <模块ID> <操作> [参数]
+  vps doctor
+  vps ssh status
+  vps firewall <plan|status|apply|verify|rollback>
+  vps fail2ban <plan|status|apply|verify|rollback>
+
+模块操作：check plan apply verify status backup rollback configure
+          start stop uninstall doctor
+EOF
+}
+
+show_module_info() {
+    local module_id=$1
+    local manifest key
+    local keys=(id name version category trust privilege background_service supported_platforms dependencies)
+
+    manifest=$(vps_module_find "$module_id") || {
+        printf '未找到模块: %s\n' "$module_id" >&2
+        return 20
+    }
+    vps_validate_manifest "$manifest" || return $?
+
+    for key in "${keys[@]}"; do
+        printf '%-20s %s\n' "$key:" "$(vps_manifest_value "$manifest" "$key" 2>/dev/null || printf '-')"
+    done
+}
+
+command_module() {
+    local subcommand=${1:-}
+    shift || true
+
+    case "$subcommand" in
+        list)
+            printf 'ID\t名称\t版本\t分类\t信任级别\n'
+            vps_module_list
+            ;;
+        info)
+            [[ $# -eq 1 ]] || { show_help >&2; return 64; }
+            show_module_info "$1"
+            ;;
+        run)
+            [[ $# -ge 2 ]] || { show_help >&2; return 64; }
+            vps_module_run "$@"
+            ;;
+        *)
+            show_help >&2
+            return 64
+            ;;
+    esac
+}
+
+main() {
+    local command=${1:-help}
+    shift || true
+
+    case "$command" in
+        -h|--help|help)
+            show_help
+            ;;
+        -V|--version|version)
+            printf 'vps-secure %s\n' "$VERSION"
+            ;;
+        module)
+            command_module "$@"
+            ;;
+        doctor)
+            vps_module_run system.doctor doctor "$@"
+            ;;
+        ssh)
+            [[ ${1:-} == status ]] || { show_help >&2; return 64; }
+            shift
+            vps_module_run security.ssh status "$@"
+            ;;
+        firewall)
+            [[ $# -ge 1 ]] || { show_help >&2; return 64; }
+            vps_module_run security.firewall "$@"
+            ;;
+        fail2ban)
+            [[ $# -ge 1 ]] || { show_help >&2; return 64; }
+            vps_module_run security.fail2ban "$@"
+            ;;
+        *)
+            printf '未知命令: %s\n\n' "$command" >&2
+            show_help >&2
+            return 64
+            ;;
+    esac
+}
+
+main "$@"

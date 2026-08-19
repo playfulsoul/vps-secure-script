@@ -36,6 +36,18 @@ assert_file_exists() {
     fi
 }
 
+assert_contains() {
+    local haystack=$1
+    local needle=$2
+    local message=$3
+
+    if [[ "$haystack" == *"$needle"* ]]; then
+        pass "$message"
+    else
+        fail "$message (missing text: $needle)"
+    fi
+}
+
 finish_tests() {
     if (( TEST_FAILURES > 0 )); then
         printf '%s test(s) failed\n' "$TEST_FAILURES" >&2
