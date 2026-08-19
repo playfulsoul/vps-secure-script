@@ -5,6 +5,7 @@ set -u
 TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
 SCRIPT="$PROJECT_ROOT/vps_secure.sh"
+FAIL2BAN_MODULE="$PROJECT_ROOT/modules/builtin/security-fail2ban/module.sh"
 
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
@@ -33,6 +34,14 @@ if grep -A80 '^install_firewall()' "$SCRIPT" | grep -Eq 'ufw allow (80|443)|add-
     fail "initial firewall setup must not open web ports by default"
 else
     pass "initial firewall setup does not open web ports by default"
+fi
+
+if grep -q 'service_active' "$FAIL2BAN_MODULE" && \
+   grep -q 'service_enabled' "$FAIL2BAN_MODULE" && \
+   grep -q 'systemctl stop fail2ban' "$FAIL2BAN_MODULE"; then
+    pass "Fail2Ban rollback records and restores the previous service state"
+else
+    fail "Fail2Ban rollback must restore the previous service state"
 fi
 
 finish_tests

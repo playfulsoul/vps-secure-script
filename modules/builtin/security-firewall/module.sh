@@ -49,8 +49,9 @@ firewall_plan() {
         printf '  - 通过 APT 安装 UFW。\n'
     fi
     printf '  - 保持并放行 SSH 端口: %s。\n' "$(printf '%s\n' "$ports" | paste -sd, -)"
-    printf '  - 启用默认入站保护。\n'
-    printf '  - 不默认开放 22、80 或 443；仅使用已确认的 SSH 端口。\n'
+    printf '  - 启用 UFW，并沿用系统现有默认策略。\n'
+    printf '  - 只为已确认的 SSH 端口新增规则；不会自动新增网站端口 80/443。\n'
+    printf '  - 现有用户防火墙规则保持不变。\n'
 }
 
 firewall_is_active() {

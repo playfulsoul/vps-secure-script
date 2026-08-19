@@ -71,7 +71,12 @@ doctor_run() {
     fi
 
     if command -v fail2ban-client >/dev/null 2>&1; then
-        printf '[INFO] 已安装 Fail2Ban。\n'
+        if fail2ban-client ping >/dev/null 2>&1; then
+            printf '[OK]   Fail2Ban 已安装且服务正在运行。\n'
+        else
+            printf '[WARN] Fail2Ban 已安装但服务未响应。\n'
+            warnings=$((warnings + 1))
+        fi
     else
         printf '[INFO] 未安装 Fail2Ban。\n'
     fi

@@ -122,10 +122,14 @@ fail2ban_verify() {
 
 fail2ban_restore_dir() {
     local transaction_dir=$1
-    local existed
+    local existed original_active original_enabled restore_failed=0
 
     [[ -r "$transaction_dir/config_existed" ]] || return 60
+    [[ -r "$transaction_dir/service_active" ]] || return 60
+    [[ -r "$transaction_dir/service_enabled" ]] || return 60
     IFS= read -r existed < "$transaction_dir/config_existed"
+    IFS= read -r original_active < "$transaction_dir/service_active"
+    IFS= read -r original_enabled < "$transaction_dir/service_enabled"
 
     if [[ "$existed" == yes ]]; then
         [[ -f "$transaction_dir/original.conf" ]] || return 60
@@ -134,14 +138,24 @@ fail2ban_restore_dir() {
         rm -f "$CONFIG_FILE" || return 60
     fi
 
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl restart fail2ban 2>/dev/null || true
+    if [[ "$original_enabled" == yes ]]; then
+        systemctl enable fail2ban >/dev/null 2>&1 || restore_failed=1
+    else
+        systemctl disable fail2ban >/dev/null 2>&1 || restore_failed=1
     fi
+
+    if [[ "$original_active" == yes ]]; then
+        systemctl restart fail2ban >/dev/null 2>&1 || restore_failed=1
+    else
+        systemctl stop fail2ban >/dev/null 2>&1 || restore_failed=1
+    fi
+    (( restore_failed == 0 )) || return 60
     printf '已恢复应用前的 Fail2Ban 模块配置。\n'
 }
 
 fail2ban_apply() {
     local ports backend ports_csv transaction_dir config_dir
+    local original_active=no original_enabled=no
 
     vps_require_root || return $?
     fail2ban_check || return $?
@@ -155,6 +169,10 @@ fail2ban_apply() {
     fi
 
     transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || return 40
+    systemctl is-active --quiet fail2ban && original_active=yes
+    systemctl is-enabled --quiet fail2ban && original_enabled=yes
+    printf '%s\n' "$original_active" > "$transaction_dir/service_active" || return 40
+    printf '%s\n' "$original_enabled" > "$transaction_dir/service_enabled" || return 40
     config_dir=$(dirname -- "$CONFIG_FILE")
     install -d -m 755 "$config_dir" || return 40
 

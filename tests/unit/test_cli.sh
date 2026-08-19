@@ -31,7 +31,8 @@ actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     $CLI firewall plan)
 assert_contains "$actual" '保持并放行 SSH 端口:' "firewall plan identifies the SSH allow-list"
 assert_contains "$actual" '32876' "firewall plan preserves the current custom SSH port"
-assert_contains "$actual" '不默认开放 22、80 或 443' "firewall plan follows least-privilege defaults"
+assert_contains "$actual" '不会自动新增网站端口 80/443' "firewall plan follows least-privilege defaults"
+assert_contains "$actual" '现有用户防火墙规则保持不变' "firewall plan preserves existing rules"
 
 actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     VPS_AUTH_LOG_FILE="$temporary_auth_log" \
