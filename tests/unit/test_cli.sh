@@ -39,11 +39,69 @@ actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     VPS_SYSTEMD_RUNTIME_DIR="$temporary_auth_log.missing-systemd" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
     $CLI fail2ban plan)
-rm -f "$temporary_os_release" "$temporary_auth_log"
 assert_contains "$actual" 'SSH 端口:' "Fail2Ban plan identifies the protected SSH ports"
 assert_contains "$actual" '32876' "Fail2Ban plan uses the current custom SSH port"
 assert_contains "$actual" '日志后端: logfile' "Fail2Ban plan selects an available Debian log backend"
 assert_contains "$actual" '不覆盖 /etc/fail2ban/jail.local' "Fail2Ban plan preserves user configuration"
+
+preflight_root=$(mktemp -d)
+mkdir -p "$preflight_root/config/jail.d" "$preflight_root/bin" "$preflight_root/systemd"
+printf '%s\n' \
+    '[sshd]' \
+    'enabled = true' \
+    'port = 22' \
+    'logpath = %(sshd_log)s' \
+    'backend = %(sshd_backend)s' > "$preflight_root/config/jail.local"
+cat > "$preflight_root/bin/fail2ban-client" <<'EOF'
+#!/usr/bin/env bash
+set -u
+config_root=''
+while (( $# > 0 )); do
+    case $1 in
+        -c)
+            config_root=$2
+            shift 2
+            ;;
+        -t)
+            shift
+            ;;
+        *)
+            exit 64
+            ;;
+    esac
+done
+candidate="$config_root/jail.d/90-vps-secure.local"
+[[ -f "$candidate" ]] || exit 1
+grep -q '^backend = systemd$' "$candidate" || exit 1
+grep -Eq '^logpath =[[:space:]]*$' "$candidate" || exit 1
+grep -q '^logpath = %(sshd_log)s$' "$config_root/jail.local" || exit 1
+EOF
+cat > "$preflight_root/bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "$preflight_root/bin/journalctl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x \
+    "$preflight_root/bin/fail2ban-client" \
+    "$preflight_root/bin/systemctl" \
+    "$preflight_root/bin/journalctl"
+actual=$(PATH="$preflight_root/bin:$PATH" \
+    VPS_OS_RELEASE_FILE="$temporary_os_release" \
+    VPS_SYSTEMD_RUNTIME_DIR="$preflight_root/systemd" \
+    VPS_FAIL2BAN_CONFIG_ROOT="$preflight_root/config" \
+    SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
+    $CLI fail2ban preflight)
+assert_contains "$actual" '临时合并配置预检通过' "Fail2Ban preflight validates a temporary merged configuration"
+if [[ -e "$preflight_root/config/jail.d/90-vps-secure.local" ]]; then
+    fail "Fail2Ban preflight must not write the live configuration tree"
+else
+    pass "Fail2Ban preflight leaves the live configuration tree unchanged"
+fi
+rm -rf "$preflight_root"
+rm -f "$temporary_os_release" "$temporary_auth_log"
 
 if $CLI module run security.ssh unsupported-action >/dev/null 2>&1; then
     fail "CLI rejects unsupported module actions"

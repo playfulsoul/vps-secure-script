@@ -39,6 +39,7 @@ Modules implement applicable actions through their entry point:
 ```text
 module.sh check
 module.sh plan
+module.sh preflight
 module.sh apply
 module.sh verify
 module.sh status
@@ -55,7 +56,9 @@ Minimum requirements by module type:
 
 - Read-only module: `check`, `status`, `doctor`
 - Monitoring module: `check`, `apply`, `verify`, `status`, `configure`, `start`, `stop`, `uninstall`
-- System-changing module: `check`, `plan`, `backup`, `apply`, `verify`, `rollback`, `status`
+- System-changing module: `check`, `plan`, `preflight`, `backup`, `apply`, `verify`, `rollback`, `status`
+
+`preflight` validates a generated candidate against a temporary copy of the effective configuration. It must not write system configuration, start or restart services, or otherwise change the target system.
 
 ## 4. Exit status
 

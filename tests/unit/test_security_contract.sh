@@ -45,13 +45,12 @@ else
 fi
 
 candidate_file=$(mktemp)
-(
-    export VPS_PLATFORM_ROOT="$PROJECT_ROOT"
-    export VPS_MODULE_ID=security.fail2ban
-    # shellcheck source=../../modules/builtin/security-fail2ban/module.sh
-    source "$FAIL2BAN_MODULE" backup >/dev/null
-    fail2ban_write_candidate "$candidate_file" "32876" systemd
-)
+VPS_PLATFORM_ROOT="$PROJECT_ROOT" \
+VPS_MODULE_ID=security.fail2ban \
+    bash -c '
+        source "$1" backup >/dev/null
+        fail2ban_write_candidate "$2" "32876" systemd
+    ' _ "$FAIL2BAN_MODULE" "$candidate_file"
 if grep -Eq '^logpath =[[:space:]]*$' "$candidate_file" && \
    grep -q '^backend = systemd$' "$candidate_file"; then
     pass "Fail2Ban systemd configuration clears inherited log paths"

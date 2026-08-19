@@ -37,11 +37,12 @@ For every scenario, `vps ssh status`, `vps firewall plan`, and `vps fail2ban pla
 ## Fail2Ban lifecycle
 
 1. Confirm which log backend the plan selects.
-2. Apply with `sudo vps fail2ban apply --yes`, then run `vps fail2ban verify`.
-3. Confirm the `sshd` jail contains every active SSH port.
-4. Confirm `/etc/fail2ban/jail.local` is unchanged.
-5. Introduce an invalid candidate in a disposable test and verify restoration.
-6. Run rollback and compare the module configuration with its pre-apply state.
+2. Run `vps fail2ban preflight` and confirm it validates a temporary merged configuration without changing `/etc/fail2ban` or the service state.
+3. Apply with `sudo vps fail2ban apply --yes`, then run `vps fail2ban verify`.
+4. Confirm the `sshd` jail contains every active SSH port.
+5. Confirm `/etc/fail2ban/jail.local` is unchanged.
+6. Introduce an invalid candidate in a disposable test and verify restoration.
+7. Run rollback and compare the module configuration with its pre-apply state.
 
 ## Evidence to retain
 

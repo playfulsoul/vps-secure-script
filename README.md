@@ -40,6 +40,7 @@ VPS Secure Platform 是面向 Debian 与 Ubuntu 的模块化服务器安全和�
 ./bin/vps doctor
 ./bin/vps firewall plan
 ./bin/vps fail2ban plan
+./bin/vps fail2ban preflight
 ```
 
 构建发行包：

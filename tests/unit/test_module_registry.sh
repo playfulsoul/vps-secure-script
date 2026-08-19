@@ -32,6 +32,12 @@ else
     fail "known module action is accepted"
 fi
 
+if vps_module_action_is_valid preflight; then
+    pass "read-only preflight module action is accepted"
+else
+    fail "read-only preflight module action is accepted"
+fi
+
 if vps_module_action_is_valid arbitrary-command; then
     fail "arbitrary module action is rejected"
 else

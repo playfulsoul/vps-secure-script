@@ -10,7 +10,9 @@ source "$VPS_PLATFORM_ROOT/core/runtime.sh"
 source "$VPS_PLATFORM_ROOT/core/ssh.sh"
 
 MODULE_ID=${VPS_MODULE_ID:-security.fail2ban}
-CONFIG_FILE=${VPS_FAIL2BAN_CONFIG:-/etc/fail2ban/jail.d/90-vps-secure.local}
+CONFIG_ROOT=${VPS_FAIL2BAN_CONFIG_ROOT:-/etc/fail2ban}
+CONFIG_RELATIVE=${VPS_FAIL2BAN_CONFIG_RELATIVE:-jail.d/90-vps-secure.local}
+CONFIG_FILE=${VPS_FAIL2BAN_CONFIG:-$CONFIG_ROOT/$CONFIG_RELATIVE}
 AUTH_LOG_FILE=${VPS_AUTH_LOG_FILE:-/var/log/auth.log}
 
 fail2ban_supported_platform() {
@@ -106,6 +108,53 @@ logpath = $AUTH_LOG_FILE
 backend = auto
 EOF
     fi
+}
+
+fail2ban_preflight() {
+    local ports backend ports_csv temporary_dir candidate_file result=0
+
+    fail2ban_check || return $?
+    command -v fail2ban-client >/dev/null 2>&1 || {
+        printf '尚未安装 Fail2Ban，无法执行真实配置预检。\n' >&2
+        return 30
+    }
+    [[ -d "$CONFIG_ROOT" ]] || {
+        printf 'Fail2Ban 配置目录不存在: %s\n' "$CONFIG_ROOT" >&2
+        return 30
+    }
+    case "/$CONFIG_RELATIVE/" in
+        *'/../'*|*'//'*)
+            printf '模块配置相对路径无效: %s\n' "$CONFIG_RELATIVE" >&2
+            return 64
+            ;;
+    esac
+
+    ports=$(fail2ban_ports) || return $?
+    backend=$(fail2ban_backend) || return $?
+    ports_csv=$(printf '%s\n' "$ports" | paste -sd, -)
+    temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-fail2ban.XXXXXX") || return 30
+
+    if ! cp -a "$CONFIG_ROOT/." "$temporary_dir/"; then
+        printf '无法复制 Fail2Ban 配置用于临时预检。\n' >&2
+        rm -rf -- "$temporary_dir"
+        return 30
+    fi
+    candidate_file="$temporary_dir/$CONFIG_RELATIVE"
+    if ! install -d -m 700 "$(dirname -- "$candidate_file")" || \
+       ! fail2ban_write_candidate "$candidate_file" "$ports_csv" "$backend"; then
+        printf '无法生成 Fail2Ban 临时候选配置。\n' >&2
+        rm -rf -- "$temporary_dir"
+        return 30
+    fi
+
+    if fail2ban-client -c "$temporary_dir" -t; then
+        printf 'Fail2Ban 临时合并配置预检通过；未修改系统配置或服务状态。\n'
+    else
+        printf 'Fail2Ban 临时合并配置预检失败；系统配置和服务状态未改变。\n' >&2
+        result=30
+    fi
+    rm -rf -- "$temporary_dir"
+    return "$result"
 }
 
 fail2ban_verify() {
@@ -227,6 +276,7 @@ fail2ban_rollback() {
 case ${1:-} in
     check) fail2ban_check ;;
     plan) fail2ban_plan ;;
+    preflight) fail2ban_preflight ;;
     apply) fail2ban_apply ;;
     verify) fail2ban_verify ;;
     status|doctor) fail2ban_status ;;

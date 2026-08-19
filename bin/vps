@@ -34,9 +34,9 @@ VPS Secure Platform
   vps doctor
   vps ssh status
   vps firewall <plan|status|apply|verify|rollback>
-  vps fail2ban <plan|status|apply|verify|rollback>
+  vps fail2ban <plan|preflight|status|apply|verify|rollback>
 
-模块操作：check plan apply verify status backup rollback configure
+模块操作：check plan preflight apply verify status backup rollback configure
           start stop uninstall doctor
 EOF
 }

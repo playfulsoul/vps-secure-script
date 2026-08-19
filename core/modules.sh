@@ -160,7 +160,7 @@ vps_module_list() {
 
 vps_module_action_is_valid() {
     case ${1:-} in
-        check|plan|apply|verify|status|backup|rollback|configure|start|stop|uninstall|doctor)
+        check|plan|preflight|apply|verify|status|backup|rollback|configure|start|stop|uninstall|doctor)
             return 0
             ;;
         *)
