@@ -1,5 +1,21 @@
 # VPS Security & Management Toolkit
 
+> **2.0 开发提示**：项目正在从单文件脚本重构为模块化 VPS 管理平台。当前工作版本用于开发和测试，不建议直接部署到生产 VPS。原始 `v1.0.1` 已完整保存在 `legacy/v1.0.1/`。
+
+## 2.0 目标
+
+新版本将以一个稳定核心统一管理安全、系统、应用、监控和诊断模块。外部链接只用于发现和下载经过版本及完整性验证的模块，不再作为 root 远程执行入口。
+
+首阶段重点包括：
+
+- 保持 VPS 当前生效的自定义 SSH 端口，识别失败时不回退到 22；
+- 适配 Debian 12/13 的 SSH 日志与 Fail2Ban 后端；
+- 使用项目自有配置片段，不覆盖用户主配置；
+- 为系统修改增加预检、验证、错误中止和回滚；
+- 建立可独立安装和升级的功能模块规范。
+
+架构和兼容性承诺分别记录在 `ARCHITECTURE.md`、`MODULE_SPEC.md` 与 `COMPATIBILITY.md`。
+
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
 

@@ -8,8 +8,18 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;36m'
 NC='\033[0m' # No Color
-VERSION_TAG="v1.0.1"
+VERSION_TAG="v2.0.0-dev"
 REPO_RAW_URL="https://raw.githubusercontent.com/playfulsoul/vps-secure-script/main/vps_secure.sh"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+VPS_BATCH_MODE=0
+
+if [ -f "$SCRIPT_DIR/core/ssh.sh" ]; then
+    # shellcheck source=core/ssh.sh
+    source "$SCRIPT_DIR/core/ssh.sh"
+else
+    echo "致命错误：缺少 SSH 核心模块 core/ssh.sh。" >&2
+    exit 1
+fi
 
 # ==========================================
 # 前置检测
@@ -54,6 +64,9 @@ esac
 # 工具函数: 暂停与返回
 # ==========================================
 pause() {
+    if [ "$VPS_BATCH_MODE" -eq 1 ]; then
+        return 0
+    fi
     echo ""
     read -n 1 -s -r -p "按任意键继续..."
 }
@@ -113,6 +126,11 @@ install_shortcut() {
 # 模块 0.1: 自助检查更新
 # ==========================================
 check_update() {
+    if [[ "$VERSION_TAG" == *-dev ]]; then
+        echo -e "${YELLOW}当前为模块化开发版本，单文件自更新已停用。请通过完整发布包更新。${NC}"
+        pause
+        return 0
+    fi
     echo -e "${BLUE}正在从 GitHub 检查最新版本...${NC}"
     REMOTE_VERSION=$(curl -sL "$REPO_RAW_URL" | grep 'VERSION_TAG=' | head -n 1 | cut -d '"' -f 2)
     
@@ -143,9 +161,14 @@ check_update() {
 # ==========================================
 do_system_update() {
     echo -e "${BLUE}开始更新系统及其软件包，请耐心等待...${NC}"
-    eval $PM_UPDATE
+    if ! eval "$PM_UPDATE"; then
+        echo -e "${RED}系统更新失败，已停止后续初始化操作。${NC}"
+        pause
+        return 1
+    fi
     echo -e "${GREEN}系统更新完成！${NC}"
     pause
+    return 0
 }
 
 change_ssh_port() {
@@ -214,27 +237,60 @@ import_github_key() {
 # 模块 2: 防火墙管理
 # ==========================================
 install_firewall() {
-    echo -e "${BLUE}正在自动配置防火墙，并放行基本端口 (SSH, 80, 443)...${NC}"
-    CUR_SSH_PORT=$(grep -E "^Port " /etc/ssh/sshd_config | awk '{print $2}' | head -n 1)
-    CUR_SSH_PORT=${CUR_SSH_PORT:-22}
+    local detected_ports
+    local ssh_ports=()
+
+    echo -e "${BLUE}正在识别当前实际使用的 SSH 端口...${NC}"
+    if ! detected_ports=$(vps_require_ssh_ports); then
+        echo -e "${RED}无法可靠确认 SSH 端口。为避免服务器失联，本次不会启用防火墙。${NC}"
+        pause
+        return 1
+    fi
+    mapfile -t ssh_ports <<< "$detected_ports"
+    echo -e "${BLUE}将保持并放行现有 SSH 端口: ${ssh_ports[*]}${NC}"
     
     if [ "$FIREWALL_CMD" == "ufw" ]; then
-        eval "$PM_INSTALL ufw"
-        ufw allow $CUR_SSH_PORT/tcp
-        ufw allow 80/tcp
-        ufw allow 443/tcp
-        echo "y" | ufw enable
+        if ! eval "$PM_INSTALL ufw"; then
+            echo -e "${RED}UFW 安装失败。${NC}"
+            pause
+            return 1
+        fi
+        local port
+        for port in "${ssh_ports[@]}"; do
+            if ! ufw allow "$port/tcp"; then
+                echo -e "${RED}无法放行 SSH 端口 $port/tcp，防火墙未启用。${NC}"
+                pause
+                return 1
+            fi
+        done
+        if ! ufw --force enable; then
+            echo -e "${RED}UFW 启用失败。${NC}"
+            pause
+            return 1
+        fi
     else
-        eval "$PM_INSTALL firewalld"
-        systemctl enable firewalld
-        systemctl start firewalld
-        firewall-cmd --permanent --add-port=$CUR_SSH_PORT/tcp
-        firewall-cmd --permanent --add-port=80/tcp
-        firewall-cmd --permanent --add-port=443/tcp
-        firewall-cmd --reload
+        if ! eval "$PM_INSTALL firewalld" || ! systemctl enable --now firewalld; then
+            echo -e "${RED}Firewalld 安装或启动失败。${NC}"
+            pause
+            return 1
+        fi
+        local port
+        for port in "${ssh_ports[@]}"; do
+            if ! firewall-cmd --permanent --add-port="$port/tcp"; then
+                echo -e "${RED}无法放行 SSH 端口 $port/tcp。${NC}"
+                pause
+                return 1
+            fi
+        done
+        if ! firewall-cmd --reload; then
+            echo -e "${RED}Firewalld 规则加载失败。${NC}"
+            pause
+            return 1
+        fi
     fi
-    echo -e "${GREEN}防火墙已开启并配置完毕！${NC}"
+    echo -e "${GREEN}防火墙已开启；现有 SSH 端口已保留。未默认开放 80/443。${NC}"
     pause
+    return 0
 }
 
 status_firewall() {
@@ -272,14 +328,64 @@ reload_firewall() {
 # ==========================================
 # 模块 3: Fail2Ban 管理
 # ==========================================
-install_fail2ban() {
-    echo -e "${BLUE}安装防暴力破解 Fail2Ban...${NC}"
-    eval "$PM_INSTALL fail2ban"
-    
-    CUR_SSH_PORT=$(grep -E "^Port " /etc/ssh/sshd_config | awk '{print $2}' | head -n 1)
-    CUR_SSH_PORT=${CUR_SSH_PORT:-ssh}
+restore_fail2ban_config() {
+    local config_file=$1
+    local backup_file=$2
 
-    cat > /etc/fail2ban/jail.local <<EOF
+    if [ -n "$backup_file" ] && [ -f "$backup_file" ]; then
+        cp "$backup_file" "$config_file"
+    else
+        rm -f "$config_file"
+    fi
+}
+
+install_fail2ban() {
+    local detected_ports
+    local ports_csv
+    local backend
+    local config_file=/etc/fail2ban/jail.d/90-vps-secure.local
+    local backup_file=''
+
+    echo -e "${BLUE}安装防暴力破解 Fail2Ban...${NC}"
+    if ! detected_ports=$(vps_require_ssh_ports); then
+        echo -e "${RED}无法可靠确认 SSH 端口，Fail2Ban 配置已停止。${NC}"
+        pause
+        return 1
+    fi
+    ports_csv=$(printf '%s\n' "$detected_ports" | paste -sd, -)
+
+    if ! eval "$PM_INSTALL fail2ban"; then
+        echo -e "${RED}Fail2Ban 安装失败。${NC}"
+        pause
+        return 1
+    fi
+
+    if command -v journalctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        backend=systemd
+    elif [ -f /var/log/auth.log ]; then
+        backend=logfile
+    else
+        echo -e "${RED}未发现 systemd journal 或 /var/log/auth.log，无法安全配置 SSH 拦截。${NC}"
+        pause
+        return 1
+    fi
+
+    if ! install -d -m 755 /etc/fail2ban/jail.d; then
+        echo -e "${RED}无法创建 Fail2Ban 配置目录。${NC}"
+        pause
+        return 1
+    fi
+    if [ -f "$config_file" ]; then
+        backup_file="${config_file}.bak.$(date +%Y%m%d%H%M%S)"
+        if ! cp "$config_file" "$backup_file"; then
+            echo -e "${RED}无法备份现有 Fail2Ban 配置。${NC}"
+            pause
+            return 1
+        fi
+    fi
+
+    if [ "$backend" = "systemd" ]; then
+        cat > "$config_file" <<EOF
 [DEFAULT]
 bantime = 86400
 findtime = 600
@@ -287,15 +393,47 @@ maxretry = 5
 
 [sshd]
 enabled = true
-port = $CUR_SSH_PORT
-logpath = %(sshd_log)s
-backend = %(sshd_backend)s
+port = $ports_csv
+backend = systemd
 EOF
+    else
+        cat > "$config_file" <<EOF
+[DEFAULT]
+bantime = 86400
+findtime = 600
+maxretry = 5
 
-    systemctl enable fail2ban
-    systemctl restart fail2ban
-    echo -e "${GREEN}Fail2Ban 预制防护安装完成！(连续错误5次封禁1天)${NC}"
+[sshd]
+enabled = true
+port = $ports_csv
+logpath = /var/log/auth.log
+backend = auto
+EOF
+    fi
+
+    if ! fail2ban-client -t; then
+        echo -e "${RED}Fail2Ban 配置检查失败，正在恢复原配置。${NC}"
+        restore_fail2ban_config "$config_file" "$backup_file"
+        pause
+        return 1
+    fi
+    if ! systemctl enable --now fail2ban || ! systemctl restart fail2ban; then
+        echo -e "${RED}Fail2Ban 服务启动失败，正在恢复原配置。${NC}"
+        restore_fail2ban_config "$config_file" "$backup_file"
+        systemctl restart fail2ban 2>/dev/null || true
+        pause
+        return 1
+    fi
+    if ! fail2ban-client ping >/dev/null 2>&1 || ! fail2ban-client status sshd >/dev/null 2>&1; then
+        echo -e "${RED}Fail2Ban 启动后验证失败，正在恢复原配置。${NC}"
+        restore_fail2ban_config "$config_file" "$backup_file"
+        systemctl restart fail2ban 2>/dev/null || true
+        pause
+        return 1
+    fi
+    echo -e "${GREEN}Fail2Ban 已启用，日志后端: $backend，SSH 端口: $ports_csv。${NC}"
     pause
+    return 0
 }
 
 status_fail2ban() {
@@ -318,30 +456,99 @@ view_fail2ban_log() {
 # ==========================================
 enable_bbr() {
     echo -e "${BLUE}检查 BBR...${NC}"
-    if sysctl net.ipv4.tcp_congestion_control | grep -q bbr; then
+    if sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null | grep -qx bbr; then
         echo -e "${GREEN}BBR 网速提升机制早已开启，无需配置。${NC}"
     else
-        echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
-        echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
-        sysctl -p
-        echo -e "${GREEN}BBR 网络加速开启成功！${NC}"
+        modprobe tcp_bbr 2>/dev/null || true
+        if ! sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -qw bbr; then
+            echo -e "${RED}当前内核未提供 BBR，本步骤已停止且未写入配置。${NC}"
+            pause
+            return 1
+        fi
+        if ! printf '%s\n' \
+            'net.core.default_qdisc=fq' \
+            'net.ipv4.tcp_congestion_control=bbr' > /etc/sysctl.d/90-vps-secure.conf; then
+            echo -e "${RED}无法写入 BBR 配置。${NC}"
+            pause
+            return 1
+        fi
+        if ! sysctl --system >/dev/null || \
+           ! sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null | grep -qx bbr; then
+            echo -e "${RED}BBR 配置验证失败。${NC}"
+            pause
+            return 1
+        fi
+        echo -e "${GREEN}BBR 网络加速已启用并验证。${NC}"
     fi
     pause
+    return 0
 }
 
 add_swap() {
-    if swapon --show | grep -q "/"; then
+    if swapon --noheadings --show=NAME 2>/dev/null | grep -q .; then
         echo -e "${YELLOW}系统已存在 Swap 虚拟内存，退出防重复。${NC}"
     else
+        if [ -e /swapfile ]; then
+            echo -e "${RED}检测到未启用的 /swapfile。为避免覆盖未知数据，本步骤已停止。${NC}"
+            pause
+            return 1
+        fi
         echo -e "${BLUE}正在创建 1GB 虚拟内存 (防突发 OOM 崩溃)...${NC}"
-        fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
-        chmod 600 /swapfile
-        mkswap /swapfile
-        swapon /swapfile
-        echo '/swapfile none swap sw 0 0' >> /etc/fstab
-        echo -e "${GREEN}Swap 1GB 创建成功！${NC}"
+        if ! fallocate -l 1G /swapfile && \
+           ! dd if=/dev/zero of=/swapfile bs=1M count=1024 status=progress; then
+            echo -e "${RED}Swap 文件创建失败。${NC}"
+            pause
+            return 1
+        fi
+        if ! chmod 600 /swapfile || ! mkswap /swapfile || ! swapon /swapfile; then
+            echo -e "${RED}Swap 初始化或启用失败。${NC}"
+            pause
+            return 1
+        fi
+        if ! grep -qF '/swapfile none swap sw 0 0' /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        fi
+        if ! swapon --noheadings --show=NAME | grep -qx /swapfile; then
+            echo -e "${RED}Swap 启用后验证失败。${NC}"
+            pause
+            return 1
+        fi
+        echo -e "${GREEN}Swap 1GB 已创建并验证。${NC}"
     fi
     pause
+    return 0
+}
+
+run_initial_hardening() {
+    local step
+    local required_steps=(do_system_update install_firewall install_fail2ban)
+    local optional_steps=(enable_bbr add_swap)
+    local optional_failures=0
+
+    VPS_BATCH_MODE=1
+    for step in "${required_steps[@]}"; do
+        if ! "$step"; then
+            VPS_BATCH_MODE=0
+            echo -e "${RED}必要步骤 '$step' 失败，初始化已停止。${NC}"
+            return 1
+        fi
+    done
+
+    for step in "${optional_steps[@]}"; do
+        if ! "$step"; then
+            optional_failures=$((optional_failures + 1))
+            echo -e "${YELLOW}可选步骤 '$step' 未完成，继续执行其余步骤。${NC}"
+        fi
+    done
+    VPS_BATCH_MODE=0
+
+    if [ "$optional_failures" -eq 0 ]; then
+        echo -e "${GREEN}系统初始化的所有步骤均已执行并通过验证。${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}安全必要步骤已完成；有 $optional_failures 个性能或可用性步骤未完成。${NC}"
+    return 1
 }
 
 # ==========================================
@@ -880,12 +1087,7 @@ main_menu() {
                 echo -e "${YELLOW}警告：一键加固将修改防火墙与系统核心参数。${NC}"
                 read -p "确认执行系统安全加固吗？(y/N): " CONFIRM_ALL
                 if [[ "$CONFIRM_ALL" =~ ^[Yy]$ ]]; then
-                    do_system_update
-                    install_firewall
-                    enable_bbr
-                    add_swap
-                    install_fail2ban
-                    echo -e "${GREEN}系统基础安全防护配置完成。${NC}"
+                    run_initial_hardening
                     pause
                 fi
                 ;;
