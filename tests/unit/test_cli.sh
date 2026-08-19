@@ -15,6 +15,10 @@ assert_eq 'vps-secure 2.0.0-dev' "$actual" "CLI reports the platform version"
 actual=$($CLI module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
 assert_contains "$actual" 'security.ssh' "CLI lists the SSH module"
+assert_contains "$actual" 'monitoring.network' "CLI lists the network monitoring module"
+
+actual=$(printf '0\n' | "$CLI")
+assert_contains "$actual" 'VPS Secure Platform' "interactive menu is generated from the module registry"
 
 actual=$($CLI module info security.ssh)
 assert_contains "$actual" 'high-risk' "CLI exposes module privilege level"
@@ -41,6 +45,12 @@ if $CLI module run security.ssh unsupported-action >/dev/null 2>&1; then
     fail "CLI rejects unsupported module actions"
 else
     pass "CLI rejects unsupported module actions"
+fi
+
+if $CLI module run system.swap apply --size 1G >/dev/null 2>&1; then
+    fail "CLI requires explicit confirmation for state changes"
+else
+    pass "CLI requires explicit confirmation for state changes"
 fi
 
 finish_tests

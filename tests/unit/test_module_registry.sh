@@ -46,7 +46,8 @@ printf '%s\n' \
     'category=test' \
     'entry=../outside.sh' \
     'trust=third-party' \
-    'privilege=unprivileged' > "$invalid_manifest"
+    'privilege=unprivileged' \
+    'actions=status' > "$invalid_manifest"
 
 if vps_validate_manifest "$invalid_manifest" >/dev/null 2>&1; then
     fail "manifest entry cannot escape its module directory"
@@ -54,5 +55,17 @@ else
     pass "manifest entry cannot escape its module directory"
 fi
 rm -f "$invalid_manifest"
+
+if vps_module_declares_action "$(vps_module_find security.ssh)" status; then
+    pass "registry accepts an action declared by the module"
+else
+    fail "registry accepts an action declared by the module"
+fi
+
+if vps_module_declares_action "$(vps_module_find security.ssh)" apply; then
+    fail "registry rejects an undeclared module action"
+else
+    pass "registry rejects an undeclared module action"
+fi
 
 finish_tests

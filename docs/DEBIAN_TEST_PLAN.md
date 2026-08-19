@@ -27,7 +27,7 @@ For every scenario, `vps ssh status`, `vps firewall plan`, and `vps fail2ban pla
 
 1. Record provider firewall and console access.
 2. Run `vps firewall plan` as an unprivileged user.
-3. Run `sudo vps firewall apply` while keeping the current SSH session open.
+3. Run `sudo vps firewall apply --yes` while keeping the current SSH session open.
 4. Open a second SSH connection on the existing custom port.
 5. Verify no implicit 22, 80, or 443 rule was added.
 6. Run apply a second time and confirm idempotency.
@@ -37,7 +37,7 @@ For every scenario, `vps ssh status`, `vps firewall plan`, and `vps fail2ban pla
 ## Fail2Ban lifecycle
 
 1. Confirm which log backend the plan selects.
-2. Apply and run `vps fail2ban verify`.
+2. Apply with `sudo vps fail2ban apply --yes`, then run `vps fail2ban verify`.
 3. Confirm the `sshd` jail contains every active SSH port.
 4. Confirm `/etc/fail2ban/jail.local` is unchanged.
 5. Introduce an invalid candidate in a disposable test and verify restoration.

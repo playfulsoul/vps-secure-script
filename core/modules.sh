@@ -26,7 +26,7 @@ vps_validate_manifest() {
     local manifest=$1
     local required key value line
     local seen_keys='|'
-    local required_keys=(id name version category entry trust privilege)
+    local required_keys=(id name version category entry trust privilege actions)
 
     [[ -f "$manifest" ]] || {
         printf '模块描述文件不存在: %s\n' "$manifest" >&2
@@ -85,10 +85,25 @@ vps_validate_manifest() {
         printf '模块权限级别无效: %s\n' "$value" >&2
         return 64
     }
+
+    value=$(vps_manifest_value "$manifest" actions)
+    [[ "$value" =~ ^[a-z]+(,[a-z]+)*$ ]] || {
+        printf '模块操作列表无效: %s\n' "$value" >&2
+        return 64
+    }
+    local declared_actions=() action
+    IFS=, read -r -a declared_actions <<< "$value"
+    for action in "${declared_actions[@]}"; do
+        vps_module_action_is_valid "$action" || {
+            printf '模块声明了未知操作: %s\n' "$action" >&2
+            return 64
+        }
+    done
 }
 
 vps_module_roots() {
-    local default_path="$VPS_PLATFORM_ROOT/modules/builtin:$VPS_PLATFORM_ROOT/modules/official"
+    local installed_path=${VPS_INSTALLED_MODULE_DIR:-/usr/local/lib/vps-secure/modules}
+    local default_path="$VPS_PLATFORM_ROOT/modules/builtin:$VPS_PLATFORM_ROOT/modules/official:$installed_path"
     local module_path=${VPS_MODULE_PATH:-$default_path}
     local roots=()
     local root
@@ -165,6 +180,17 @@ vps_module_action_changes_state() {
     esac
 }
 
+vps_module_declares_action() {
+    local manifest=$1 requested=$2 actions action
+    local declared_actions=()
+    actions=$(vps_manifest_value "$manifest" actions) || return 1
+    IFS=, read -r -a declared_actions <<< "$actions"
+    for action in "${declared_actions[@]}"; do
+        [[ "$action" == "$requested" ]] && return 0
+    done
+    return 1
+}
+
 vps_module_run() {
     local module_id=$1
     local action=$2
@@ -181,6 +207,10 @@ vps_module_run() {
         return 20
     }
     vps_validate_manifest "$manifest" || return $?
+    vps_module_declares_action "$manifest" "$action" || {
+        printf '模块 %s 未声明操作: %s\n' "$module_id" "$action" >&2
+        return 64
+    }
 
     module_dir=$(dirname -- "$manifest")
     entry=$(vps_manifest_value "$manifest" entry)

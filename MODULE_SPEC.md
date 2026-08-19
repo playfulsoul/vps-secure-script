@@ -29,6 +29,7 @@ privilege=unprivileged
 background_service=true
 supported_platforms=debian:12+,debian:13+,ubuntu:22.04+
 dependencies=ping,systemd
+actions=check,plan,configure,start,stop,status,verify
 ```
 
 ## 3. Required actions
@@ -106,8 +107,8 @@ Installation sequence:
 3. verify size and SHA-256;
 4. validate manifest keys and module ID;
 5. run contract and syntax checks;
-6. install atomically to a versioned local directory;
-7. update the active-version link only after verification.
+6. install through a temporary directory and atomically replace the active module;
+7. retain transaction metadata and a copy of the previous module for recovery.
 
 The platform does not execute the contents of a mutable remote branch directly as root.
 

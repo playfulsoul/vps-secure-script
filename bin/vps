@@ -2,12 +2,22 @@
 
 set -u
 
-BIN_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+VPS_ENTRY=${BASH_SOURCE[0]}
+while [[ -L "$VPS_ENTRY" ]]; do
+    BIN_DIR=$(cd -- "$(dirname -- "$VPS_ENTRY")" && pwd)
+    VPS_ENTRY=$(readlink "$VPS_ENTRY")
+    [[ "$VPS_ENTRY" == /* ]] || VPS_ENTRY="$BIN_DIR/$VPS_ENTRY"
+done
+BIN_DIR=$(cd -- "$(dirname -- "$VPS_ENTRY")" && pwd)
 VPS_PLATFORM_ROOT=$(cd -- "$BIN_DIR/.." && pwd)
 export VPS_PLATFORM_ROOT
 
 # shellcheck source=../core/modules.sh
 source "$VPS_PLATFORM_ROOT/core/modules.sh"
+# shellcheck source=../core/runtime.sh
+source "$VPS_PLATFORM_ROOT/core/runtime.sh"
+# shellcheck source=../core/installer.sh
+source "$VPS_PLATFORM_ROOT/core/installer.sh"
 
 VERSION=$(<"$VPS_PLATFORM_ROOT/VERSION")
 
@@ -20,6 +30,7 @@ VPS Secure Platform
   vps module list
   vps module info <模块ID>
   vps module run <模块ID> <操作> [参数]
+  vps module install <模块包或HTTPS地址> --sha256 <摘要> --yes
   vps doctor
   vps ssh status
   vps firewall <plan|status|apply|verify|rollback>
@@ -33,7 +44,7 @@ EOF
 show_module_info() {
     local module_id=$1
     local manifest key
-    local keys=(id name version category trust privilege background_service supported_platforms dependencies)
+    local keys=(id name version category trust privilege background_service supported_platforms dependencies actions)
 
     manifest=$(vps_module_find "$module_id") || {
         printf '未找到模块: %s\n' "$module_id" >&2
@@ -43,6 +54,83 @@ show_module_info() {
 
     for key in "${keys[@]}"; do
         printf '%-20s %s\n' "$key:" "$(vps_manifest_value "$manifest" "$key" 2>/dev/null || printf '-')"
+    done
+}
+
+run_module_command() {
+    local module_id=$1
+    local action=$2
+    shift 2
+
+    if vps_module_action_changes_state "$action"; then
+        if [[ ${1:-} != --yes ]]; then
+            if [[ "$action" == apply ]]; then
+                vps_module_run "$module_id" plan 2>/dev/null || true
+            fi
+            printf '\n这是修改系统状态的操作。确认计划后请添加 --yes。\n' >&2
+            return 64
+        fi
+        shift
+    fi
+
+    vps_module_run "$module_id" "$action" "$@"
+}
+
+interactive_module() {
+    local module_id=$1
+    local manifest name actions action_list=() choice action
+
+    manifest=$(vps_module_find "$module_id") || return 20
+    name=$(vps_manifest_value "$manifest" name)
+    actions=$(vps_manifest_value "$manifest" actions 2>/dev/null || printf 'status')
+    IFS=, read -r -a action_list <<< "$actions"
+
+    while true; do
+        printf '\n%s (%s)\n' "$name" "$module_id"
+        local index=1
+        for action in "${action_list[@]}"; do
+            printf '  %s. %s\n' "$index" "$action"
+            index=$((index + 1))
+        done
+        printf '  0. 返回\n'
+        read -r -p '请选择操作: ' choice
+        [[ "$choice" == 0 ]] && return 0
+        [[ "$choice" =~ ^[0-9]+$ ]] || { printf '输入无效。\n'; continue; }
+        (( choice >= 1 && choice <= ${#action_list[@]} )) || { printf '输入无效。\n'; continue; }
+        action=${action_list[choice - 1]}
+
+        if vps_module_action_changes_state "$action"; then
+            [[ "$action" == apply ]] && vps_module_run "$module_id" plan || true
+            read -r -p "确认执行 $action？(y/N): " choice
+            [[ "$choice" =~ ^[Yy]$ ]] || continue
+        fi
+        vps_module_run "$module_id" "$action" || printf '操作未完成，退出状态: %s\n' "$?"
+    done
+}
+
+interactive_menu() {
+    local modules=() line choice index
+
+    while true; do
+        modules=()
+        while IFS= read -r line; do
+            modules+=("$line")
+        done < <(vps_module_list)
+        printf '\nVPS Secure Platform %s\n' "$VERSION"
+        printf '%s\n' '========================================'
+        index=1
+        for line in "${modules[@]}"; do
+            IFS=$'\t' read -r module_id name module_version category trust <<< "$line"
+            printf '  %s. %-28s [%s]\n' "$index" "$name" "$category"
+            index=$((index + 1))
+        done
+        printf '  0. 退出\n'
+        read -r -p '请选择模块: ' choice
+        [[ "$choice" == 0 ]] && return 0
+        [[ "$choice" =~ ^[0-9]+$ ]] || { printf '输入无效。\n'; continue; }
+        (( choice >= 1 && choice <= ${#modules[@]} )) || { printf '输入无效。\n'; continue; }
+        IFS=$'\t' read -r module_id _ <<< "${modules[choice - 1]}"
+        interactive_module "$module_id"
     done
 }
 
@@ -61,7 +149,14 @@ command_module() {
             ;;
         run)
             [[ $# -ge 2 ]] || { show_help >&2; return 64; }
-            vps_module_run "$@"
+            run_module_command "$@"
+            ;;
+        install|update)
+            [[ $# -eq 4 && ${2:-} == --sha256 && ${4:-} == --yes ]] || {
+                show_help >&2
+                return 64
+            }
+            vps_install_module_archive "$1" "$3"
             ;;
         *)
             show_help >&2
@@ -71,7 +166,12 @@ command_module() {
 }
 
 main() {
-    local command=${1:-help}
+    if [[ $# -eq 0 ]]; then
+        interactive_menu
+        return
+    fi
+
+    local command=$1
     shift || true
 
     case "$command" in
@@ -94,11 +194,11 @@ main() {
             ;;
         firewall)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
-            vps_module_run security.firewall "$@"
+            run_module_command security.firewall "$@"
             ;;
         fail2ban)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
-            vps_module_run security.fail2ban "$@"
+            run_module_command security.fail2ban "$@"
             ;;
         *)
             printf '未知命令: %s\n\n' "$command" >&2
