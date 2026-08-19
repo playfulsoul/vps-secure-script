@@ -90,6 +90,7 @@ maxretry = 5
 enabled = true
 port = $ports_csv
 backend = systemd
+logpath =
 EOF
     else
         cat > "$candidate" <<EOF

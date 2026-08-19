@@ -44,4 +44,20 @@ else
     fail "Fail2Ban rollback must restore the previous service state"
 fi
 
+candidate_file=$(mktemp)
+(
+    export VPS_PLATFORM_ROOT="$PROJECT_ROOT"
+    export VPS_MODULE_ID=security.fail2ban
+    # shellcheck source=../../modules/builtin/security-fail2ban/module.sh
+    source "$FAIL2BAN_MODULE" backup >/dev/null
+    fail2ban_write_candidate "$candidate_file" "32876" systemd
+)
+if grep -Eq '^logpath =[[:space:]]*$' "$candidate_file" && \
+   grep -q '^backend = systemd$' "$candidate_file"; then
+    pass "Fail2Ban systemd configuration clears inherited log paths"
+else
+    fail "Fail2Ban systemd configuration must clear inherited log paths"
+fi
+rm -f "$candidate_file"
+
 finish_tests
