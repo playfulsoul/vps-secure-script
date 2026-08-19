@@ -102,20 +102,33 @@ firewall_status() {
 
 firewall_rollback_dir() {
     local transaction_dir=$1
-    local original_active added_port
+    local original_active added_port current_port retained_current_port=no
 
     [[ -r "$transaction_dir/original_active" ]] || return 60
     IFS= read -r original_active < "$transaction_dir/original_active"
 
+    if [[ "$original_active" == no ]]; then
+        ufw --force disable >/dev/null 2>&1 || return 60
+    else
+        current_port=$(vps_ssh_connection_port "${SSH_CONNECTION:-}" 2>/dev/null || true)
+    fi
+
     if [[ -r "$transaction_dir/added_ports" ]]; then
         while IFS= read -r added_port; do
             [[ -n "$added_port" ]] || continue
-            ufw --force delete allow "$added_port/tcp" >/dev/null 2>&1 || true
+            if [[ "$original_active" == yes && "$added_port" == "$current_port" ]]; then
+                printf '保留当前 SSH 会话端口规则: %s/tcp；请切换到其他已放行端口后再次回滚。\n' \
+                    "$added_port" >&2
+                retained_current_port=yes
+                continue
+            fi
+            firewall_rule_exists "$added_port" || continue
+            ufw --force delete allow "$added_port/tcp" >/dev/null 2>&1 || return 60
         done < "$transaction_dir/added_ports"
     fi
 
-    if [[ "$original_active" == no ]]; then
-        ufw --force disable >/dev/null 2>&1 || return 60
+    if [[ "$retained_current_port" == yes ]]; then
+        return 10
     fi
 
     printf '已回滚本模块添加的规则。\n'
