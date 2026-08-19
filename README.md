@@ -2,7 +2,7 @@
 
 VPS Secure Platform 是面向 Debian 与 Ubuntu 的模块化服务器安全和管理工具。核心只负责系统识别、菜单、模块生命周期、确认、状态与事务；安全、系统、应用、监控和诊断能力由独立模块提供。
 
-当前版本为 `2.0.0-dev`，已完成本地自动化测试，尚未完成真实 VPS 集成验收。请先在有控制台和快照的临时机器上测试，不要直接部署到生产服务器。
+当前版本为 `2.0.0-dev`，已完成本地自动化测试和一轮 Debian 12 真实 VPS 验收，包括默认/临时双 SSH 端口、UFW、Fail2Ban、验证与回滚。其他目标系统和剩余高风险场景仍待验证，请先在有控制台和快照的临时机器上测试，不要直接部署到生产服务器。
 
 ## 关键安全规则
 
@@ -93,7 +93,7 @@ vps module run monitoring.network status
 
 ## 支持范围与测试
 
-首批目标为 Debian 11/12/13 和 Ubuntu 22.04/24.04，要求 systemd 与 APT。兼容性边界见 [COMPATIBILITY.md](COMPATIBILITY.md)，真实 Debian 验收步骤见 [docs/DEBIAN_TEST_PLAN.md](docs/DEBIAN_TEST_PLAN.md)。
+首批目标为 Debian 11/12/13 和 Ubuntu 22.04/24.04，要求 systemd 与 APT。兼容性边界见 [COMPATIBILITY.md](COMPATIBILITY.md)，真实 Debian 验收步骤见 [docs/DEBIAN_TEST_PLAN.md](docs/DEBIAN_TEST_PLAN.md)，已完成的 Debian 12 证据见 [docs/DEBIAN_12_VALIDATION.md](docs/DEBIAN_12_VALIDATION.md)。
 
 本地运行：
 

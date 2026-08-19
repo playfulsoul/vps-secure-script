@@ -4,6 +4,7 @@
 
 - **Supported**: included in automated tests and manually verified for high-risk workflows.
 - **Compatible**: expected to work and covered by selected tests, but not every scenario is guaranteed.
+- **Target**: planned for the 2.x line but not yet manually verified for high-risk workflows.
 - **Experimental**: visible only with a warning; not included in one-click hardening promises.
 - **Unsupported**: execution stops before system modification.
 
@@ -11,12 +12,12 @@
 
 | Platform | Level | Notes |
 | --- | --- | --- |
-| Debian 13 | Supported target | systemd journal-aware Fail2Ban configuration |
-| Debian 12 | Supported target | test with and without `/var/log/auth.log` and rsyslog |
-| Debian 11 | Compatible target | security fixes only after capability detection |
+| Debian 13 | Target | systemd journal-aware Fail2Ban configuration; manual validation pending |
+| Debian 12 | Compatible | default and temporary dual SSH ports, active UFW, journald Fail2Ban, verification, and rollback manually validated; remaining scenarios documented separately |
+| Debian 11 | Target | security fixes only after capability detection; manual validation pending |
 | Debian 10 | Unsupported target for 2.x | legacy script remains available; show lifecycle warning |
-| Ubuntu 24.04 LTS | Supported target | test OpenSSH drop-ins and UFW |
-| Ubuntu 22.04 LTS | Supported target | test OpenSSH drop-ins and UFW |
+| Ubuntu 24.04 LTS | Target | test OpenSSH drop-ins and UFW |
+| Ubuntu 22.04 LTS | Target | test OpenSSH drop-ins and UFW |
 | Rocky/AlmaLinux | Experimental | excluded from initial modular hardening release |
 
 ## Mandatory scenarios
@@ -42,3 +43,5 @@ High-risk modules are not marked supported until these scenarios pass where appl
 ## Definition of support
 
 Recognizing `/etc/os-release` is not sufficient. A supported platform must have tested adapters, safe failure behavior, post-change verification, and documented recovery steps.
+
+The current Debian 12 validation record is available in [`docs/DEBIAN_12_VALIDATION.md`](docs/DEBIAN_12_VALIDATION.md).
