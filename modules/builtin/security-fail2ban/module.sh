@@ -157,10 +157,27 @@ fail2ban_preflight() {
     return "$result"
 }
 
+fail2ban_wait_ready() {
+    local attempts=${VPS_FAIL2BAN_READY_ATTEMPTS:-10}
+    local delay=${VPS_FAIL2BAN_READY_DELAY:-1}
+    local attempt=1
+
+    [[ "$attempts" =~ ^[1-9][0-9]*$ ]] || attempts=10
+    [[ "$delay" =~ ^[0-9]+([.][0-9]+)?$ ]] || delay=1
+
+    while (( attempt <= attempts )); do
+        fail2ban-client ping >/dev/null 2>&1 && return 0
+        (( attempt == attempts )) && break
+        sleep "$delay"
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
 fail2ban_verify() {
     command -v fail2ban-client >/dev/null 2>&1 || return 50
-    fail2ban-client ping >/dev/null 2>&1 || {
-        printf 'Fail2Ban 服务未响应。\n' >&2
+    fail2ban_wait_ready || {
+        printf 'Fail2Ban 服务在等待就绪后仍未响应。\n' >&2
         return 50
     }
     fail2ban-client status sshd >/dev/null 2>&1 || {
@@ -241,7 +258,7 @@ fail2ban_apply() {
         return 40
     fi
 
-    if ! systemctl enable --now fail2ban || ! systemctl restart fail2ban; then
+    if ! systemctl enable fail2ban || ! systemctl restart fail2ban; then
         fail2ban_restore_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 40
     fi

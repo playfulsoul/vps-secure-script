@@ -59,4 +59,47 @@ else
 fi
 rm -f "$candidate_file"
 
+readiness_root=$(mktemp -d)
+readiness_counter="$readiness_root/ping-count"
+printf '0\n' > "$readiness_counter"
+cat > "$readiness_root/fail2ban-client" <<'EOF'
+#!/usr/bin/env bash
+set -u
+case ${1:-} in
+    ping)
+        count=$(<"$VPS_TEST_READINESS_COUNTER")
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$VPS_TEST_READINESS_COUNTER"
+        (( count >= 3 ))
+        ;;
+    status)
+        exit 0
+        ;;
+    *)
+        exit 64
+        ;;
+esac
+EOF
+chmod +x "$readiness_root/fail2ban-client"
+actual=$(PATH="$readiness_root:$PATH" \
+    VPS_PLATFORM_ROOT="$PROJECT_ROOT" \
+    VPS_MODULE_ID=security.fail2ban \
+    VPS_TEST_READINESS_COUNTER="$readiness_counter" \
+    VPS_FAIL2BAN_READY_ATTEMPTS=3 \
+    VPS_FAIL2BAN_READY_DELAY=0 \
+    bash -c '
+        source "$1" backup >/dev/null
+        fail2ban_verify
+    ' _ "$FAIL2BAN_MODULE")
+assert_contains "$actual" '已通过验证' "Fail2Ban verification waits for a delayed service socket"
+actual=$(<"$readiness_counter")
+assert_eq '3' "$actual" "Fail2Ban readiness check uses bounded retries"
+rm -rf "$readiness_root"
+
+if grep -q 'systemctl enable --now fail2ban' "$FAIL2BAN_MODULE"; then
+    fail "Fail2Ban apply must not start and immediately restart the service"
+else
+    pass "Fail2Ban apply avoids redundant service startup"
+fi
+
 finish_tests
