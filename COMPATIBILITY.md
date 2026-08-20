@@ -17,7 +17,7 @@
 | Debian 11 | Target | security fixes only after capability detection; manual validation pending |
 | Debian 10 | Unsupported target for 2.x | legacy script remains available; show lifecycle warning |
 | Ubuntu 24.04 LTS | Target | test OpenSSH drop-ins and UFW |
-| Ubuntu 22.04 LTS | Target | test OpenSSH drop-ins and UFW |
+| Ubuntu 22.04 LTS | Compatible | default, dual, and custom-only SSH ports; complex existing UFW rules; Fail2Ban installation, journal backend, rollback, active-session protection, and reboot persistence manually validated |
 | Rocky/AlmaLinux | Experimental | excluded from initial modular hardening release |
 
 ## Mandatory scenarios
@@ -44,4 +44,4 @@ High-risk modules are not marked supported until these scenarios pass where appl
 
 Recognizing `/etc/os-release` is not sufficient. A supported platform must have tested adapters, safe failure behavior, post-change verification, and documented recovery steps.
 
-The current Debian 12 validation record is available in [`docs/DEBIAN_12_VALIDATION.md`](docs/DEBIAN_12_VALIDATION.md).
+Current manual validation records are available for [Debian 12](docs/DEBIAN_12_VALIDATION.md) and [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md).
