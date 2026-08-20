@@ -2,7 +2,7 @@
 
 VPS Secure Platform 是面向 Debian 与 Ubuntu 的模块化服务器安全和管理工具。核心只负责系统识别、菜单、模块生命周期、确认、状态与事务；安全、系统、应用、监控和诊断能力由独立模块提供。
 
-当前版本为 `2.0.0-dev`，已完成本地自动化测试，以及 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 真实 VPS 验收，包括 `ssh.service`/`ssh.socket`、默认/双端口/仅自定义 SSH 端口、UFW、Fail2Ban、重启持久性、幂等执行、验证和回滚。其他目标系统和剩余故障场景仍待验证，请先在有控制台和快照的临时机器上测试，不要直接部署到生产服务器。
+当前预览版本为 `2.0.0-beta.1`，已完成本地自动化测试，以及 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 真实 VPS 验收，包括 `ssh.service`/`ssh.socket`、默认/双端口/仅自定义 SSH 端口、UFW、Fail2Ban、重启持久性、幂等执行、验证和回滚。其他目标系统和剩余故障场景仍待验证，请先在有控制台和快照的临时机器上测试，不要直接部署到生产服务器。
 
 ## 关键安全规则
 
@@ -29,6 +29,21 @@ VPS Secure Platform 是面向 Debian 与 Ubuntu 的模块化服务器安全和�
 | 应用 | `applications.1panel` | 校验官方安装脚本后再执行 |
 | 监控 | `monitoring.network` | 定时记录延迟、丢包及网卡累计流量 |
 | 诊断 | `diagnostics.external` | 隔离运行经用户校验的第三方诊断脚本 |
+
+## 安装 beta 发行包
+
+从 GitHub Release 下载归档和摘要，校验后再安装；不要使用 `curl | bash`：
+
+```bash
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.1/vps-secure-platform-2.0.0-beta.1.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.1/vps-secure-platform-2.0.0-beta.1.tar.gz.sha256
+sha256sum -c vps-secure-platform-2.0.0-beta.1.tar.gz.sha256
+tar -xzf vps-secure-platform-2.0.0-beta.1.tar.gz
+sudo ./install.sh
+vps --version
+```
+
+安装前请保持当前 SSH 窗口打开，并确认服务商控制台或救援模式可用。
 
 ## 本地试用
 
