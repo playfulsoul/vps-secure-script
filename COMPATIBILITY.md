@@ -16,7 +16,7 @@
 | Debian 12 | Compatible | default, dual, and custom-only SSH ports; active and initially inactive UFW; journald Fail2Ban; reboot persistence; verification and rollback manually validated; remaining scenarios documented separately |
 | Debian 11 | Target | security fixes only after capability detection; manual validation pending |
 | Debian 10 | Unsupported target for 2.x | legacy script remains available; show lifecycle warning |
-| Ubuntu 24.04 LTS | Target | test OpenSSH drop-ins and UFW |
+| Ubuntu 24.04 LTS | Compatible | default socket activation, default/dual/custom-only SSH ports, initially inactive UFW, Fail2Ban installation, idempotent apply, rollback, custom-port reboot persistence, and real installation manually validated |
 | Ubuntu 22.04 LTS | Compatible | default, dual, and custom-only SSH ports; complex existing UFW rules; Fail2Ban installation, journal backend, rollback, active-session protection, and reboot persistence manually validated |
 | Rocky/AlmaLinux | Experimental | excluded from initial modular hardening release |
 
@@ -44,4 +44,4 @@ High-risk modules are not marked supported until these scenarios pass where appl
 
 Recognizing `/etc/os-release` is not sufficient. A supported platform must have tested adapters, safe failure behavior, post-change verification, and documented recovery steps.
 
-Current manual validation records are available for [Debian 12](docs/DEBIAN_12_VALIDATION.md) and [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md).
+Current manual validation records are available for [Debian 12](docs/DEBIAN_12_VALIDATION.md), [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md), and [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md).
