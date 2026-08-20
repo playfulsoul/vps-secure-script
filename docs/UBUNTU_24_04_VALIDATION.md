@@ -57,6 +57,23 @@ UFW rewrote its internal rule files during enable/disable operations, so their b
 - Installed the platform into `/usr/lib/vps-secure` with the `/usr/local/bin/vps` command link.
 - Verified the global version command, complete built-in module registry, doctor, firewall verification, and Fail2Ban verification.
 
+### Beta.2 beginner experience and SSH public keys
+
+The ordinary-user workflows added in `2.0.0-beta.2` were validated on the same
+dedicated Ubuntu 24.04 test host at commit `7cba553`:
+
+- GitHub CI and the complete project test suite passed for the exact commit tested on the VPS.
+- Installed `2.0.0-beta.2` over the previous development build and confirmed that the installer preserved a version backup.
+- Confirmed that entering `vps` opened the Chinese status dashboard and task-oriented menu, with correct Ubuntu 24.04, SSH port 22, UFW, Fail2Ban, and beta-channel state.
+- Confirmed that the security and update submenus used user-facing action labels and that an unavailable newer release did not interrupt normal operation.
+- Ran the guided security initialization against an already healthy host. UFW and Fail2Ban were verified as compliant without replacing their meaningful rollback points.
+- Previewed and imported two public ED25519 keys from the configured GitHub account into root while preserving password authentication and existing authorized keys.
+- Verified `.ssh` mode 700, `authorized_keys` mode 600, the module transaction record, and both imported key fingerprints.
+- Compared the server RSA host-key fingerprint from an existing trusted session with an independent client scan before opening a new connection.
+- Established a new SSH session from the validation client with batch mode enabled and password and keyboard-interactive authentication disabled.
+- Restored the pre-import `authorized_keys`, reimported the same GitHub keys, verified the transaction, and established another key-only SSH session.
+- Restored the previously installed platform version through `vps update rollback`, reinstalled `2.0.0-beta.2`, and confirmed that SSH, UFW, Fail2Ban, and authorized keys remained intact.
+
 ## Defects discovered during the run
 
 1. A repeated no-change firewall apply replaced the earlier meaningful rollback point.
@@ -75,6 +92,7 @@ Both defects were fixed in the development branch, received functional regressio
 
 ## Remaining validation gaps
 
+- automatic detection and download of a newly published beta release, which requires a real release newer than the installed build;
 - an explicitly selected file-log Fail2Ban backend using `/var/log/auth.log`;
 - APT/dpkg lock contention and interrupted-operation fault injection;
 - Debian 11 and Debian 13;

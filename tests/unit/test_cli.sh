@@ -10,7 +10,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$($CLI --version)
-assert_eq 'vps-secure 2.0.0-beta.1' "$actual" "CLI reports the platform version"
+assert_eq 'vps-secure 2.0.0-beta.2' "$actual" "CLI reports the platform version"
 
 actual=$($CLI module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
@@ -18,10 +18,19 @@ assert_contains "$actual" 'security.ssh' "CLI lists the SSH module"
 assert_contains "$actual" 'monitoring.network' "CLI lists the network monitoring module"
 
 actual=$(printf '0\n' | "$CLI")
-assert_contains "$actual" 'VPS Secure Platform' "interactive menu is generated from the module registry"
+assert_contains "$actual" 'VPS 安全与管理平台' "CLI opens the beginner-friendly Chinese menu"
+assert_contains "$actual" '新 VPS 安全初始化' "beginner menu exposes the guided security workflow"
+assert_contains "$actual" '更新与恢复' "beginner menu exposes platform updates"
 
 actual=$($CLI module info security.ssh)
 assert_contains "$actual" 'high-risk' "CLI exposes module privilege level"
+
+actual=$($CLI update status)
+assert_contains "$actual" '更新通道: beta' "prerelease builds use the beta update channel"
+
+actual=$($CLI ssh key import-github octocat --user root 2>&1 || true)
+assert_contains "$actual" '公钥导入计划' "SSH key command previews changes before confirmation"
+assert_contains "$actual" '不会自动关闭密码登录' "SSH key import keeps password login unchanged"
 
 temporary_os_release=$(mktemp)
 temporary_auth_log=$(mktemp)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-beta.2 - 2026-08-21
+
+- Add a Chinese beginner dashboard and task-oriented menus.
+- Add a guided VPS security initialization workflow.
+- Add verified GitHub SSH public-key import with rollback.
+- Add cached GitHub Release checks, verified self-update, and version restore.
+- Rewrite the README around first-time installation and public-key onboarding.
+
 ## 2.0.0-beta.1 - 2026-08-21
 
 - 将单文件脚本重构为核心加模块的平台结构。
