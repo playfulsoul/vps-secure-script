@@ -1,122 +1,196 @@
 # VPS Secure Platform
 
-VPS Secure Platform 是面向 Debian 与 Ubuntu 的模块化服务器安全和管理工具。核心只负责系统识别、菜单、模块生命周期、确认、状态与事务；安全、系统、应用、监控和诊断能力由独立模块提供。
+一款面向普通用户的 VPS 安全与管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前预览版本为 `2.0.0-beta.1`，已完成本地自动化测试，以及 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 真实 VPS 验收，包括 `ssh.service`/`ssh.socket`、默认/双端口/仅自定义 SSH 端口、UFW、Fail2Ban、重启持久性、幂等执行、验证和回滚。其他目标系统和剩余故障场景仍待验证，请先在有控制台和快照的临时机器上测试，不要直接部署到生产服务器。
+当前版本为 `2.0.0-beta.2`。它保留了 1.x 简单直观的菜单体验，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
-## 关键安全规则
+> Beta 版本已经在 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
-- 保留 VPS 当前有效的自定义 SSH 端口，不主动改成 22。
-- SSH 端口无法可靠确认时停止防火墙和 Fail2Ban 配置。
-- 防火墙只放行检测到的 SSH 端口，不默认开放 22、80 或 443。
-- 项目配置写入自有 drop-in，不覆盖用户已有主配置。
-- 修改系统状态的命令必须显式添加 `--yes`，交互菜单会再次确认。
-- 第三方模块和外部脚本仅通过 HTTPS 下载，并要求 SHA-256 完整性校验；不使用 `curl | bash`。
+## 安装后怎样使用
 
-## 当前模块
-
-| 分类 | 模块 | 能力 |
-|---|---|---|
-| 安全 | `security.ssh` | 查看实际 SSH 监听端口及配置来源 |
-| 安全 | `security.firewall` | 最小权限 UFW 配置、验证和回滚 |
-| 安全 | `security.fail2ban` | Debian 日志后端适配、独立 jail 配置和回滚 |
-| 系统 | `system.doctor` | 系统、init、SSH 与依赖预检 |
-| 系统 | `system.packages` | APT 更新及保守升级 |
-| 系统 | `system.swap` | Swap 创建、持久化、验证和回滚 |
-| 系统 | `system.bbr` | BBR 检测、配置、验证和运行值回滚 |
-| 系统 | `system.users` | 普通用户与 sudo 管理 |
-| 应用 | `applications.docker` | 使用官方 APT 仓库安装 Docker Engine |
-| 应用 | `applications.1panel` | 校验官方安装脚本后再执行 |
-| 监控 | `monitoring.network` | 定时记录延迟、丢包及网卡累计流量 |
-| 诊断 | `diagnostics.external` | 隔离运行经用户校验的第三方诊断脚本 |
-
-## 安装 beta 发行包
-
-从 GitHub Release 下载归档和摘要，校验后再安装；不要使用 `curl | bash`：
+输入：
 
 ```bash
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.1/vps-secure-platform-2.0.0-beta.1.tar.gz
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.1/vps-secure-platform-2.0.0-beta.1.tar.gz.sha256
-sha256sum -c vps-secure-platform-2.0.0-beta.1.tar.gz.sha256
-tar -xzf vps-secure-platform-2.0.0-beta.1.tar.gz
+sudo vps
+```
+
+程序会显示服务器状态和中文菜单：
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          VPS 安全与管理平台
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+系统：Ubuntu 24.04
+SSH 端口：32876（程序不会自动改成 22）
+防火墙：运行正常
+SSH 防暴力破解：运行正常
+
+1. 新 VPS 安全初始化（推荐）
+2. 安全防护
+3. 系统管理
+4. 应用安装
+5. 网络监控与测试
+6. 查看完整服务器检查报告
+7. 更新与恢复
+8. 高级模式
+0. 退出
+```
+
+第一次使用建议选择 **1. 新 VPS 安全初始化**。程序会先检查系统和 SSH 端口，显示将要进行的修改，得到确认后再配置 UFW 和 Fail2Ban。
+
+安全初始化遵守以下规则：
+
+- 保留当前有效的 SSH 端口，不会擅自改为 22。
+- 无法可靠确认 SSH 端口时停止，不冒险启用防火墙。
+- 只放行确认过的 SSH 端口，不默认开放 80 或 443。
+- 保留现有防火墙规则和用户配置。
+- Fail2Ban 使用项目自己的配置片段，不覆盖 `jail.local`。
+- 修改后自动验证；关键模块提供撤销上次修改的入口。
+
+## 安装 beta 版本
+
+从 GitHub Release 下载程序包和校验文件，验证无误后安装：
+
+```bash
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2/vps-secure-platform-2.0.0-beta.2.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2/vps-secure-platform-2.0.0-beta.2.tar.gz.sha256
+sha256sum -c vps-secure-platform-2.0.0-beta.2.tar.gz.sha256
+tar -xzf vps-secure-platform-2.0.0-beta.2.tar.gz
 sudo ./install.sh
-vps --version
+sudo vps
 ```
 
-安装前请保持当前 SSH 窗口打开，并确认服务商控制台或救援模式可用。
+安装和防火墙操作期间请保持当前 SSH 窗口打开。有条件时先创建 VPS 快照，并确认服务商网页控制台可用。
 
-## 本地试用
+项目不采用 `curl | bash` 直接把远程内容交给 root 执行。
 
-无需安装即可查看菜单和计划：
+## 使用 SSH 公钥登录（推荐）
+
+SSH 公钥登录比反复输入服务器密码更安全。可以把“公钥”理解为安装在服务器上的锁，把只保存在自己电脑中的“私钥”理解为钥匙。
+
+### 最简单的方法：通过 GitHub 导入
+
+### 第一步：在自己的电脑生成密钥
+
+macOS、Linux 或 Windows PowerShell 都可以运行：
 
 ```bash
-./bin/vps
-./bin/vps module list
-./bin/vps doctor
-./bin/vps firewall plan
-./bin/vps fail2ban plan
-./bin/vps fail2ban preflight
+ssh-keygen -t ed25519 -C "我的电脑"
 ```
 
-构建发行包：
+没有特殊要求时一路按回车即可。私钥通常是 `id_ed25519`，绝对不要发送给任何人；可以公开和上传的是带 `.pub` 后缀的 `id_ed25519.pub`。
+
+### 第二步：把公钥添加到 GitHub
+
+macOS 或 Linux 查看公钥：
 
 ```bash
-./scripts/build-release.sh
+cat ~/.ssh/id_ed25519.pub
 ```
 
-解压发行包后，以 root 安装：
+Windows PowerShell 查看公钥：
+
+```powershell
+Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+```
+
+复制整行内容，打开 [GitHub SSH keys 设置](https://github.com/settings/keys)，选择 **New SSH key**，粘贴并保存。
+
+### 第三步：在 VPS 中导入
+
+运行 `sudo vps`，依次选择：
+
+```text
+2. 安全防护
+2. 从 GitHub 导入登录公钥
+```
+
+输入 GitHub 用户名和服务器用户（一般是 `root`）。程序会：
+
+- 只从 `https://github.com/用户名.keys` 获取公开密钥；
+- 验证返回内容确实是 SSH 公钥；
+- 显示密钥指纹；
+- 保留并去重已有公钥；
+- 正确设置 `.ssh` 和 `authorized_keys` 权限；
+- 保存可回滚备份。
+
+也可以使用命令模式：
 
 ```bash
-sudo ./install.sh
-vps --version
-vps
+sudo vps ssh key import-github <GitHub用户名> --user root --yes
 ```
 
-系统变更示例：
+### 第四步：一定要测试新窗口
+
+保持原窗口不要关闭，另外打开一个终端，用同一端口重新登录。确认无需服务器密码也能登录后，才可以考虑关闭密码登录。
+
+当前版本导入公钥时**不会自动关闭密码登录**。这是有意的安全设计：密钥路径、客户端选择或云服务商配置稍有差异，立即关闭密码可能把用户锁在服务器外。关闭密码登录将作为独立的验证流程提供，而不会与公钥导入捆绑执行。
+
+## 自动检查和更新
+
+已安装用户输入 `vps` 时，程序每天最多检查一次 GitHub Release。发现新版本会在首页提示，但不会擅自更新；网络不可用也不会影响正常使用。
+
+在菜单中选择 **7. 更新与恢复**，可以检查并安装更新。更新包必须通过 SHA-256 校验，安装器会保留上一版本备份。
+
+命令模式：
 
 ```bash
-vps module run security.firewall plan
-sudo vps module run security.firewall apply --yes
-sudo vps module run security.firewall verify
+vps update status
+vps update check
+sudo vps update apply --yes
+sudo vps update rollback --yes
 ```
 
-请始终先查看 `plan`。防火墙和 SSH 相关操作时保持当前 SSH 窗口打开，并在新窗口验证连接。
+Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更新。
 
-## 外部模块
+## 功能分类
 
-平台本身是集成入口，功能不需要全部堆在一个脚本里。模块包必须包含一个 `module.conf` 和入口脚本；安装时需要固定摘要：
+| 分类 | 普通用户功能 |
+|---|---|
+| 安全防护 | SSH 端口状态、GitHub 公钥导入、UFW、Fail2Ban |
+| 系统管理 | 软件包更新、Swap、BBR、用户和 sudo |
+| 应用安装 | Docker Engine、1Panel |
+| 网络监控 | 延迟、丢包、网卡流量和外部诊断工具 |
+| 平台管理 | 状态总览、自动检查更新、校验安装和版本恢复 |
+
+高级用户仍可在主菜单进入“高级模式”，也可以直接运行模块命令：
+
+```bash
+vps module list
+vps doctor
+vps firewall plan
+sudo vps firewall apply --yes
+vps fail2ban status
+```
+
+## 模块化扩展
+
+平台是统一入口，功能不需要全部堆进一个大型脚本。安全、系统、应用、监控和诊断能力由独立模块提供；其他项目也可以保留自己的仓库和发布节奏，再通过经过版本与摘要校验的模块包接入。
 
 ```bash
 sudo vps module install https://example.org/example-module.tar.gz \
   --sha256 <64位摘要> --yes
 ```
 
-这使独立项目可以保留自己的仓库、版本和发布节奏，同时通过统一菜单接入。模块契约见 [MODULE_SPEC.md](MODULE_SPEC.md)，整体结构见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+模块规范见 [MODULE_SPEC.md](MODULE_SPEC.md)，技术结构见 [ARCHITECTURE.md](ARCHITECTURE.md)，兼容性范围见 [COMPATIBILITY.md](COMPATIBILITY.md)。
 
-## 网络监控
+## 开发和测试
 
-监控模块默认只执行小规模 Ping 和读取网卡计数器，不会自动进行高流量测速：
-
-```bash
-sudo vps module run monitoring.network configure --yes \
-  --target 1.1.1.1 --interval 60 --retention-days 30
-sudo vps module run monitoring.network start --yes
-vps module run monitoring.network status
-```
-
-历史数据默认位于 `/var/lib/vps-secure/monitoring/network/metrics.tsv`。
-
-## 支持范围与测试
-
-首批目标为 Debian 11/12/13 和 Ubuntu 22.04/24.04，要求 systemd 与 APT。兼容性边界见 [COMPATIBILITY.md](COMPATIBILITY.md)，真实 Debian 验收步骤见 [docs/DEBIAN_TEST_PLAN.md](docs/DEBIAN_TEST_PLAN.md)，已完成的证据见 [Debian 12](docs/DEBIAN_12_VALIDATION.md)、[Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md)和 [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md) 验收记录。
-
-本地运行：
+无需安装即可运行本地代码：
 
 ```bash
+./bin/vps
 ./tests/run.sh
+./scripts/build-release.sh
 ```
 
-旧版 `v1.0.1` 原样保存在 `legacy/v1.0.1/`。根目录的 `vps_secure.sh` 仅作为过渡兼容入口，不再是 v2 的主实现。
+真实 VPS 验收记录：
+
+- [Debian 12](docs/DEBIAN_12_VALIDATION.md)
+- [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md)
+- [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md)
+
+旧版 `v1.0.1` 原样保存在 `legacy/v1.0.1/`，仅用于追溯，不再作为 v2 主实现。
 
 ## 许可证
 

@@ -21,9 +21,11 @@ The project is not intended to become a single ever-growing shell file. The core
 
 ### User interfaces
 
-- Interactive menu: `vps`
+- Beginner dashboard and guided workflows: `vps`
+- Advanced module menu: available from the beginner dashboard
 - Command mode: `vps <module> <action>`
 - Diagnostics: `vps doctor`
+- Release checks and verified self-update: `vps update <check|apply|rollback>`
 - Module management: `vps module <list|info|install|update|disable|uninstall>`
 
 ### Core

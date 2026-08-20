@@ -18,8 +18,13 @@ source "$VPS_PLATFORM_ROOT/core/modules.sh"
 source "$VPS_PLATFORM_ROOT/core/runtime.sh"
 # shellcheck source=../core/installer.sh
 source "$VPS_PLATFORM_ROOT/core/installer.sh"
+# shellcheck source=../core/update.sh
+source "$VPS_PLATFORM_ROOT/core/update.sh"
 
 VERSION=$(<"$VPS_PLATFORM_ROOT/VERSION")
+
+# shellcheck source=../core/ui.sh
+source "$VPS_PLATFORM_ROOT/core/ui.sh"
 
 show_help() {
     cat <<'EOF'
@@ -32,9 +37,13 @@ VPS Secure Platform
   vps module run <模块ID> <操作> [参数]
   vps module install <模块包或HTTPS地址> --sha256 <摘要> --yes
   vps doctor
+  vps status
+  vps init
   vps ssh status
+  vps ssh key import-github <GitHub用户名> [--user <服务器用户>] --yes
   vps firewall <plan|status|apply|verify|rollback>
   vps fail2ban <plan|preflight|status|apply|verify|rollback>
+  vps update <check|status|apply|rollback>
 
 模块操作：check plan preflight apply verify status backup rollback configure
           start stop uninstall doctor
@@ -78,10 +87,12 @@ run_module_command() {
 
 interactive_module() {
     local module_id=$1
+    local friendly_name=${2:-}
     local manifest name actions action_list=() choice action
 
     manifest=$(vps_module_find "$module_id") || return 20
     name=$(vps_manifest_value "$manifest" name)
+    [[ -z "$friendly_name" ]] || name=$friendly_name
     actions=$(vps_manifest_value "$manifest" actions 2>/dev/null || printf 'status')
     IFS=, read -r -a action_list <<< "$actions"
 
@@ -89,7 +100,7 @@ interactive_module() {
         printf '\n%s (%s)\n' "$name" "$module_id"
         local index=1
         for action in "${action_list[@]}"; do
-            printf '  %s. %s\n' "$index" "$action"
+            printf '  %s. %s\n' "$index" "$(friendly_action_name "$action")"
             index=$((index + 1))
         done
         printf '  0. 返回\n'
@@ -101,14 +112,33 @@ interactive_module() {
 
         if vps_module_action_changes_state "$action"; then
             [[ "$action" == apply ]] && vps_module_run "$module_id" plan || true
-            read -r -p "确认执行 $action？(y/N): " choice
+            read -r -p "确认执行“$(friendly_action_name "$action")”？(y/N): " choice
             [[ "$choice" =~ ^[Yy]$ ]] || continue
         fi
         vps_module_run "$module_id" "$action" || printf '操作未完成，退出状态: %s\n' "$?"
     done
 }
 
-interactive_menu() {
+friendly_action_name() {
+    case ${1:-} in
+        check) printf '运行兼容性检查\n' ;;
+        plan) printf '查看执行计划\n' ;;
+        preflight) printf '运行安全预检\n' ;;
+        apply) printf '安装或应用配置\n' ;;
+        verify) printf '验证是否正常\n' ;;
+        status) printf '查看状态\n' ;;
+        backup) printf '创建备份\n' ;;
+        rollback) printf '撤销上一次修改\n' ;;
+        configure) printf '进行设置\n' ;;
+        start) printf '启动服务\n' ;;
+        stop) printf '停止服务\n' ;;
+        uninstall) printf '卸载\n' ;;
+        doctor) printf '运行检查报告\n' ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+interactive_advanced_menu() {
     local modules=() line choice index
 
     while true; do
@@ -167,7 +197,7 @@ command_module() {
 
 main() {
     if [[ $# -eq 0 ]]; then
-        interactive_menu
+        vps_ui_main_menu
         return
     fi
 
@@ -187,10 +217,38 @@ main() {
         doctor)
             vps_module_run system.doctor doctor "$@"
             ;;
+        status)
+            vps_ui_status_dashboard
+            ;;
+        init)
+            vps_ui_safe_init
+            ;;
         ssh)
-            [[ ${1:-} == status ]] || { show_help >&2; return 64; }
-            shift
-            vps_module_run security.ssh status "$@"
+            case ${1:-} in
+                status)
+                    shift
+                    vps_module_run security.ssh status "$@"
+                    ;;
+                key)
+                    [[ ${2:-} == import-github && -n ${3:-} ]] || { show_help >&2; return 64; }
+                    local github_user=$3 target_user=root confirmed=no
+                    shift 3
+                    while (( $# > 0 )); do
+                        case $1 in
+                            --user) target_user=${2:-}; shift 2 ;;
+                            --yes) confirmed=yes; shift ;;
+                            *) show_help >&2; return 64 ;;
+                        esac
+                    done
+                    [[ "$confirmed" == yes ]] || {
+                        vps_module_run security.ssh plan --github "$github_user" --user "$target_user" || return $?
+                        printf '\n这是修改登录授权的操作。确认后请添加 --yes。\n' >&2
+                        return 64
+                    }
+                    vps_module_run security.ssh configure --github "$github_user" --user "$target_user"
+                    ;;
+                *) show_help >&2; return 64 ;;
+            esac
             ;;
         firewall)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
@@ -199,6 +257,30 @@ main() {
         fail2ban)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
             run_module_command security.fail2ban "$@"
+            ;;
+        update)
+            case ${1:-} in
+                check) vps_update_check yes ;;
+                status)
+                    printf '当前版本: %s\n更新通道: %s\n' "$VERSION" "$(vps_update_channel)"
+                    ;;
+                apply)
+                    [[ ${2:-} == --yes ]] || {
+                        vps_update_check yes || true
+                        printf '\n这是更新平台程序的操作。确认后请添加 --yes。\n' >&2
+                        return 64
+                    }
+                    vps_update_apply
+                    ;;
+                rollback)
+                    [[ ${2:-} == --yes ]] || {
+                        printf '恢复上一版本需要确认，请添加 --yes。\n' >&2
+                        return 64
+                    }
+                    vps_update_rollback
+                    ;;
+                *) show_help >&2; return 64 ;;
+            esac
             ;;
         *)
             printf '未知命令: %s\n\n' "$command" >&2
