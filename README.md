@@ -1,89 +1,123 @@
-# VPS Security & Management Toolkit
+# VPS Secure Platform
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
+VPS Secure Platform 是面向 Debian 与 Ubuntu 的模块化服务器安全和管理工具。核心只负责系统识别、菜单、模块生命周期、确认、状态与事务；安全、系统、应用、监控和诊断能力由独立模块提供。
 
-本脚本旨在为 Linux 服务器提供基础系统加固与日常运维功能的自动化工具集。通过菜单化交互设计，降低配置门槛，提高服务器管理效率。
+当前预览版本为 `2.0.0-beta.1`，已完成本地自动化测试，以及 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 真实 VPS 验收，包括 `ssh.service`/`ssh.socket`、默认/双端口/仅自定义 SSH 端口、UFW、Fail2Ban、重启持久性、幂等执行、验证和回滚。其他目标系统和剩余故障场景仍待验证，请先在有控制台和快照的临时机器上测试，不要直接部署到生产服务器。
 
-## 核心架构与功能
+## 关键安全规则
 
-脚本功能分为三个逻辑模块：基础环境防护、系统运维管理、应用部署与性能测评。
+- 保留 VPS 当前有效的自定义 SSH 端口，不主动改成 22。
+- SSH 端口无法可靠确认时停止防火墙和 Fail2Ban 配置。
+- 防火墙只放行检测到的 SSH 端口，不默认开放 22、80 或 443。
+- 项目配置写入自有 drop-in，不覆盖用户已有主配置。
+- 修改系统状态的命令必须显式添加 `--yes`，交互菜单会再次确认。
+- 第三方模块和外部脚本仅通过 HTTPS 下载，并要求 SHA-256 完整性校验；不使用 `curl | bash`。
 
-### 一、 基础安装与安全防护
-针对新部署的服务器，提供一键自动化环境配置与防御构建。
-* **环境初始化与网络优化**：自动更新系统软件包，配置 Swap 交换分区以缓解内存溢出风险，并开启 BBR 拥塞控制算法改善网络吞吐。
-* **防御机制部署**：配置并启用系统防火墙（UFW/iptables）阻断非授权端口请求；拉取并配置 Fail2Ban 服务，基于日志自动封禁异常密码探测的恶意 IP。
+## 当前模块
 
-### 二、 系统运维与权限管理
-对各项安全与性能参数进行独立的查询或修正。
-* **SSH 访问控制**：支持修改 SSH 端口、通过 GitHub 导入公钥建立免密登录，以及禁用密码登录。
-* **防火墙与日志检查**：提供端口放行与拦截功能；支持查看 Fail2Ban 拦截日志及当前封禁 IP 列表。
-* **用户安全机制**：支持创建具备 sudo 权限的标准操作账户。
-* **系统参数微调**：支持配置 Swap 空间大小及开启 BBR 网络加速。
+| 分类 | 模块 | 能力 |
+|---|---|---|
+| 安全 | `security.ssh` | 查看实际 SSH 监听端口及配置来源 |
+| 安全 | `security.firewall` | 最小权限 UFW 配置、验证和回滚 |
+| 安全 | `security.fail2ban` | Debian 日志后端适配、独立 jail 配置和回滚 |
+| 系统 | `system.doctor` | 系统、init、SSH 与依赖预检 |
+| 系统 | `system.packages` | APT 更新及保守升级 |
+| 系统 | `system.swap` | Swap 创建、持久化、验证和回滚 |
+| 系统 | `system.bbr` | BBR 检测、配置、验证和运行值回滚 |
+| 系统 | `system.users` | 普通用户与 sudo 管理 |
+| 应用 | `applications.docker` | 使用官方 APT 仓库安装 Docker Engine |
+| 应用 | `applications.1panel` | 校验官方安装脚本后再执行 |
+| 监控 | `monitoring.network` | 定时记录延迟、丢包及网卡累计流量 |
+| 诊断 | `diagnostics.external` | 隔离运行经用户校验的第三方诊断脚本 |
 
-### 三、 应用部署与系统评测
-集成常用环境部署指令及系统/网络基准测试工具。
-* **应用环境搭建**：支持从官方源部署 Docker 引擎及 1Panel 运维面板。
-* **系统状态与基准测试**：
-  * 负载监控：实时获取 CPU、物理内存与磁盘的使用率及负载状态。
-  * 综合测试：集成 YABS 与 Fusion Monster (融合怪) 脚本，量化计算性能与存储速度。
-  * 网络与 IP 测试：调用 bench.sh 测试节点带宽，利用 NextTrace 追踪回程路由，支持流媒体解锁能力检测及 IP 地址质量评分。
-*(注：硬件压测与全球网络测速会导致大量并发网络请求，请留意服务商流量与资源超售限制政策。)*
+## 安装 beta 发行包
 
-## 部署与使用指南
+从 GitHub Release 下载归档和摘要，校验后再安装；不要使用 `curl | bash`：
 
-### 系统要求
-当前验证通过的主流系统发行版：Ubuntu (20.04/22.04+), Debian (10+)。建议在未经二次打包的纯净系统镜像中运行。
-
-### 初始化安装
-以 root 权限登录服务器后执行：
 ```bash
-wget -O vps_secure.sh https://raw.githubusercontent.com/playfulsoul/vps-secure-script/main/vps_secure.sh && chmod +x vps_secure.sh && ./vps_secure.sh
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.1/vps-secure-platform-2.0.0-beta.1.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.1/vps-secure-platform-2.0.0-beta.1.tar.gz.sha256
+sha256sum -c vps-secure-platform-2.0.0-beta.1.tar.gz.sha256
+tar -xzf vps-secure-platform-2.0.0-beta.1.tar.gz
+sudo ./install.sh
+vps --version
 ```
 
-### 全局别名注入
-脚本在完成首次初始化后，将自动向系统环境变量注册 `vps` 指令。日后进行运维时，只需在终端任意层级输入 `vps` 即可唤起管理面板，无需重新查找并执行脚本源文件。
+安装前请保持当前 SSH 窗口打开，并确认服务商控制台或救援模式可用。
 
-## 注意事项
+## 本地试用
 
-### 关于 GitHub 公钥导入 (选项 2-3)
-通过该功能可实现基于 SSH 密钥的身份认证，适用于多设备同步。
-- **工作原理**：脚本通过 `https://github.com/用户名.keys` 获取你在 GitHub 账户配置中公开的 SSH 公钥，并将其注入到服务器的 `authorized_keys` 中。
-- **前提条件**：你必须拥有一个 GitHub 账号，并在 [GitHub Settings -> SSH Keys](https://github.com/settings/keys) 中上传了你的电脑公钥。
-- **安全建议 (重要)**：
-    1. **先行测试**：在选择“立刻禁用 SSH 密码登录”之前，请务必保持当前的 SSH 连接窗口不关闭。
-    2. **二次验证**：打开一个新的本地终端，尝试执行 `ssh root@服务器IP`。如果无需输入密码即可直接进入，则说明密钥生效。
-    3. **双保险**：如果你是新手，建议先选择 `N` (不禁用密码)，等测试密钥登录成功后再次运行脚本进行禁用。
+无需安装即可查看菜单和计划：
 
-### 防火墙操作须知
-- 在修改 SSH 端口 (选项 2-2) 时，脚本会自动判断并尝试在 UFW 或 Firewalld 中放行新端口。
-- 如果你的 VPS 服务商在外部（如云控制面板、安全组）还设有一层防火墙，请务必同时在服务商后台放行对应端口，否则会导致无法连接。
-
-## 📖 快速入门：如何配置 GitHub 公钥登录？
-
-即便不具备 SSH 密钥使用经验，也可通过以下步骤实现安全的密钥认证登录：
-
-### 第一步：生成本地电脑的“钥匙”
-在你自己电脑的终端（Windows 请用 PowerShell）输入：
 ```bash
-ssh-keygen -t ed25519 -C "密钥备注 (例如：我的大别野电脑 / 公司电脑)"
+./bin/vps
+./bin/vps module list
+./bin/vps doctor
+./bin/vps firewall plan
+./bin/vps fail2ban plan
+./bin/vps fail2ban preflight
 ```
-- **注意**：末尾引号里的内容是“密钥备注”，方便你在 GitHub 上区分这把锁是属于哪台电脑的。
-- **操作**：输入命令后一路敲回车即可。这会在你的电脑里生成一个公钥（锁）和私钥（钥匙）。
 
-### 第二步：将“锁”挂到 GitHub 上
-1. 在终端输入以下命令直接查看并复制公钥内容：
-   ```bash
-   cat ~/.ssh/id_ed25519.pub
-   ```
-   *(Windows 用户如果命令无效，可手动打开 `C:\Users\用户名\.ssh\id_ed25519.pub` 文件)*
-2. 复制输出的以 `ssh-ed25519` 开头的整行内容。
-3. 进入 [GitHub SSH 设置页面](https://github.com/settings/keys)，点击 **New SSH key**，粘贴并保存。
+构建发行包：
 
-### 第三步：运行脚本同步公钥
-在新服务器上运行本脚本，选择 **选项 2-3 (导入 GitHub 公钥)**，输入你的 GitHub 用户名。
-- **效果**：脚本将自动获取并安装对应的公钥到服务器。
-- **结果**：实现该电脑免密登录服务器，且显著提升安全性。
+```bash
+./scripts/build-release.sh
+```
 
-## 版权与组件声明
-本项目自身代码遵循 [MIT License](LICENSE) 协议发布。其中第三模块引用的部分性能检测工具与路由探针均来自相关开源社区（例如 YABS, NextTrace 等），运行相关服务应遵循上游开发者的授权政策及规范。
+解压发行包后，以 root 安装：
+
+```bash
+sudo ./install.sh
+vps --version
+vps
+```
+
+系统变更示例：
+
+```bash
+vps module run security.firewall plan
+sudo vps module run security.firewall apply --yes
+sudo vps module run security.firewall verify
+```
+
+请始终先查看 `plan`。防火墙和 SSH 相关操作时保持当前 SSH 窗口打开，并在新窗口验证连接。
+
+## 外部模块
+
+平台本身是集成入口，功能不需要全部堆在一个脚本里。模块包必须包含一个 `module.conf` 和入口脚本；安装时需要固定摘要：
+
+```bash
+sudo vps module install https://example.org/example-module.tar.gz \
+  --sha256 <64位摘要> --yes
+```
+
+这使独立项目可以保留自己的仓库、版本和发布节奏，同时通过统一菜单接入。模块契约见 [MODULE_SPEC.md](MODULE_SPEC.md)，整体结构见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+## 网络监控
+
+监控模块默认只执行小规模 Ping 和读取网卡计数器，不会自动进行高流量测速：
+
+```bash
+sudo vps module run monitoring.network configure --yes \
+  --target 1.1.1.1 --interval 60 --retention-days 30
+sudo vps module run monitoring.network start --yes
+vps module run monitoring.network status
+```
+
+历史数据默认位于 `/var/lib/vps-secure/monitoring/network/metrics.tsv`。
+
+## 支持范围与测试
+
+首批目标为 Debian 11/12/13 和 Ubuntu 22.04/24.04，要求 systemd 与 APT。兼容性边界见 [COMPATIBILITY.md](COMPATIBILITY.md)，真实 Debian 验收步骤见 [docs/DEBIAN_TEST_PLAN.md](docs/DEBIAN_TEST_PLAN.md)，已完成的证据见 [Debian 12](docs/DEBIAN_12_VALIDATION.md)、[Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md)和 [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md) 验收记录。
+
+本地运行：
+
+```bash
+./tests/run.sh
+```
+
+旧版 `v1.0.1` 原样保存在 `legacy/v1.0.1/`。根目录的 `vps_secure.sh` 仅作为过渡兼容入口，不再是 v2 的主实现。
+
+## 许可证
+
+本项目采用 MIT License。外部诊断工具仍分别受其上游许可证约束。
