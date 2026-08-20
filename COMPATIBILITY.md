@@ -13,7 +13,7 @@
 | Platform | Level | Notes |
 | --- | --- | --- |
 | Debian 13 | Target | systemd journal-aware Fail2Ban configuration; manual validation pending |
-| Debian 12 | Compatible | default and temporary dual SSH ports, active UFW, journald Fail2Ban, verification, and rollback manually validated; remaining scenarios documented separately |
+| Debian 12 | Compatible | default, dual, and custom-only SSH ports; active and initially inactive UFW; journald Fail2Ban; reboot persistence; verification and rollback manually validated; remaining scenarios documented separately |
 | Debian 11 | Target | security fixes only after capability detection; manual validation pending |
 | Debian 10 | Unsupported target for 2.x | legacy script remains available; show lifecycle warning |
 | Ubuntu 24.04 LTS | Target | test OpenSSH drop-ins and UFW |
