@@ -135,7 +135,7 @@ firewall_rollback_dir() {
 }
 
 firewall_apply() {
-    local ports port transaction_dir original_active=no
+    local ports port transaction_dir original_active=no changed=no
 
     vps_require_root || return $?
     firewall_check || return $?
@@ -149,6 +149,8 @@ firewall_apply() {
     transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || return 40
     if firewall_is_active; then
         original_active=yes
+    else
+        changed=yes
     fi
     printf '%s\n' "$original_active" > "$transaction_dir/original_active" || return 40
     : > "$transaction_dir/added_ports" || return 40
@@ -162,9 +164,10 @@ firewall_apply() {
             return 40
         fi
         printf '%s\n' "$port" >> "$transaction_dir/added_ports"
+        changed=yes
     done <<< "$ports"
 
-    if ! ufw --force enable; then
+    if [[ "$original_active" == no ]] && ! ufw --force enable; then
         firewall_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 40
     fi
@@ -172,6 +175,13 @@ firewall_apply() {
     if ! firewall_verify; then
         firewall_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 50
+    fi
+
+    if [[ "$changed" == no ]]; then
+        rm -f "$transaction_dir/original_active" "$transaction_dir/added_ports"
+        rmdir "$transaction_dir" 2>/dev/null || true
+        printf '防火墙已符合执行计划；未创建新事务，保留现有回滚点。\n'
+        return 0
     fi
 
     vps_set_last_transaction "$MODULE_ID" "$transaction_dir" || return 40

@@ -86,5 +86,37 @@ SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
 actual=$(sed -n '1p' "$command_log")
 assert_eq '--force disable' "$actual" "firewall rollback disables an originally inactive firewall before deleting rules"
 
+noop_state="$test_root/noop-state"
+: > "$command_log"
+actual=$(PATH="$test_root/bin:$PATH" \
+    VPS_PLATFORM_ROOT="$PROJECT_ROOT" \
+    VPS_MODULE_ID=security.firewall \
+    VPS_STATE_DIR="$noop_state" \
+    VPS_TEST_UFW_LOG="$command_log" \
+    bash -c '
+        source "$1" backup >/dev/null
+        module_state=$(vps_module_state_dir security.firewall)
+        baseline="$module_state/transactions/baseline"
+        mkdir -p "$baseline"
+        vps_set_last_transaction security.firewall "$baseline"
+        vps_require_root() { return 0; }
+        firewall_check() { return 0; }
+        firewall_ports() { printf "32876\n"; }
+        firewall_apply
+        printf "last=%s\n" "$(vps_last_transaction security.firewall)"
+        printf "baseline=%s\n" "$baseline"
+    ' _ "$FIREWALL_MODULE" 2>&1)
+result=$?
+assert_eq '0' "$result" "repeated firewall apply succeeds as a no-op"
+assert_contains "$actual" '未创建新事务，保留现有回滚点' "repeated firewall apply explains rollback-point retention"
+last=$(printf '%s\n' "$actual" | sed -n 's/^last=//p')
+baseline=$(printf '%s\n' "$actual" | sed -n 's/^baseline=//p')
+assert_eq "$baseline" "$last" "repeated firewall apply preserves the meaningful rollback point"
+if grep -q -- '--force enable' "$command_log"; then
+    fail "repeated firewall apply must not re-enable an active firewall"
+else
+    pass "repeated firewall apply avoids redundant enable"
+fi
+
 rm -rf "$test_root"
 finish_tests
