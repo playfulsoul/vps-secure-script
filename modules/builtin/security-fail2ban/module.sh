@@ -251,6 +251,21 @@ fail2ban_apply() {
     fi
 
     fail2ban_write_candidate "$transaction_dir/candidate.conf" "$ports_csv" "$backend" || return 40
+
+    if [[ "$original_active" == yes && "$original_enabled" == yes ]] && \
+       [[ -f "$CONFIG_FILE" ]] && \
+       cmp -s "$transaction_dir/candidate.conf" "$CONFIG_FILE" && \
+       fail2ban_verify >/dev/null 2>&1; then
+        rm -f "$transaction_dir/service_active" \
+            "$transaction_dir/service_enabled" \
+            "$transaction_dir/config_existed" \
+            "$transaction_dir/original.conf" \
+            "$transaction_dir/candidate.conf"
+        rmdir "$transaction_dir" 2>/dev/null || true
+        printf 'Fail2Ban 已符合执行计划；未重启服务或创建新事务，保留现有回滚点。\n'
+        return 0
+    fi
+
     install -m 644 "$transaction_dir/candidate.conf" "$CONFIG_FILE" || return 40
 
     if ! fail2ban-client -t; then
