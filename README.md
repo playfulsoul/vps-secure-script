@@ -2,7 +2,7 @@
 
 一款面向普通用户的 VPS 安全与管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前版本为 `2.0.0-beta.2.1`。它保留了 1.x 简单直观的菜单体验，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前版本为 `2.0.0-beta.3`。它保留了 1.x 简单直观的菜单体验，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 > Beta 版本已经在 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -25,14 +25,21 @@ SSH 端口：32876（程序不会自动改成 22）
 防火墙：运行正常
 SSH 防暴力破解：运行正常
 
-1. 新 VPS 安全初始化（推荐）
-2. 安全防护
+1. 新 VPS 安全初始化
+   防火墙 · SSH 防暴力破解
+2. SSH 与安全防护
+   端口 · GitHub 公钥 · UFW · Fail2Ban · 回滚
 3. 系统管理
+   软件更新 · Swap · BBR · 用户与 sudo
 4. 应用安装
-5. 网络监控与测试
-6. 查看完整服务器检查报告
-7. 更新与恢复
-8. 高级模式
+   Docker · Docker Compose · 1Panel
+5. 网络状态监控
+   延迟 · 丢包 · 网卡流量记录
+6. VPS 测试工具
+   融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量
+7. 服务器完整体检
+8. 程序更新与恢复
+9. 高级模式
 0. 退出
 ```
 
@@ -52,10 +59,10 @@ SSH 防暴力破解：运行正常
 从 GitHub Release 下载程序包和校验文件，验证无误后安装：
 
 ```bash
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2.1/vps-secure-platform-2.0.0-beta.2.1.tar.gz
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2.1/vps-secure-platform-2.0.0-beta.2.1.tar.gz.sha256
-sha256sum -c vps-secure-platform-2.0.0-beta.2.1.tar.gz.sha256
-tar -xzf vps-secure-platform-2.0.0-beta.2.1.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.3/vps-secure-platform-2.0.0-beta.3.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.3/vps-secure-platform-2.0.0-beta.3.tar.gz.sha256
+sha256sum -c vps-secure-platform-2.0.0-beta.3.tar.gz.sha256
+tar -xzf vps-secure-platform-2.0.0-beta.3.tar.gz
 sudo ./install.sh
 sudo vps
 ```
@@ -130,7 +137,7 @@ sudo vps ssh key import-github <GitHub用户名> --user root --yes
 
 已安装用户输入 `vps` 时，程序每天最多检查一次 GitHub Release。发现新版本会在首页提示，但不会擅自更新；网络不可用也不会影响正常使用。
 
-在菜单中选择 **7. 更新与恢复**，可以检查并安装更新。更新包必须通过 SHA-256 校验，安装器会保留上一版本备份。
+在菜单中选择 **8. 程序更新与恢复**，可以检查并安装更新。更新包必须通过 SHA-256 校验，安装器会保留上一版本备份。
 
 命令模式：
 
@@ -150,8 +157,21 @@ Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更
 | 安全防护 | SSH 端口状态、GitHub 公钥导入、UFW、Fail2Ban |
 | 系统管理 | 软件包更新、Swap、BBR、用户和 sudo |
 | 应用安装 | Docker Engine、1Panel |
-| 网络监控 | 延迟、丢包、网卡流量和外部诊断工具 |
+| 网络监控 | 延迟、丢包和网卡流量记录 |
+| VPS 测试工具 | 融合怪、YABS、Bench.sh、回程路由、流媒体解锁和 IP 质量 |
 | 平台管理 | 状态总览、自动检查更新、校验安装和版本恢复 |
+
+## 从 1.x 重新安装 2.x
+
+1.x 与 2.x 的结构不同，不通过覆盖单个脚本原地升级。1.x 用户选择旧菜单中的 **检查更新与自助升级** 后，会进入独立迁移助手。迁移助手先下载完整 2.x 包并验证 SHA-256，确认包可用后才替换 `vps` 管理入口。
+
+重新安装只替换管理程序，不会修改现有 SSH 端口、登录方式、UFW、Fail2Ban、BBR、Swap、Docker 或 1Panel 配置，也不会重新执行安全初始化。
+
+## VPS 测试工具与第三方代码
+
+普通菜单直接提供融合怪、YABS、Bench.sh、NextTrace 回程、流媒体解锁和 IP 质量检测。平台随版本固定入口脚本的上游提交、许可证和 SHA-256，校验成功后才从临时目录执行。
+
+这些工具仍属于第三方 root 代码，其中部分入口脚本会继续下载二进制或辅助脚本。运行前请阅读负载和流量提示；平台对入口文件的校验不等于对全部下游组件的完整审计。
 
 高级用户仍可在主菜单进入“高级模式”，也可以直接运行模块命令：
 

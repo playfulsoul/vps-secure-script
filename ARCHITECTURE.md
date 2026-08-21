@@ -22,6 +22,7 @@ The project is not intended to become a single ever-growing shell file. The core
 ### User interfaces
 
 - Beginner dashboard and guided workflows: `vps`
+- Task-oriented beginner menus expose concrete outcomes and feature keywords; technical lifecycle actions stay in advanced and command modes.
 - Advanced module menu: available from the beginner dashboard
 - Command mode: `vps <module> <action>`
 - Diagnostics: `vps doctor`
@@ -78,6 +79,8 @@ Maintained by the project but versioned independently. They are downloaded to a 
 
 Untrusted by default. They run as separate processes, declare required privileges and changes, and are never sourced into the core shell process.
 
+The built-in diagnostics catalog pins each selected entry script to an immutable upstream commit and SHA-256. Some third-party entry scripts download additional components at runtime; the interface must disclose that downstream trust boundary and must not describe entry-file verification as a full audit.
+
 ## 5. Filesystem layout
 
 Development layout:
@@ -128,6 +131,7 @@ The Bash-based 2.x line establishes module boundaries. A later daemon may be imp
 ## 8. Release strategy
 
 - `1.0.1` remains the immutable legacy baseline.
+- The historical raw `vps_secure.sh` URL serves a standalone migration assistant. It installs a verified complete 2.x bundle instead of attempting a cross-architecture single-file update.
 - `2.x` introduces the modular Bash platform and compatibility fixes.
 - A thin installer may download the core and selected modules.
 - A verified full bundle may be offered for offline or rescue use.

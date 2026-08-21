@@ -10,7 +10,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$($CLI --version)
-assert_eq 'vps-secure 2.0.0-beta.2.1' "$actual" "CLI reports the platform version"
+assert_eq 'vps-secure 2.0.0-beta.3' "$actual" "CLI reports the platform version"
 
 actual=$($CLI module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
@@ -21,6 +21,15 @@ actual=$(printf '0\n' | "$CLI")
 assert_contains "$actual" 'VPS 安全与管理平台' "CLI opens the beginner-friendly Chinese menu"
 assert_contains "$actual" '新 VPS 安全初始化' "beginner menu exposes the guided security workflow"
 assert_contains "$actual" '更新与恢复' "beginner menu exposes platform updates"
+assert_contains "$actual" '软件更新 · Swap · BBR · 用户与 sudo' \
+    "main menu summarizes system-management capabilities"
+assert_contains "$actual" '融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量' \
+    "main menu summarizes external test capabilities"
+
+actual=$(printf '3\n3\n1\n0\n0\n0\n' | "$CLI")
+assert_contains "$actual" '查看当前网络加速状态' "BBR menu uses task-specific wording"
+assert_contains "$actual" '━━━━━━━━ BBR 当前状态' "read-only actions have a visible result section"
+assert_contains "$actual" '[完成] 操作已完成' "module result is acknowledged before menu redraw"
 
 actual=$($CLI module info security.ssh)
 assert_contains "$actual" 'high-risk' "CLI exposes module privilege level"

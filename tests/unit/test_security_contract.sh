@@ -4,7 +4,8 @@ set -u
 
 TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
-SCRIPT="$PROJECT_ROOT/vps_secure.sh"
+SSH_CORE="$PROJECT_ROOT/core/ssh.sh"
+FIREWALL_MODULE="$PROJECT_ROOT/modules/builtin/security-firewall/module.sh"
 FAIL2BAN_MODULE="$PROJECT_ROOT/modules/builtin/security-fail2ban/module.sh"
 
 # shellcheck source=../test_helper.sh
@@ -12,25 +13,28 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 
 # The pattern is intentionally literal; it detects the removed fallback expression.
 # shellcheck disable=SC2016
-if grep -q 'CUR_SSH_PORT=${CUR_SSH_PORT:-22}' "$SCRIPT"; then
+if grep -q 'CUR_SSH_PORT=${CUR_SSH_PORT:-22}' \
+    "$SSH_CORE" "$FIREWALL_MODULE" "$FAIL2BAN_MODULE"; then
     fail "security workflows must not fall back to SSH port 22"
 else
     pass "security workflows do not fall back to SSH port 22"
 fi
 
-if grep -q 'cat > /etc/fail2ban/jail.local' "$SCRIPT"; then
+if grep -q 'cat > /etc/fail2ban/jail.local' "$FAIL2BAN_MODULE"; then
     fail "Fail2Ban installation must not overwrite jail.local"
 else
     pass "Fail2Ban installation does not overwrite jail.local"
 fi
 
-if grep -q 'config_file=/etc/fail2ban/jail.d/90-vps-secure.local' "$SCRIPT"; then
+# shellcheck disable=SC2016
+if grep -q 'CONFIG_RELATIVE=${VPS_FAIL2BAN_CONFIG_RELATIVE:-jail.d/90-vps-secure.local}' \
+    "$FAIL2BAN_MODULE"; then
     pass "Fail2Ban uses a platform-owned configuration drop-in"
 else
     fail "Fail2Ban platform-owned configuration drop-in is missing"
 fi
 
-if grep -A80 '^install_firewall()' "$SCRIPT" | grep -Eq 'ufw allow (80|443)|add-port=(80|443)'; then
+if grep -Eq 'ufw allow (80|443)|add-port=(80|443)' "$FIREWALL_MODULE"; then
     fail "initial firewall setup must not open web ports by default"
 else
     pass "initial firewall setup does not open web ports by default"
