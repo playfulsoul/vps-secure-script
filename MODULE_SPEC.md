@@ -73,7 +73,7 @@ Minimum requirements by module type:
 64  invalid arguments or module contract violation
 ```
 
-Human-readable output goes to standard output. Diagnostic details go to standard error. A future `--json` mode will provide stable machine-readable results; modules must not depend on parsing colored menu text.
+Human-readable output goes to standard output. Diagnostic details go to standard error. Modules must not depend on parsing colored menu text.
 
 ## 5. Privilege levels
 
@@ -117,7 +117,7 @@ The platform does not execute the contents of a mutable remote branch directly a
 
 ## 8. Compatibility wrappers
 
-An existing standalone script may be integrated through a wrapper module. The wrapper translates module actions to the legacy script without requiring an immediate rewrite. Interactive prompts must eventually be separated from domain logic so command and menu modes behave consistently.
+An existing standalone script may be integrated through a wrapper module. The wrapper translates module actions to the legacy script without requiring an immediate rewrite. Interactive prompts must remain separate from domain logic so command and menu modes behave consistently.
 
 For curated external tools, the wrapper records an immutable entry URL, upstream commit, license, and SHA-256. Verification covers the downloaded entry file only. If that file downloads other scripts or binaries, the plan and user interface must disclose the additional trust boundary before execution.
 

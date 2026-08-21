@@ -1,0 +1,84 @@
+name: 错误报告
+description: 报告可以复现的安装、菜单、模块或兼容性问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请勿提交 VPS 密码、Token、Cookie、SSH 私钥、完整 IP、未脱敏认证日志或业务数据。SSH 已失联时请先使用服务商控制台恢复访问。
+  - type: input
+    id: version
+    attributes:
+      label: 平台版本
+      description: 运行 `vps --version` 查看。
+      placeholder: vps-secure 2.0.0-beta.4
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: 操作系统
+      description: 例如 Debian 12 或 Ubuntu 24.04。
+      placeholder: Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题范围
+      options:
+        - 安装或迁移
+        - 程序更新或恢复
+        - SSH 或公钥
+        - UFW 防火墙
+        - Fail2Ban
+        - 系统更新、Swap 或 BBR
+        - Docker 或 1Panel
+        - 网络检查或第三方测试
+        - 菜单或文档
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从进入哪个菜单或运行哪个命令开始，按顺序说明。
+      placeholder: |
+        1. 运行 sudo vps
+        2. 选择……
+        3. 出现……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 可以粘贴已经脱敏的错误信息。
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 脱敏诊断信息
+      description: 请先人工检查并删除 IP、主机名、用户名、密钥、Token 和业务数据。
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 安全确认
+      options:
+        - label: 我没有提交密码、Token、Cookie、SSH 私钥或其他凭据。
+          required: true
+        - label: 我已经隐藏 IP、主机名、用户名和业务数据。
+          required: true
+        - label: 如果问题涉及 SSH 或防火墙，我仍保留现有窗口或具有服务商控制台。
+          required: false

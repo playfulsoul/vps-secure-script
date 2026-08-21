@@ -88,6 +88,7 @@ The built-in diagnostics catalog pins each selected entry script to an immutable
 Development layout:
 
 ```text
+.github/                 CI, issue forms and pull-request templates
 bin/                     command entry points
 core/                    routing, state, logging, backup and adapters
 modules/builtin/         security-critical first-party modules
@@ -95,7 +96,7 @@ modules/official/        optional first-party modules during development
 registry/                module catalog and integrity metadata
 tests/unit/              deterministic unit tests
 tests/integration/       distribution and service integration tests
-docs/                    user and maintainer documentation
+docs/                    user, testing and maintainer documentation
 legacy/v1.0.1/           immutable legacy baseline
 ```
 
@@ -128,13 +129,12 @@ Changing an SSH port is a separate, explicit workflow. The old port remains allo
 
 Lightweight continuous collectors may measure latency, packet loss, TCP/HTTP response time, resource use, and interface traffic. Bandwidth speed tests are active, traffic-consuming jobs and remain opt-in with frequency and traffic limits.
 
-The Bash-based 2.x line establishes module boundaries. A later daemon may be implemented as a small compiled service if continuous collection, concurrency, retention, and alerting exceed what shell and systemd timers can safely provide.
+The current Bash-based 2.x line uses systemd timers for lightweight local collection. High-volume tests and centralized monitoring are outside the built-in collector's current contract.
 
 ## 8. Release strategy
 
 - `1.0.1` remains the immutable legacy baseline.
 - The historical raw `vps_secure.sh` URL serves a standalone migration assistant. It installs a verified complete 2.x bundle instead of attempting a cross-architecture single-file update.
 - `2.x` introduces the modular Bash platform and compatibility fixes.
-- A thin installer may download the core and selected modules.
-- A verified full bundle may be offered for offline or rescue use.
+- Releases use a verified full bundle, and installed platforms retrieve updates through the same integrity-checked lifecycle.
 - Remote module execution via `curl | bash` is not part of the trusted module lifecycle.
