@@ -90,6 +90,21 @@ The `2.0.0-beta.3` release candidate received an additional live pass on the ded
 
 High-load or downstream-fetching third-party diagnostics were deliberately not executed as part of the unattended pass. Their entry-file integrity path is validated, while execution remains an explicit user-approved external-root action.
 
+### Beta.4 ordinary-user setup and network checks
+
+The `2.0.0-beta.4` release candidate received a further live pass on the same dedicated Ubuntu 24.04 host:
+
+- Installed the locally built archive only after its generated SHA-256 checksum passed, then confirmed the previous installation was backed up.
+- Confirmed the new “VPS 管理与安全平台” branding, colored icon sections, feature summaries on the first page, and the plain-text `NO_COLOR` fallback.
+- Ran the expanded VPS security and optimization wizard with package upgrades declined. It detected and preserved the already active BBR configuration and existing Swap partition.
+- Confirmed the wizard treated the already compliant UFW and Fail2Ban configurations as no-ops, preserved their meaningful rollback points, and completed post-change verification.
+- Confirmed that SSH continued listening on port 22 and that the doctor, firewall verification, and Fail2Ban verification all passed after the wizard.
+- Ran the low-load network check twice without configuring a timer. It reported target, latency, packet loss, a readable quality label, default interface, cumulative traffic, and sampling-window download/upload rates.
+- Confirmed that an inactive monitoring timer is reported once without duplicate raw `inactive` output.
+- Ran all packaged automated test suites on the target. ShellCheck was unavailable on the VPS; the same candidate passed ShellCheck and all suites on the development host.
+
+No high-volume bandwidth test or downstream-fetching third-party diagnostic was run during this pass.
+
 ## Defects discovered during the run
 
 1. A repeated no-change firewall apply replaced the earlier meaningful rollback point.

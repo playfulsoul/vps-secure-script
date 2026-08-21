@@ -8,6 +8,7 @@ source "$VPS_PLATFORM_ROOT/core/runtime.sh"
 MODULE_ID=${VPS_MODULE_ID:-system.swap}
 SWAP_FILE=${VPS_SWAP_FILE:-/swapfile}
 FSTAB_FILE=${VPS_FSTAB_FILE:-/etc/fstab}
+SWAP_RESERVE_MB=${VPS_SWAP_RESERVE_MB:-256}
 
 swap_size() {
     local size=1G
@@ -26,6 +27,32 @@ swap_check() {
     [[ -r "$FSTAB_FILE" ]] || return 30
 }
 
+swap_size_mb() {
+    local size=$1
+    if [[ "$size" == *G ]]; then
+        printf '%s\n' "$((${size%G} * 1024))"
+    else
+        printf '%s\n' "${size%M}"
+    fi
+}
+
+swap_capacity_check() {
+    local size=$1 target_dir available_mb requested_mb
+    target_dir=$(dirname -- "$SWAP_FILE")
+    available_mb=$(df -Pm "$target_dir" 2>/dev/null | awk 'NR == 2 { print $4; exit }')
+    [[ "$available_mb" =~ ^[0-9]+$ ]] || {
+        printf '无法确认 Swap 目标磁盘的可用空间。\n' >&2
+        return 20
+    }
+    requested_mb=$(swap_size_mb "$size")
+    if (( available_mb < requested_mb + SWAP_RESERVE_MB )); then
+        printf '磁盘空间不足：创建 %s Swap 后必须至少保留 %s MB 可用空间。\n' \
+            "$size" "$SWAP_RESERVE_MB" >&2
+        return 30
+    fi
+    printf '%s\n' "$available_mb"
+}
+
 swap_status() {
     if swapon --noheadings --show=NAME,SIZE,USED 2>/dev/null | grep -q .; then
         swapon --show=NAME,SIZE,USED,PRIO
@@ -36,14 +63,19 @@ swap_status() {
 }
 
 swap_plan() {
-    local size
+    local size available_mb=''
     swap_check || return $?
     size=$(swap_size "$@") || return $?
+    if ! swapon --noheadings --show=NAME 2>/dev/null | grep -q .; then
+        available_mb=$(swap_capacity_check "$size") || return $?
+    fi
     printf 'Swap 执行计划：\n'
     printf '  - 目标文件: %s\n' "$SWAP_FILE"
     printf '  - 大小: %s\n' "$size"
     printf '  - 已存在任何 Swap 时安全跳过。\n'
     printf '  - 未启用但已存在目标文件时停止，不覆盖未知数据。\n'
+    [[ -z "$available_mb" ]] || printf '  - 当前目标磁盘可用: %s MB；至少保留 %s MB。\n' \
+        "$available_mb" "$SWAP_RESERVE_MB"
 }
 
 swap_verify() {
@@ -80,6 +112,7 @@ swap_apply() {
         printf '目标文件已存在但未启用，拒绝覆盖: %s\n' "$SWAP_FILE" >&2
         return 30
     }
+    swap_capacity_check "$size" >/dev/null || return $?
 
     transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || return 40
     cp "$FSTAB_FILE" "$transaction_dir/fstab.before" || return 40

@@ -28,7 +28,7 @@ source "$VPS_PLATFORM_ROOT/core/ui.sh"
 
 show_help() {
     cat <<'EOF'
-VPS Secure Platform
+VPS 管理与安全平台
 
 用法：
   vps --version
@@ -147,7 +147,7 @@ interactive_advanced_menu() {
         while IFS= read -r line; do
             modules+=("$line")
         done < <(vps_module_list)
-        printf '\nVPS Secure Platform %s\n' "$VERSION"
+        printf '\nVPS 管理与安全平台 %s\n' "$VERSION"
         printf '%s\n' '========================================'
         index=1
         for line in "${modules[@]}"; do

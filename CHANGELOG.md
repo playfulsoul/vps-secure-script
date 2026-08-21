@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-beta.4 - Unreleased
 
 - Point the standalone 1.x migration assistant directly to the now-published `2.0.0-beta.3` release.
+- Rename the user-facing product to VPS 管理与安全平台 while retaining all `vps-secure` repository, command, update, and filesystem identifiers for compatibility.
+- Add a color-aware, icon-based section menu with a plain-text fallback for non-interactive and `NO_COLOR` environments.
+- Expand the guided VPS setup to cover UFW, Fail2Ban, optional package updates, BBR detection, and a memory-aware Swap choice.
+- Make the low-load network check usable without prior timer configuration and render human-readable latency, loss, traffic, and sample-rate results.
+- Validate the complete ordinary-user setup and low-load network workflow on a dedicated Ubuntu 24.04 VPS.
 
 ## 2.0.0-beta.3 - 2026-08-21
 

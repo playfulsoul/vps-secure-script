@@ -10,7 +10,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$($CLI --version)
-assert_eq 'vps-secure 2.0.0-beta.3' "$actual" "CLI reports the platform version"
+assert_eq 'vps-secure 2.0.0-beta.4' "$actual" "CLI reports the platform version"
 
 actual=$($CLI module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
@@ -18,13 +18,40 @@ assert_contains "$actual" 'security.ssh' "CLI lists the SSH module"
 assert_contains "$actual" 'monitoring.network' "CLI lists the network monitoring module"
 
 actual=$(printf '0\n' | "$CLI")
-assert_contains "$actual" 'VPS 安全与管理平台' "CLI opens the beginner-friendly Chinese menu"
-assert_contains "$actual" '新 VPS 安全初始化' "beginner menu exposes the guided security workflow"
+assert_contains "$actual" 'VPS 管理与安全平台' "CLI opens the beginner-friendly Chinese menu"
+assert_contains "$actual" 'VPS 安全与配置优化设置' "beginner menu exposes the guided security and optimization workflow"
+assert_contains "$actual" '推荐操作' "beginner menu groups tasks into visual sections"
 assert_contains "$actual" '更新与恢复' "beginner menu exposes platform updates"
 assert_contains "$actual" '软件更新 · Swap · BBR · 用户与 sudo' \
     "main menu summarizes system-management capabilities"
 assert_contains "$actual" '融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量' \
     "main menu summarizes external test capabilities"
+assert_contains "$actual" '立即检测 · 延迟 · 丢包 · 网卡流量记录' \
+    "main menu exposes the usable low-load network check"
+
+actual=$(printf '0\n' | VPS_UI_COLOR=always "$CLI")
+assert_contains "$actual" $'\033[0;36m' "interactive UI supports ANSI color sections"
+actual=$(printf '0\n' | NO_COLOR=1 "$CLI")
+if [[ "$actual" == *$'\033['* ]]; then
+    fail "NO_COLOR disables ANSI menu colors"
+else
+    pass "NO_COLOR disables ANSI menu colors"
+fi
+
+actual=$(printf '5\n0\n0\n' | "$CLI")
+assert_contains "$actual" '立即检测网络状态（无需预配置）' \
+    "network menu exposes a configuration-free quick check"
+
+meminfo_file=$(mktemp)
+printf '%s\n' 'MemTotal:        1048576 kB' > "$meminfo_file"
+actual=$(VPS_UI_SWAP_ACTIVE=no VPS_UI_MEMINFO_FILE="$meminfo_file" VPS_PLATFORM_ROOT="$PROJECT_ROOT" \
+    bash -c 'source "$VPS_PLATFORM_ROOT/core/ui.sh"; vps_ui_swap_recommendation')
+assert_eq '1G' "$actual" "guided setup recommends Swap for a low-memory VPS"
+printf '%s\n' 'MemTotal:        8388608 kB' > "$meminfo_file"
+actual=$(VPS_UI_SWAP_ACTIVE=no VPS_UI_MEMINFO_FILE="$meminfo_file" VPS_PLATFORM_ROOT="$PROJECT_ROOT" \
+    bash -c 'source "$VPS_PLATFORM_ROOT/core/ui.sh"; vps_ui_swap_recommendation')
+assert_eq 'none' "$actual" "guided setup does not add Swap by default on a high-memory VPS"
+rm -f "$meminfo_file"
 
 actual=$(printf '3\n3\n1\n0\n0\n0\n' | "$CLI")
 assert_contains "$actual" '查看当前网络加速状态' "BBR menu uses task-specific wording"
