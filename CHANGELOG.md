@@ -1,6 +1,10 @@
 # Changelog
 
-## 2.0.0-beta.4 - Unreleased
+## Unreleased
+
+- Point the standalone 1.x migration assistant directly to the published `2.0.0-beta.4` release.
+
+## 2.0.0-beta.4 - 2026-08-21
 
 - Point the standalone 1.x migration assistant directly to the now-published `2.0.0-beta.3` release.
 - Rename the user-facing product to VPS 管理与安全平台 while retaining all `vps-secure` repository, command, update, and filesystem identifiers for compatibility.
