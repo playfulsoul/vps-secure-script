@@ -58,6 +58,17 @@ monitor_check() {
     command -v ip >/dev/null 2>&1 || { printf '缺少 iproute2。\n' >&2; return 20; }
 }
 
+monitor_ensure_dependencies() {
+    monitor_check >/dev/null 2>&1 && return 0
+    vps_require_root || {
+        printf '网络检测缺少必要组件，请使用 sudo vps 后重试。\n' >&2
+        return 30
+    }
+    vps_apt_update || return 40
+    vps_apt_install iproute2 iputils-ping || return 40
+    monitor_check
+}
+
 monitor_plan() {
     local target interval retention
     read -r target interval retention <<< "$(monitor_arguments "$@")" || return $?
@@ -66,7 +77,7 @@ monitor_plan() {
     printf '  - 间隔: %s 秒\n' "$interval"
     printf '  - 数据保留: %s 天\n' "$retention"
     printf '  - 每次发送 5 个 ICMP 请求，记录延迟和丢包。\n'
-    printf '  - 同时记录默认网卡累计收发字节，用于计算实际流量速率。\n'
+    printf '  - 同时记录默认网卡累计收发字节；至少两次采样后计算平均速率。\n'
     printf '  - 不自动运行高流量互联网带宽测试。\n'
 }
 
@@ -119,9 +130,23 @@ monitor_configure() {
 
 monitor_collect() {
     local target retention now iso output sent received loss average interface rx_bytes tx_bytes
-    local temporary cutoff
+    local temporary cutoff target_override=''
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --target) target_override=${2:-}; shift 2 ;;
+            *) printf '未知参数: %s\n' "$1" >&2; return 64 ;;
+        esac
+    done
     monitor_check || return $?
-    target=$(monitor_config_value target) || return 30
+    if [[ -n "$target_override" ]]; then
+        monitor_target_valid "$target_override" || {
+            printf '检测目标格式无效。\n' >&2
+            return 64
+        }
+        target=$target_override
+    else
+        target=$(monitor_config_value target 2>/dev/null || printf '1.1.1.1')
+    fi
     retention=$(monitor_config_value retention_days 2>/dev/null || printf 30)
     now=$(date +%s)
     iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -159,16 +184,82 @@ monitor_collect() {
         mv "$temporary" "$METRICS_FILE"
 }
 
+monitor_format_bytes() {
+    awk -v bytes="${1:-0}" 'BEGIN {
+        split("B KB MB GB TB", unit, " ")
+        value = bytes + 0
+        unit_index = 1
+        while (value >= 1024 && unit_index < 5) { value /= 1024; unit_index++ }
+        if (unit_index == 1) printf "%.0f %s", value, unit[unit_index]
+        else printf "%.2f %s", value, unit[unit_index]
+    }'
+}
+
+monitor_quality_label() {
+    local loss=$1 average=$2
+    if [[ "$average" == NA ]] || awk -v value="$loss" 'BEGIN { exit !(value >= 100) }'; then
+        printf '无法连接'
+    elif awk -v value="$loss" 'BEGIN { exit !(value > 0) }'; then
+        printf '存在丢包'
+    elif awk -v value="$average" 'BEGIN { exit !(value < 50) }'; then
+        printf '良好'
+    elif awk -v value="$average" 'BEGIN { exit !(value < 120) }'; then
+        printf '一般'
+    else
+        printf '延迟较高'
+    fi
+}
+
+monitor_latest_rate() {
+    local previous current
+    local p_epoch p_interface p_rx p_tx
+    local c_epoch c_interface c_rx c_tx
+    previous=$(tail -n 2 "$METRICS_FILE" 2>/dev/null | head -n 1)
+    current=$(tail -n 1 "$METRICS_FILE" 2>/dev/null)
+    if [[ -z "$previous" || "$previous" == epoch$'\t'* || "$previous" == "$current" ]]; then
+        printf '平均速率：需要至少两次采样\n'
+        return 0
+    fi
+    IFS=$'\t' read -r p_epoch _ _ _ _ _ _ p_interface p_rx p_tx <<< "$previous"
+    IFS=$'\t' read -r c_epoch _ _ _ _ _ _ c_interface c_rx c_tx <<< "$current"
+    if [[ "$p_interface" != "$c_interface" || "$c_interface" == unknown ]] || \
+       (( c_epoch <= p_epoch || c_rx < p_rx || c_tx < p_tx )); then
+        printf '平均速率：暂时无法计算\n'
+        return 0
+    fi
+    awk -v seconds="$((c_epoch - p_epoch))" -v rx="$((c_rx - p_rx))" -v tx="$((c_tx - p_tx))" \
+        'BEGIN { printf "采样间平均速率：下载 %.2f Mbps｜上传 %.2f Mbps\n", rx * 8 / seconds / 1000000, tx * 8 / seconds / 1000000 }'
+}
+
 monitor_status() {
+    local latest iso target sent received loss average interface rx_bytes tx_bytes timer_state
     if [[ ! -r "$METRICS_FILE" ]]; then
-        printf '尚无网络监控数据。\n'
+        printf '尚无网络检测数据。请先运行一次“立即检测网络状态”。\n'
         return 10
     fi
-    printf '最近网络监控数据：\n'
-    tail -n 11 "$METRICS_FILE"
+    latest=$(tail -n 1 "$METRICS_FILE")
+    IFS=$'\t' read -r _ iso target sent received loss average interface rx_bytes tx_bytes <<< "$latest"
+    printf '最近一次网络检测\n\n'
+    printf '检测时间：%s\n' "$iso"
+    printf '检测目标：%s\n' "$target"
+    printf '平均延迟：%s ms\n' "$average"
+    printf '丢包率：%s%%（发送 %s，收到 %s）\n' "$loss" "$sent" "$received"
+    printf '网络状态：%s\n' "$(monitor_quality_label "$loss" "$average")"
+    printf '默认网卡：%s\n' "$interface"
+    printf '累计接收：%s\n' "$(monitor_format_bytes "$rx_bytes")"
+    printf '累计发送：%s\n' "$(monitor_format_bytes "$tx_bytes")"
+    monitor_latest_rate
     if command -v systemctl >/dev/null 2>&1; then
-        printf '\n定时器状态: %s\n' "$(systemctl is-active vps-network-monitor.timer 2>/dev/null || printf inactive)"
+        timer_state=$(systemctl is-active vps-network-monitor.timer 2>/dev/null || true)
+        printf '\n定时器状态: %s\n' "${timer_state:-inactive}"
     fi
+}
+
+monitor_apply() {
+    vps_require_root || return $?
+    monitor_ensure_dependencies || return $?
+    monitor_collect "$@" || return $?
+    monitor_status
 }
 
 monitor_verify() {
@@ -192,8 +283,8 @@ case ${1:-} in
     check) monitor_check ;;
     plan) shift; monitor_plan "$@" ;;
     configure) shift; monitor_configure "$@" ;;
-    apply) monitor_collect ;;
-    collect) monitor_collect ;;
+    apply) shift; monitor_apply "$@" ;;
+    collect) shift; monitor_collect "$@" ;;
     status|doctor) monitor_status ;;
     verify) monitor_verify ;;
     start) monitor_start ;;

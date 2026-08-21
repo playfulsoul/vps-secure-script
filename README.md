@@ -1,8 +1,8 @@
-# VPS Secure Platform
+# VPS 管理与安全平台
 
-一款面向普通用户的 VPS 安全与管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
+原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前版本为 `2.0.0-beta.3`。它保留了 1.x 简单直观的菜单体验，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前开发版本为 `2.0.0-beta.4`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 > Beta 版本已经在 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -17,24 +17,25 @@ sudo vps
 程序会显示服务器状态和中文菜单：
 
 ```text
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          VPS 安全与管理平台
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  🎯 VPS 管理与安全平台  2.0.0-beta.4
+     安全优先 · 模块化 · 可扩展
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
 SSH 端口：32876（程序不会自动改成 22）
 防火墙：运行正常
 SSH 防暴力破解：运行正常
 
-1. 新 VPS 安全初始化
-   防火墙 · SSH 防暴力破解
+1. VPS 安全与配置优化设置
+   系统检查 · UFW · Fail2Ban · BBR · 智能 Swap
 2. SSH 与安全防护
    端口 · GitHub 公钥 · UFW · Fail2Ban · 回滚
 3. 系统管理
    软件更新 · Swap · BBR · 用户与 sudo
 4. 应用安装
    Docker · Docker Compose · 1Panel
-5. 网络状态监控
-   延迟 · 丢包 · 网卡流量记录
+5. 基础网络检查与监控
+   立即检测 · 延迟 · 丢包 · 网卡流量记录
 6. VPS 测试工具
    融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量
 7. 服务器完整体检
@@ -43,7 +44,7 @@ SSH 防暴力破解：运行正常
 0. 退出
 ```
 
-第一次使用建议选择 **1. 新 VPS 安全初始化**。程序会先检查系统和 SSH 端口，显示将要进行的修改，得到确认后再配置 UFW 和 Fail2Ban。
+第一次使用建议选择 **1. VPS 安全与配置优化设置**。推荐向导会先检查系统和 SSH 端口，让用户决定是否执行常规软件更新、启用 BBR，并根据内存提供 Swap 建议；显示完整计划并确认后，才配置 UFW、Fail2Ban 和已选择的优化项目。
 
 安全初始化遵守以下规则：
 
@@ -52,6 +53,9 @@ SSH 防暴力破解：运行正常
 - 只放行确认过的 SSH 端口，不默认开放 80 或 443。
 - 保留现有防火墙规则和用户配置。
 - Fail2Ban 使用项目自己的配置片段，不覆盖 `jail.local`。
+- BBR 仅在内核支持时提供，并在应用后读取内核状态验证。
+- 已有 Swap 时保持现状；新建 Swap 前检查磁盘空间并保留安全余量。
+- 不自动关闭密码登录或禁止 root 登录，高风险登录强化必须分阶段验证。
 - 修改后自动验证；关键模块提供撤销上次修改的入口。
 
 ## 安装 beta 版本
@@ -59,10 +63,10 @@ SSH 防暴力破解：运行正常
 从 GitHub Release 下载程序包和校验文件，验证无误后安装：
 
 ```bash
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.3/vps-secure-platform-2.0.0-beta.3.tar.gz
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.3/vps-secure-platform-2.0.0-beta.3.tar.gz.sha256
-sha256sum -c vps-secure-platform-2.0.0-beta.3.tar.gz.sha256
-tar -xzf vps-secure-platform-2.0.0-beta.3.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.4/vps-secure-platform-2.0.0-beta.4.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.4/vps-secure-platform-2.0.0-beta.4.tar.gz.sha256
+sha256sum -c vps-secure-platform-2.0.0-beta.4.tar.gz.sha256
+tar -xzf vps-secure-platform-2.0.0-beta.4.tar.gz
 sudo ./install.sh
 sudo vps
 ```
@@ -157,7 +161,7 @@ Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更
 | 安全防护 | SSH 端口状态、GitHub 公钥导入、UFW、Fail2Ban |
 | 系统管理 | 软件包更新、Swap、BBR、用户和 sudo |
 | 应用安装 | Docker Engine、1Panel |
-| 网络监控 | 延迟、丢包和网卡流量记录 |
+| 基础网络检查 | 无需预配置的延迟、丢包、网卡流量与采样间平均速率 |
 | VPS 测试工具 | 融合怪、YABS、Bench.sh、回程路由、流媒体解锁和 IP 质量 |
 | 平台管理 | 状态总览、自动检查更新、校验安装和版本恢复 |
 

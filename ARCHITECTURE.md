@@ -1,8 +1,10 @@
-# VPS Secure Platform Architecture
+# VPS 管理与安全平台 Architecture
 
 ## 1. Product direction
 
-VPS Secure Platform is an integrated VPS security, operations, application, monitoring, and diagnostics platform. The `vps` command provides one consistent user experience while individual capabilities are delivered by independently testable modules.
+VPS 管理与安全平台（原 VPS Secure Platform）is an integrated VPS security, operations, application, monitoring, and diagnostics platform. The `vps` command provides one consistent user experience while individual capabilities are delivered by independently testable modules.
+
+The repository name, command, environment variables, and `/usr`, `/etc`, and `/var` paths retain their existing `vps-secure` identifiers as compatibility contracts. Product display naming is intentionally decoupled from these internal identifiers.
 
 The project is not intended to become a single ever-growing shell file. The core owns platform behavior; modules own domain behavior.
 

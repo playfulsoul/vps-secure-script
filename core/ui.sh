@@ -5,6 +5,46 @@ source "$VPS_PLATFORM_ROOT/core/platform.sh"
 # shellcheck source=ssh.sh
 source "$VPS_PLATFORM_ROOT/core/ssh.sh"
 
+VPS_PRODUCT_NAME=${VPS_PRODUCT_NAME:-VPS 管理与安全平台}
+VPS_PRODUCT_TAGLINE=${VPS_PRODUCT_TAGLINE:-安全优先 · 模块化 · 可扩展}
+
+UI_RESET=''
+UI_CYAN=''
+UI_BLUE=''
+UI_GREEN=''
+UI_YELLOW=''
+UI_RED=''
+UI_DIM=''
+
+vps_ui_enable_colors() {
+    local color_mode=${VPS_UI_COLOR:-auto}
+    [[ "$color_mode" != never ]] || return 0
+    if [[ "$color_mode" == always ]] || \
+       { [[ -t 1 && ${TERM:-dumb} != dumb ]] && [[ -z ${NO_COLOR+x} ]]; }; then
+        UI_RESET=$'\033[0m'
+        UI_CYAN=$'\033[0;36m'
+        UI_BLUE=$'\033[0;34m'
+        UI_GREEN=$'\033[0;32m'
+        UI_YELLOW=$'\033[0;33m'
+        UI_RED=$'\033[0;31m'
+        UI_DIM=$'\033[2m'
+    fi
+}
+
+vps_ui_enable_colors
+
+vps_ui_section() {
+    local icon=$1 title=$2
+    printf '\n%b════════════【 %s %s 】════════════%b\n' "$UI_BLUE" "$icon" "$title" "$UI_RESET"
+}
+
+vps_ui_menu_item() {
+    local number=$1 icon=$2 title=$3 detail=${4:-}
+    printf '  %b%s.%b %s %b%s%b\n' \
+        "$UI_YELLOW" "$number" "$UI_RESET" "$icon" "$UI_GREEN" "$title" "$UI_RESET"
+    [[ -z "$detail" ]] || printf '     %b%s%b\n' "$UI_YELLOW" "$detail" "$UI_RESET"
+}
+
 vps_ui_pause() {
     [[ -t 0 ]] || return 0
     read -r -p $'\n按回车键继续……' _
@@ -18,21 +58,23 @@ vps_ui_show_result() {
     result=$?
     printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
     case "$result" in
-        0) printf '[完成] 操作已完成。\n' ;;
-        10) printf '[提示] 操作已结束；当前功能可能尚未配置或无需变更。\n' ;;
-        90) printf '[取消] 没有执行任何修改。\n' ;;
-        *) printf '[未完成] 请查看上方提示后重试。\n' ;;
+        0) printf '%b[完成]%b 操作已完成。\n' "$UI_GREEN" "$UI_RESET" ;;
+        10) printf '%b[提示]%b 操作已结束；当前功能可能尚未配置或无需变更。\n' "$UI_YELLOW" "$UI_RESET" ;;
+        90) printf '%b[取消]%b 没有执行任何修改。\n' "$UI_YELLOW" "$UI_RESET" ;;
+        *) printf '%b[未完成]%b 请查看上方提示后重试。\n' "$UI_RED" "$UI_RESET" ;;
     esac
     vps_ui_pause
     return 0
 }
 
 vps_ui_header() {
-    printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+    printf '\n%b━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n' "$UI_CYAN" "$UI_RESET"
     # VERSION is set by the CLI before this function is called.
     # shellcheck disable=SC2153
-    printf '          VPS 安全与管理平台 %s\n' "$VERSION"
-    printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+    printf '  🎯 %b%s%b  %b%s%b\n' \
+        "$UI_GREEN" "$VPS_PRODUCT_NAME" "$UI_RESET" "$UI_YELLOW" "$VERSION" "$UI_RESET"
+    printf '     %b%s%b\n' "$UI_DIM" "$VPS_PRODUCT_TAGLINE" "$UI_RESET"
+    printf '%b━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n' "$UI_CYAN" "$UI_RESET"
 }
 
 vps_ui_status_dashboard() {
@@ -61,6 +103,12 @@ vps_ui_confirm() {
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
+vps_ui_confirm_default_yes() {
+    local prompt=$1 answer
+    read -r -p "$prompt (Y/n): " answer
+    [[ -z "$answer" || "$answer" =~ ^[Yy]$ ]]
+}
+
 vps_ui_run_action() {
     local module_id=$1 action=$2
     shift 2
@@ -78,13 +126,87 @@ vps_ui_run_action() {
     vps_module_run "$module_id" "$action" "$@"
 }
 
+vps_ui_swap_recommendation() {
+    local meminfo=${VPS_UI_MEMINFO_FILE:-/proc/meminfo} memory_kb memory_mb
+    if [[ ${VPS_UI_SWAP_ACTIVE:-auto} == yes ]]; then
+        printf 'existing\n'
+        return 0
+    elif [[ ${VPS_UI_SWAP_ACTIVE:-auto} == auto ]] && \
+         command -v swapon >/dev/null 2>&1 && \
+         swapon --noheadings --show=NAME 2>/dev/null | grep -q .; then
+        printf 'existing\n'
+        return 0
+    fi
+    memory_kb=$(awk '/^MemTotal:/ { print $2; exit }' "$meminfo" 2>/dev/null || true)
+    [[ "$memory_kb" =~ ^[0-9]+$ ]] || {
+        printf 'none\n'
+        return 0
+    }
+    memory_mb=$((memory_kb / 1024))
+    if (( memory_mb <= 2048 )); then
+        printf '1G\n'
+    elif (( memory_mb <= 4096 )); then
+        printf '512M\n'
+    else
+        printf 'none\n'
+    fi
+}
+
+vps_ui_choose_swap() {
+    local recommendation=$1 choice custom recommendation_label
+    VPS_UI_SELECTED_SWAP=''
+    if [[ "$recommendation" == existing ]]; then
+        printf '\n检测到系统已有 Swap，将保持现状。\n'
+        return 0
+    fi
+    printf '\nSwap 虚拟内存选择\n'
+    if [[ "$recommendation" == none ]]; then
+        printf '当前内存较充足，默认不新增 Swap。\n'
+        recommendation_label='不新增'
+    else
+        printf '根据当前内存，建议创建 %s Swap。\n' "$recommendation"
+        recommendation_label=$recommendation
+    fi
+    printf '  1. 使用建议值：%s\n' "$recommendation_label"
+    printf '  2. 创建 512M\n'
+    printf '  3. 创建 1G\n'
+    printf '  4. 创建 2G\n'
+    printf '  5. 自定义大小\n'
+    printf '  0. 不修改 Swap\n'
+    read -r -p '请选择 [1]: ' choice
+    choice=${choice:-1}
+    case "$choice" in
+        1) [[ "$recommendation" == none ]] || VPS_UI_SELECTED_SWAP=$recommendation ;;
+        2) VPS_UI_SELECTED_SWAP=512M ;;
+        3) VPS_UI_SELECTED_SWAP=1G ;;
+        4) VPS_UI_SELECTED_SWAP=2G ;;
+        5)
+            read -r -p '请输入大小，例如 768M 或 2G: ' custom
+            [[ "$custom" =~ ^[1-9][0-9]*[MG]$ ]] || {
+                printf 'Swap 大小格式无效。\n' >&2
+                return 64
+            }
+            VPS_UI_SELECTED_SWAP=$custom
+            ;;
+        0) ;;
+        *) printf '输入无效。\n' >&2; return 64 ;;
+    esac
+}
+
 vps_ui_safe_init() {
     (( EUID == 0 )) || {
-        printf '安全初始化需要管理员权限。请退出后输入：sudo vps init\n' >&2
+        printf '安全与配置优化需要管理员权限。请退出后输入：sudo vps init\n' >&2
         return 30
     }
+    vps_ui_safe_init_flow
+}
+
+vps_ui_safe_init_flow() {
+    local update_system=no enable_bbr=no swap_recommendation swap_size optional_failures=0
     vps_ui_header
-    printf '新 VPS 安全初始化\n\n'
+    vps_ui_section '🚀' 'VPS 安全与配置优化向导'
+    printf '\n该向导会先检查并展示计划，再由你确认是否执行。\n'
+    printf '高风险登录策略不会在本向导中自动修改。\n\n'
     vps_module_run system.doctor check || {
         printf '\n当前系统不在支持范围内，初始化尚未执行。\n' >&2
         return 20
@@ -94,21 +216,135 @@ vps_ui_safe_init() {
         printf '\n无法可靠确认 SSH 端口，初始化尚未执行。\n' >&2
         return 30
     }
-    printf '\n将进行以下操作：\n'
+
+    vps_ui_confirm '是否同时执行常规系统软件更新？' && update_system=yes
+    if vps_module_run system.bbr verify >/dev/null 2>&1; then
+        printf 'BBR 已经启用，将保持现状。\n'
+    elif vps_module_run system.bbr check >/dev/null 2>&1; then
+        vps_ui_confirm_default_yes '检测到内核支持 BBR，是否启用？' && enable_bbr=yes
+    else
+        printf '当前内核未提供 BBR，本次将安全跳过。\n'
+    fi
+    swap_recommendation=$(vps_ui_swap_recommendation)
+    vps_ui_choose_swap "$swap_recommendation" || return $?
+    swap_size=$VPS_UI_SELECTED_SWAP
+
+    printf '\n将进行以下操作：\n\n'
+    if [[ "$update_system" == yes ]]; then
+        vps_module_run system.packages plan || return $?
+        printf '\n'
+    else
+        printf '系统软件更新：本次不执行，可稍后在“系统管理”中运行。\n\n'
+    fi
     vps_module_run security.firewall plan || return $?
     printf '\n'
     vps_module_run security.fail2ban plan || return $?
-    printf '\n保证：保留当前 SSH 端口，不覆盖已有规则，不自动开放网站端口。\n'
-    vps_ui_confirm '开始安全初始化？' || { printf '已取消，服务器没有被修改。\n'; return 90; }
+    if [[ "$enable_bbr" == yes ]]; then
+        printf '\n'
+        vps_module_run system.bbr plan || return $?
+    fi
+    if [[ -n "$swap_size" ]]; then
+        printf '\n'
+        vps_module_run system.swap plan --size "$swap_size" || return $?
+    else
+        printf '\nSwap：保持现状。\n'
+    fi
+    printf '\n安全保证：保留当前 SSH 端口和现有防火墙规则，不自动开放网站端口，\n'
+    printf '不自动关闭密码登录，也不自动禁止 root 登录。\n'
+    vps_ui_confirm '开始执行安全与配置优化？' || { printf '已取消，服务器没有被修改。\n'; return 90; }
 
-    printf '\n[1/2] 配置防火墙……\n'
+    if [[ "$update_system" == yes ]]; then
+        printf '\n[系统] 更新常规软件包……\n'
+        vps_module_run system.packages apply || return $?
+    fi
+    printf '\n[安全] 配置防火墙……\n'
     vps_module_run security.firewall apply || return $?
-    printf '\n[2/2] 配置 SSH 防暴力破解……\n'
+    printf '\n[安全] 配置 SSH 防暴力破解……\n'
     if ! vps_module_run security.fail2ban apply; then
         printf 'Fail2Ban 配置失败。防火墙保持安全状态，可在“安全防护”中分别检查或回滚。\n' >&2
         return 50
     fi
-    printf '\n安全初始化完成。请保持当前窗口，并新开 SSH 窗口确认可以正常登录。\n'
+    if [[ "$enable_bbr" == yes ]]; then
+        printf '\n[优化] 启用 BBR……\n'
+        vps_module_run system.bbr apply || {
+            optional_failures=$((optional_failures + 1))
+            printf 'BBR 未完成，不影响已完成的安全配置。\n' >&2
+        }
+    fi
+    if [[ -n "$swap_size" ]]; then
+        printf '\n[优化] 创建 %s Swap……\n' "$swap_size"
+        vps_module_run system.swap apply --size "$swap_size" || {
+            optional_failures=$((optional_failures + 1))
+            printf 'Swap 未完成，不影响已完成的安全配置。\n' >&2
+        }
+    fi
+    printf '\n[验证] 检查安全组件……\n'
+    vps_module_run security.firewall verify || return $?
+    vps_module_run security.fail2ban verify || return $?
+    if (( optional_failures > 0 )); then
+        printf '\n基础安全配置已完成；有 %s 个可选优化项目未完成。\n' "$optional_failures"
+    else
+        printf '\nVPS 安全与配置优化已经完成。\n'
+    fi
+    printf '请保持当前窗口，并新开 SSH 窗口确认可以正常登录。\n'
+}
+
+vps_ui_login_safety_info() {
+    printf '推荐的登录强化顺序：\n\n'
+    printf '  1. 导入或添加 SSH 公钥。\n'
+    printf '  2. 创建并确认普通 sudo 用户。\n'
+    printf '  3. 打开新的 SSH 窗口验证密钥和 sudo。\n'
+    printf '  4. 验证成功后，才考虑关闭密码登录。\n'
+    printf '  5. 最后再考虑限制 root 登录。\n\n'
+    printf '当前版本不会自动关闭密码登录或禁止 root，避免把用户锁在服务器外。\n'
+}
+
+vps_ui_login_safety_menu() {
+    local choice
+    while true; do
+        vps_ui_header
+        vps_ui_section '🔑' '登录安全基础设置'
+        printf '\n  1. 查看当前 SSH 端口\n'
+        printf '  2. 从 GitHub 导入登录公钥\n'
+        printf '  3. 管理普通用户与 sudo 权限\n'
+        printf '  4. 查看登录安全进阶步骤\n'
+        printf '  0. 返回\n'
+        read -r -p '请选择: ' choice
+        case "$choice" in
+            1) vps_ui_show_result 'SSH 端口状态' vps_module_run security.ssh status ;;
+            2) vps_ui_show_result 'GitHub 登录公钥' vps_ui_github_key ;;
+            3) vps_ui_users_menu ;;
+            4) vps_ui_show_result '登录安全进阶说明' vps_ui_login_safety_info ;;
+            0) return 0 ;;
+            *) printf '输入无效。\n' ;;
+        esac
+    done
+}
+
+vps_ui_optimization_menu() {
+    local choice
+    while true; do
+        vps_ui_header
+        vps_ui_section '🚀' 'VPS 安全与配置优化设置'
+        printf '\n  1. 启动推荐配置向导\n'
+        printf '     系统检查 · UFW · Fail2Ban · BBR · 智能 Swap\n'
+        printf '  2. 登录安全基础与进阶说明\n'
+        printf '     GitHub 公钥 · sudo 用户 · 分阶段强化\n'
+        printf '  3. 单独管理防火墙和 Fail2Ban\n'
+        printf '  4. 单独管理更新、Swap、BBR 和用户\n'
+        printf '  5. 查看服务器完整体检\n'
+        printf '  0. 返回首页\n'
+        read -r -p '请选择: ' choice
+        case "$choice" in
+            1) vps_ui_show_result 'VPS 安全与配置优化' vps_ui_safe_init ;;
+            2) vps_ui_login_safety_menu ;;
+            3) vps_ui_security_menu ;;
+            4) vps_ui_system_menu ;;
+            5) vps_ui_show_result '服务器完整体检' vps_module_run system.doctor doctor ;;
+            0) return 0 ;;
+            *) printf '输入无效。\n' ;;
+        esac
+    done
 }
 
 vps_ui_github_key() {
@@ -130,7 +366,8 @@ vps_ui_security_menu() {
     local choice
     while true; do
         vps_ui_header
-        printf '安全防护\n\n'
+        vps_ui_section '🛡️' 'SSH 与安全防护'
+        printf '\n'
         printf '  1. 查看 SSH 端口\n'
         printf '  2. 从 GitHub 导入登录公钥\n'
         printf '  3. 安装并启用防火墙\n'
@@ -160,7 +397,8 @@ vps_ui_update_menu() {
     local choice
     while true; do
         vps_ui_header
-        printf '更新与恢复\n\n'
+        vps_ui_section '🔄' '程序更新与恢复'
+        printf '\n'
         printf '当前版本：%s\n' "$VERSION"
         printf '更新通道：%s\n\n' "$(vps_update_channel)"
         printf '  1. 检查新版本\n'
@@ -304,7 +542,8 @@ vps_ui_system_menu() {
     local choice
     while true; do
         vps_ui_header
-        printf '系统管理｜软件更新 · Swap · BBR · 用户与 sudo\n\n'
+        vps_ui_section '⚙️' '系统管理'
+        printf '\n软件更新 · Swap · BBR · 用户与 sudo\n\n'
         printf '  1. 系统软件更新\n'
         printf '  2. Swap 虚拟内存\n'
         printf '  3. BBR 网络加速\n'
@@ -372,7 +611,8 @@ vps_ui_applications_menu() {
     local choice
     while true; do
         vps_ui_header
-        printf '应用安装｜Docker · Docker Compose · 1Panel\n\n'
+        vps_ui_section '📦' '应用安装'
+        printf '\nDocker · Docker Compose · 1Panel\n\n'
         printf '  1. Docker 容器引擎与 Compose\n'
         printf '  2. 1Panel 管理面板\n'
         printf '  0. 返回首页\n'
@@ -399,27 +639,32 @@ vps_ui_monitor_configure() {
 }
 
 vps_ui_monitor_collect() {
-    vps_ui_confirm '立即采集一次延迟、丢包和流量数据？' || return 90
-    vps_module_run monitoring.network apply
+    local target
+    read -r -p '检测目标 [1.1.1.1]: ' target
+    target=${target:-1.1.1.1}
+    vps_ui_confirm '立即发送 5 个 ICMP 请求并读取网卡计数？' || return 90
+    vps_module_run monitoring.network apply --target "$target"
 }
 
 vps_ui_monitoring_menu() {
     local choice
     while true; do
         vps_ui_header
-        printf '网络状态监控｜延迟 · 丢包 · 网卡流量记录\n\n'
-        printf '  1. 查看最近监控数据\n'
-        printf '  2. 配置并启动定时监控\n'
-        printf '  3. 立即采集一次数据\n'
+        vps_ui_section '📡' '基础网络检查与监控'
+        printf '\n低负载延迟 · 丢包 · 网卡流量记录\n'
+        printf '专业线路探针将在独立模块成熟后接入。\n\n'
+        printf '  1. 立即检测网络状态（无需预配置）\n'
+        printf '  2. 查看最近一次检测结果\n'
+        printf '  3. 配置并启动定时监控\n'
         printf '  4. 启动定时监控\n'
         printf '  5. 停止定时监控\n'
         printf '  6. 检查监控服务是否正常\n'
         printf '  0. 返回首页\n'
         read -r -p '请选择: ' choice
         case "$choice" in
-            1) vps_ui_show_result '最近网络监控数据' vps_module_run monitoring.network status ;;
-            2) vps_ui_show_result '配置网络监控' vps_ui_monitor_configure ;;
-            3) vps_ui_show_result '采集网络数据' vps_ui_monitor_collect ;;
+            1) vps_ui_show_result '立即检测网络状态' vps_ui_monitor_collect ;;
+            2) vps_ui_show_result '最近网络检测结果' vps_module_run monitoring.network status ;;
+            3) vps_ui_show_result '配置网络监控' vps_ui_monitor_configure ;;
             4) vps_ui_show_result '启动网络监控' vps_ui_run_action monitoring.network start ;;
             5) vps_ui_show_result '停止网络监控' vps_ui_run_action monitoring.network stop ;;
             6) vps_ui_show_result '网络监控服务检查' vps_module_run monitoring.network verify ;;
@@ -448,7 +693,8 @@ vps_ui_diagnostics_menu() {
     local choice
     while true; do
         vps_ui_header
-        printf 'VPS 测试工具｜融合怪 · YABS · Bench · 回程路由 · 流媒体 · IP 质量\n\n'
+        vps_ui_section '🧪' 'VPS 测试工具'
+        printf '\n融合怪 · YABS · Bench · 回程路由 · 流媒体 · IP 质量\n\n'
         printf '  1. 融合怪综合测试\n'
         printf '  2. YABS CPU、磁盘与网络测试\n'
         printf '  3. Bench.sh 网络带宽测试\n'
@@ -478,28 +724,33 @@ vps_ui_main_menu() {
     while true; do
         vps_ui_status_dashboard
         [[ -z "${VPS_UPDATE_AVAILABLE:-}" ]] || printf '可更新版本：%s\n' "$VPS_UPDATE_AVAILABLE"
-        printf '\n  1. 新 VPS 安全初始化\n'
-        printf '     防火墙 · SSH 防暴力破解\n'
-        printf '  2. SSH 与安全防护\n'
-        printf '     端口 · GitHub 公钥 · UFW · Fail2Ban · 回滚\n'
-        printf '  3. 系统管理\n'
-        printf '     软件更新 · Swap · BBR · 用户与 sudo\n'
-        printf '  4. 应用安装\n'
-        printf '     Docker · Docker Compose · 1Panel\n'
-        printf '  5. 网络状态监控\n'
-        printf '     延迟 · 丢包 · 网卡流量记录\n'
-        printf '  6. VPS 测试工具\n'
-        printf '     融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量\n'
-        printf '  7. 服务器完整体检\n'
-        printf '     系统 · SSH · 防火墙 · Fail2Ban\n'
-        printf '  8. 程序更新与恢复\n'
-        printf '     检查更新 · 自动升级 · 恢复旧版\n'
-        printf '  9. 高级模式\n'
-        printf '     全部模块与专业操作\n'
-        printf '  0. 退出\n'
+        vps_ui_section '🚀' '推荐操作'
+        vps_ui_menu_item 1 '🧭' 'VPS 安全与配置优化设置' \
+            '系统检查 · UFW · Fail2Ban · BBR · 智能 Swap'
+        vps_ui_section '🔐' '安全与登录'
+        vps_ui_menu_item 2 '🔑' 'SSH 与安全防护' \
+            '端口 · GitHub 公钥 · UFW · Fail2Ban · 回滚'
+        vps_ui_section '⚙️' '系统与应用'
+        vps_ui_menu_item 3 '🧰' '系统管理' \
+            '软件更新 · Swap · BBR · 用户与 sudo'
+        vps_ui_menu_item 4 '📦' '应用安装' \
+            'Docker · Docker Compose · 1Panel'
+        vps_ui_section '📡' '监控与测试'
+        vps_ui_menu_item 5 '📶' '基础网络检查与监控' \
+            '立即检测 · 延迟 · 丢包 · 网卡流量记录'
+        vps_ui_menu_item 6 '🧪' 'VPS 测试工具' \
+            '融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量'
+        vps_ui_section '🛠️' '检查与维护'
+        vps_ui_menu_item 7 '🩺' '服务器完整体检' \
+            '系统 · SSH · 防火墙 · Fail2Ban'
+        vps_ui_menu_item 8 '🔄' '程序更新与恢复' \
+            '检查更新 · 自动升级 · 恢复旧版'
+        vps_ui_menu_item 9 '🧱' '高级模式' \
+            '全部模块与专业操作'
+        printf '\n  %b0.%b 退出\n' "$UI_YELLOW" "$UI_RESET"
         read -r -p '请选择: ' choice
         case "$choice" in
-            1) vps_ui_safe_init; vps_ui_pause ;;
+            1) vps_ui_optimization_menu ;;
             2) vps_ui_security_menu ;;
             3) vps_ui_system_menu ;;
             4) vps_ui_applications_menu ;;

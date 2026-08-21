@@ -18,7 +18,12 @@ assert_contains "$actual" 'SHA-256:' "diagnostics catalog shows pinned checksums
 assert_contains "$actual" '部分工具运行时仍会下载上游组件' \
     "diagnostics catalog explains the downstream trust boundary"
 
-if rg -n "raw\.githubusercontent\.com/[^/]+/[^/]+/(main|master)/" "$MODULE" >/dev/null; then
+if command -v rg >/dev/null 2>&1; then
+    mutable_url_found=$(rg -n "raw\.githubusercontent\.com/[^/]+/[^/]+/(main|master)/" "$MODULE" || true)
+else
+    mutable_url_found=$(grep -En "raw\.githubusercontent\.com/[^/]+/[^/]+/(main|master)/" "$MODULE" || true)
+fi
+if [[ -n "$mutable_url_found" ]]; then
     fail "diagnostic entry scripts must not use mutable main or master URLs"
 else
     pass "diagnostic entry scripts use immutable commit URLs"

@@ -54,7 +54,7 @@ main() {
 
     ln -sfn "$INSTALL_ROOT/bin/vps" "$LINK_PATH" || return 40
 
-    printf 'VPS Secure Platform %s 已安装。\n' "$version"
+    printf 'VPS 管理与安全平台 %s 已安装。\n' "$version"
     printf '命令入口: %s\n' "$LINK_PATH"
     [[ ! -e "$backup" ]] || printf '上一版本备份: %s\n' "$backup"
 }
