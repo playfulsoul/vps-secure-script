@@ -15,7 +15,7 @@
 | Debian 13 | Target | systemd journal-aware Fail2Ban configuration; manual validation pending |
 | Debian 12 | Compatible | default, dual, and custom-only SSH ports; active and initially inactive UFW; journald Fail2Ban; reboot persistence; verification and rollback manually validated; remaining scenarios documented separately |
 | Debian 11 | Target | security fixes only after capability detection; manual validation pending |
-| Debian 10 | Unsupported target for 2.x | legacy script remains available; show lifecycle warning |
+| Debian 10 | Unsupported target for 2.x | immutable legacy source remains for reference; migration assistant must stop before unsupported installation |
 | Ubuntu 24.04 LTS | Compatible | default socket activation, default/dual/custom-only SSH ports, initially inactive UFW, Fail2Ban installation, idempotent apply, rollback, custom-port reboot persistence, and real installation manually validated |
 | Ubuntu 22.04 LTS | Compatible | default, dual, and custom-only SSH ports; complex existing UFW rules; Fail2Ban installation, journal backend, rollback, active-session protection, and reboot persistence manually validated |
 | Rocky/AlmaLinux | Experimental | excluded from initial modular hardening release |

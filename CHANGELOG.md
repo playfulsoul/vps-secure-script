@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-beta.3 - 2026-08-21
+
+- Replace the legacy raw-script entry with a standalone 1.x-to-2.x reinstallation assistant that downloads and verifies a complete release package without changing existing VPS configuration.
+- Redesign the beginner interface around concrete tasks, expose feature keywords on the first page, and pause after every result before redrawing a menu.
+- Add dedicated workflows for packages, Swap, BBR, users, Docker, 1Panel, network monitoring, and VPS diagnostics while retaining technical module actions in advanced mode.
+- Pin YABS, Bench.sh, RegionRestrictionCheck, NextTrace, Fusion, and IP Quality entry scripts to immutable commits with built-in SHA-256, license metadata, and non-executing preflight checks.
+- Pin and verify the 1Panel official installer entry script, including a non-executing preflight, so ordinary users no longer need to provide a checksum manually.
+
 ## 2.0.0-beta.2.1 - 2026-08-21
 
 - Remove macOS extended attributes and file flags from release archives so GNU tar on VPS hosts does not emit misleading extraction warnings.

@@ -112,10 +112,11 @@ interactive_module() {
 
         if vps_module_action_changes_state "$action"; then
             [[ "$action" == apply ]] && vps_module_run "$module_id" plan || true
-            read -r -p "确认执行“$(friendly_action_name "$action")”？(y/N): " choice
+            read -r -p "确认执行 $(friendly_action_name "$action")？(y/N): " choice
             [[ "$choice" =~ ^[Yy]$ ]] || continue
         fi
-        vps_module_run "$module_id" "$action" || printf '操作未完成，退出状态: %s\n' "$?"
+        vps_ui_show_result "$name：$(friendly_action_name "$action")" \
+            vps_module_run "$module_id" "$action"
     done
 }
 
@@ -150,7 +151,7 @@ interactive_advanced_menu() {
         printf '%s\n' '========================================'
         index=1
         for line in "${modules[@]}"; do
-            IFS=$'\t' read -r module_id name module_version category trust <<< "$line"
+            IFS=$'\t' read -r module_id name _module_version category trust <<< "$line"
             printf '  %s. %-28s [%s]\n' "$index" "$name" "$category"
             index=$((index + 1))
         done

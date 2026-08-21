@@ -76,6 +76,20 @@ dedicated Ubuntu 24.04 test host at commit `7cba553`:
 - After publishing beta.2, ran an isolated older-version client through the real GitHub API and Release asset path. Download, SHA-256 verification, installation, and post-update security verification all passed.
 - The live update exposed noisy GNU tar warnings caused by macOS extended attributes in the archive. The beta.2.1 build removes those metadata headers and adds regression coverage.
 
+### Beta.3 menus, migration, and curated tools
+
+The `2.0.0-beta.3` release candidate received an additional live pass on the dedicated Ubuntu 24.04 host:
+
+- Installed the locally built, SHA-256-verified full bundle over beta.2.1 and confirmed that UFW, Fail2Ban, SSH port 22, and the system doctor remained healthy.
+- Opened the task-oriented menu through a real pseudo-terminal, selected the BBR status task, confirmed that the result appeared in its own section, and confirmed that the interface waited for Enter before redrawing the menu.
+- Confirmed that the first page exposes keywords for SSH keys, UFW, Fail2Ban, Swap, BBR, Docker, 1Panel, latency, packet loss, Fusion, YABS, Bench, return-route, media, and IP-quality capabilities.
+- Simulated a 1.x user with the standalone raw-entry migration assistant. It downloaded the public beta.2.1 full bundle, verified its checksum, reinstalled the platform, and preserved working SSH, UFW, and Fail2Ban state.
+- Reinstalled the beta.3 candidate and confirmed that rerunning the migration assistant detects the existing 2.x installation and refuses to replace or downgrade it.
+- Downloaded and verified the pinned entry scripts for YABS, Bench.sh, RegionRestrictionCheck, NextTrace, Fusion, and IP Quality without executing them.
+- Downloaded and verified the pinned 1Panel installer entry without executing it.
+
+High-load or downstream-fetching third-party diagnostics were deliberately not executed as part of the unattended pass. Their entry-file integrity path is validated, while execution remains an explicit user-approved external-root action.
+
 ## Defects discovered during the run
 
 1. A repeated no-change firewall apply replaced the earlier meaningful rollback point.

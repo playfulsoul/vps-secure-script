@@ -17,7 +17,7 @@ assert_file_exists "$temporary_root/lib/vps-secure/bin/vps" "installer copies th
 assert_file_exists "$temporary_root/lib/vps-secure/modules/builtin/security-firewall/module.conf" \
     "installer copies built-in modules"
 actual=$("$temporary_root/bin/vps" --version)
-assert_eq 'vps-secure 2.0.0-beta.2.1' "$actual" "installed command runs through the symlink"
+assert_eq 'vps-secure 2.0.0-beta.3' "$actual" "installed command runs through the symlink"
 
 rm -rf "$temporary_root"
 finish_tests

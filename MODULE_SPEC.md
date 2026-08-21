@@ -118,3 +118,7 @@ The platform does not execute the contents of a mutable remote branch directly a
 ## 8. Compatibility wrappers
 
 An existing standalone script may be integrated through a wrapper module. The wrapper translates module actions to the legacy script without requiring an immediate rewrite. Interactive prompts must eventually be separated from domain logic so command and menu modes behave consistently.
+
+For curated external tools, the wrapper records an immutable entry URL, upstream commit, license, and SHA-256. Verification covers the downloaded entry file only. If that file downloads other scripts or binaries, the plan and user interface must disclose the additional trust boundary before execution.
+
+The beginner interface presents task-specific wording and may intentionally expose only a subset of module actions. `plan`, `verify`, and `check` remain part of the module contract even when a guided workflow invokes them automatically instead of listing them as separate menu items.
