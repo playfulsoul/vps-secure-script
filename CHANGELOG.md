@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Point the standalone 1.x migration assistant directly to the now-published `2.0.0-beta.3` release.
+
 ## 2.0.0-beta.3 - 2026-08-21
 
 - Replace the legacy raw-script entry with a standalone 1.x-to-2.x reinstallation assistant that downloads and verifies a complete release package without changing existing VPS configuration.
