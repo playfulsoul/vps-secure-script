@@ -135,7 +135,7 @@ sudo vps ssh key import-github <GitHub用户名> --user root --yes
 
 保持原窗口不要关闭，另外打开一个终端，用同一端口重新登录。确认无需服务器密码也能登录后，才可以考虑关闭密码登录。
 
-当前版本导入公钥时**不会自动关闭密码登录**。这是有意的安全设计：密钥路径、客户端选择或云服务商配置稍有差异，立即关闭密码可能把用户锁在服务器外。关闭密码登录将作为独立的验证流程提供，而不会与公钥导入捆绑执行。
+当前版本导入公钥时**不会自动关闭密码登录**。这是有意的安全设计：密钥路径、客户端选择或云服务商配置稍有差异，立即关闭密码可能把用户锁在服务器外。用户如需手动强化认证，应先保持原窗口，并通过新窗口验证密钥登录。
 
 ## 自动检查和更新
 
@@ -197,6 +197,16 @@ sudo vps module install https://example.org/example-module.tar.gz \
 ```
 
 模块规范见 [MODULE_SPEC.md](MODULE_SPEC.md)，技术结构见 [ARCHITECTURE.md](ARCHITECTURE.md)，兼容性范围见 [COMPATIBILITY.md](COMPATIBILITY.md)。
+
+## 项目文档
+
+- [项目文档索引](docs/README.md)：架构、模块、测试、发布和实机验证文档。
+- [项目总结](PROJECT_SUMMARY.md)：设计背景、已有成果和未完成部分。
+- [版本记录](CHANGELOG.md)：已经发布及尚未发布的变化。
+- [贡献指南](CONTRIBUTING.md)：开发原则、测试和 Pull Request 要求。
+- [社区行为准则](CODE_OF_CONDUCT.md)：项目协作中的基本行为要求。
+- [支持与问题反馈](SUPPORT.md)：如何提交脱敏、可复现的问题。
+- [安全政策](SECURITY.md)：如何私密报告安全问题。
 
 ## 开发和测试
 

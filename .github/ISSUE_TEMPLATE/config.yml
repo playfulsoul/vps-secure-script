@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞报告
+    url: https://github.com/playfulsoul/vps-secure-script/security
+    about: 请优先使用 Security 页面中的私密报告入口，不要公开凭据或漏洞细节。
+  - name: 使用与脱敏说明
+    url: https://github.com/playfulsoul/vps-secure-script/blob/main/SUPPORT.md
+    about: 提交问题前请阅读支持范围和敏感信息处理方法。
