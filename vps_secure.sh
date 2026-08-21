@@ -4,9 +4,9 @@ set -u
 
 # Keep this assignment simple: VPS Secure 1.x extracts it from the raw file to
 # discover that a replacement is available.
-VERSION_TAG="v1.0.2"
+VERSION_TAG="v1.0.3"
 
-MIGRATION_TARGET_VERSION=${VPS_MIGRATION_TARGET_VERSION:-2.0.0-beta.2.1}
+MIGRATION_TARGET_VERSION=${VPS_MIGRATION_TARGET_VERSION:-2.0.0-beta.3}
 MIGRATION_REPOSITORY=${VPS_MIGRATION_REPOSITORY:-playfulsoul/vps-secure-script}
 MIGRATION_RELEASE_BASE=${VPS_MIGRATION_RELEASE_BASE:-https://github.com/$MIGRATION_REPOSITORY/releases/download/v$MIGRATION_TARGET_VERSION}
 MIGRATION_LINK_PATH=${VPS_MIGRATION_LINK_PATH:-/usr/local/bin/vps}

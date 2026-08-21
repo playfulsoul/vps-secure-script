@@ -9,8 +9,8 @@ PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$PROJECT_ROOT/vps_secure.sh" --version)
-assert_contains "$actual" 'legacy migration v1.0.2' "legacy raw entry is a migration assistant"
-assert_contains "$actual" '2.0.0-beta.2.1' "legacy migration points to a complete published package"
+assert_contains "$actual" 'legacy migration v1.0.3' "legacy raw entry is a migration assistant"
+assert_contains "$actual" '2.0.0-beta.3' "legacy migration points directly to the current published package"
 
 actual=$(printf '0\n' | "$PROJECT_ROOT/vps_secure.sh")
 assert_contains "$actual" '1.x 单文件版本已经停止功能更新' "legacy users receive an end-of-maintenance notice"
@@ -19,9 +19,9 @@ assert_contains "$actual" '不会' "migration notice explains preserved server c
 temporary_root=$(mktemp -d)
 fixture_root="$temporary_root/fixture"
 fake_bin="$temporary_root/bin"
-archive_name='vps-secure-platform-2.0.0-beta.2.1.tar.gz'
+archive_name='vps-secure-platform-2.0.0-beta.3.tar.gz'
 mkdir -p "$fixture_root" "$fake_bin"
-printf '%s\n' '2.0.0-beta.2.1' > "$fixture_root/VERSION"
+printf '%s\n' '2.0.0-beta.3' > "$fixture_root/VERSION"
 cat > "$fixture_root/install.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' installed > "$VPS_MIGRATION_TEST_MARKER"
