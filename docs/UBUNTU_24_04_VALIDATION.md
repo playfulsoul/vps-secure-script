@@ -73,6 +73,8 @@ dedicated Ubuntu 24.04 test host at commit `7cba553`:
 - Established a new SSH session from the validation client with batch mode enabled and password and keyboard-interactive authentication disabled.
 - Restored the pre-import `authorized_keys`, reimported the same GitHub keys, verified the transaction, and established another key-only SSH session.
 - Restored the previously installed platform version through `vps update rollback`, reinstalled `2.0.0-beta.2`, and confirmed that SSH, UFW, Fail2Ban, and authorized keys remained intact.
+- After publishing beta.2, ran an isolated older-version client through the real GitHub API and Release asset path. Download, SHA-256 verification, installation, and post-update security verification all passed.
+- The live update exposed noisy GNU tar warnings caused by macOS extended attributes in the archive. The beta.2.1 build removes those metadata headers and adds regression coverage.
 
 ## Defects discovered during the run
 
@@ -92,7 +94,6 @@ Both defects were fixed in the development branch, received functional regressio
 
 ## Remaining validation gaps
 
-- automatic detection and download of a newly published beta release, which requires a real release newer than the installed build;
 - an explicitly selected file-log Fail2Ban backend using `/var/log/auth.log`;
 - APT/dpkg lock contention and interrupted-operation fault injection;
 - Debian 11 and Debian 13;

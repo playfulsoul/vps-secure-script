@@ -2,7 +2,7 @@
 
 一款面向普通用户的 VPS 安全与管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前版本为 `2.0.0-beta.2`。它保留了 1.x 简单直观的菜单体验，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前版本为 `2.0.0-beta.2.1`。它保留了 1.x 简单直观的菜单体验，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 > Beta 版本已经在 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -52,10 +52,10 @@ SSH 防暴力破解：运行正常
 从 GitHub Release 下载程序包和校验文件，验证无误后安装：
 
 ```bash
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2/vps-secure-platform-2.0.0-beta.2.tar.gz
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2/vps-secure-platform-2.0.0-beta.2.tar.gz.sha256
-sha256sum -c vps-secure-platform-2.0.0-beta.2.tar.gz.sha256
-tar -xzf vps-secure-platform-2.0.0-beta.2.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2.1/vps-secure-platform-2.0.0-beta.2.1.tar.gz
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.2.1/vps-secure-platform-2.0.0-beta.2.1.tar.gz.sha256
+sha256sum -c vps-secure-platform-2.0.0-beta.2.1.tar.gz.sha256
+tar -xzf vps-secure-platform-2.0.0-beta.2.1.tar.gz
 sudo ./install.sh
 sudo vps
 ```

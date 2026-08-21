@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.2.1 - 2026-08-21
+
+- Remove macOS extended attributes and file flags from release archives so GNU tar on VPS hosts does not emit misleading extraction warnings.
+- Add release-package regression coverage.
+
 ## 2.0.0-beta.2 - 2026-08-21
 
 - Add a Chinese beginner dashboard and task-oriented menus.
