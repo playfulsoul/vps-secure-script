@@ -10,7 +10,7 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$PROJECT_ROOT/vps_secure.sh" --version)
 assert_contains "$actual" 'legacy migration v1.0.3' "legacy raw entry is a migration assistant"
-assert_contains "$actual" '2.0.0-beta.3' "legacy migration points directly to the current published package"
+assert_contains "$actual" '2.0.0-beta.4' "legacy migration points directly to the current published package"
 
 actual=$(printf '0\n' | "$PROJECT_ROOT/vps_secure.sh")
 assert_contains "$actual" '1.x 单文件版本已经停止功能更新' "legacy users receive an end-of-maintenance notice"
@@ -19,9 +19,9 @@ assert_contains "$actual" '不会' "migration notice explains preserved server c
 temporary_root=$(mktemp -d)
 fixture_root="$temporary_root/fixture"
 fake_bin="$temporary_root/bin"
-archive_name='vps-secure-platform-2.0.0-beta.3.tar.gz'
+archive_name='vps-secure-platform-2.0.0-beta.4.tar.gz'
 mkdir -p "$fixture_root" "$fake_bin"
-printf '%s\n' '2.0.0-beta.3' > "$fixture_root/VERSION"
+printf '%s\n' '2.0.0-beta.4' > "$fixture_root/VERSION"
 cat > "$fixture_root/install.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' installed > "$VPS_MIGRATION_TEST_MARKER"
@@ -90,12 +90,12 @@ assert_contains "$actual" '当前支持 Debian 11+ 和 Ubuntu 22.04+' \
     "migration stops before installing on an unsupported platform"
 
 mkdir -p "$temporary_root/already-installed"
-printf '%s\n' '2.0.0-beta.3' > "$temporary_root/already-installed/VERSION"
+printf '%s\n' '2.0.0-beta.4' > "$temporary_root/already-installed/VERSION"
 actual=$(VPS_MIGRATION_ALLOW_NON_ROOT=yes \
     VPS_MIGRATION_SKIP_PLATFORM_CHECK=yes \
     VPS_MIGRATION_INSTALLED_ROOT="$temporary_root/already-installed" \
     "$PROJECT_ROOT/vps_secure.sh" --install --yes 2>&1 || true)
-assert_contains "$actual" '2.0.0-beta.3 已经安装' \
+assert_contains "$actual" '2.0.0-beta.4 已经安装' \
     "migration assistant does not replace an existing 2.x installation"
 
 rm -rf -- "$temporary_root"
