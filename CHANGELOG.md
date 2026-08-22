@@ -4,6 +4,8 @@
 
 - Point the standalone 1.x migration assistant directly to the published `2.0.0-beta.4` release.
 - Add public testing and release guides, contribution/security/support policies, and structured GitHub issue and pull-request templates.
+- Make the beta installation instructions work on minimal Debian/Ubuntu images without preinstalled curl and stop the command chain after the first failed step.
+- Record successful Debian 13 validation for SSH port preservation, UFW, Fail2Ban, rollback, recovery, and reboot persistence.
 
 ## 2.0.0-beta.4 - 2026-08-21
 
