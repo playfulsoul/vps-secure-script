@@ -23,8 +23,23 @@ else
     fail "release archive must match its SHA-256 file"
 fi
 
-actual=$(tar -xOf "$temporary_dist/$archive_name" ./VERSION)
+actual=$(tar -xOf "$temporary_dist/$archive_name" VERSION)
 assert_eq "$version" "$actual" "release archive contains the expected platform version"
+
+if tar -tzf "$temporary_dist/$archive_name" | grep -Eq '^\./?$'; then
+    fail "release archive must not contain a parent-directory entry"
+else
+    pass "release archive cannot change the extraction directory metadata"
+fi
+
+extract_dir="$temporary_dist/extracted"
+mkdir "$extract_dir"
+chmod 711 "$extract_dir"
+before_mode=$(stat -c %a "$extract_dir" 2>/dev/null || stat -f %Lp "$extract_dir")
+tar -xzf "$temporary_dist/$archive_name" -C "$extract_dir"
+after_mode=$(stat -c %a "$extract_dir" 2>/dev/null || stat -f %Lp "$extract_dir")
+assert_eq "$before_mode" "$after_mode" "release extraction preserves its parent directory mode"
+assert_file_exists "$extract_dir/install.sh" "flat release layout remains installable"
 
 if [[ $(uname -s) == Darwin ]] && command -v strings >/dev/null 2>&1; then
     if gzip -dc "$temporary_dist/$archive_name" | strings |
