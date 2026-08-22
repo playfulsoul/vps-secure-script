@@ -4,15 +4,17 @@
 
 当前开发版本为 `2.0.0-beta.4`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
-> Beta 版本已经在 Debian 12、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
+> Beta 版本已经在 Debian 12、Debian 13、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
 ## 安装后怎样使用
 
-输入：
+如果当前提示符以 `root@` 开头，直接输入：
 
 ```bash
-sudo vps
+vps
 ```
+
+普通 sudo 用户输入 `sudo vps`。
 
 程序会显示服务器状态和中文菜单：
 
@@ -60,16 +62,37 @@ SSH 防暴力破解：运行正常
 
 ## 安装 beta 版本
 
-从 GitHub Release 下载程序包和校验文件，验证无误后安装：
+全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
+`curl: command not found`，先安装下载工具和 HTTPS 证书：
 
 ```bash
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.4/vps-secure-platform-2.0.0-beta.4.tar.gz
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.4/vps-secure-platform-2.0.0-beta.4.tar.gz.sha256
-sha256sum -c vps-secure-platform-2.0.0-beta.4.tar.gz.sha256
-tar -xzf vps-secure-platform-2.0.0-beta.4.tar.gz
-sudo ./install.sh
-sudo vps
+apt-get update
+apt-get install -y ca-certificates curl
 ```
+
+上面两条命令适用于提示符以 `root@` 开头的 root 用户。普通 sudo 用户请在
+`apt-get` 前加上 `sudo`。
+
+然后从 GitHub Release 下载程序包和校验文件。以下命令使用 `&&` 串联，任意一步
+失败都会停止，不会在缺少安装包时继续执行解压或安装：
+
+```bash
+mkdir -p ~/vps-secure-install &&
+cd ~/vps-secure-install &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.4/vps-secure-platform-2.0.0-beta.4.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.4/vps-secure-platform-2.0.0-beta.4.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.0-beta.4.tar.gz.sha256 &&
+tar -xzf vps-secure-platform-2.0.0-beta.4.tar.gz &&
+./install.sh &&
+vps
+```
+
+普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
+校验成功时会显示 `vps-secure-platform-2.0.0-beta.4.tar.gz: OK`。
+
+如果出现 `sudo: unable to resolve host`，这是 VPS 模板中的 `/etc/hostname` 与
+`/etc/hosts` 不一致，不是安装包下载失败。root 用户可以暂时不使用 `sudo`，并在
+修改主机名配置前先执行 `hostname`、`cat /etc/hostname` 和 `cat /etc/hosts` 核对。
 
 安装和防火墙操作期间请保持当前 SSH 窗口打开。有条件时先创建 VPS 快照，并确认服务商网页控制台可用。
 
@@ -109,7 +132,7 @@ Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
 
 ### 第三步：在 VPS 中导入
 
-运行 `sudo vps`，依次选择：
+root 用户运行 `vps`（普通 sudo 用户运行 `sudo vps`），依次选择：
 
 ```text
 2. 安全防护
@@ -221,6 +244,7 @@ sudo vps module install https://example.org/example-module.tar.gz \
 真实 VPS 验收记录：
 
 - [Debian 12](docs/DEBIAN_12_VALIDATION.md)
+- [Debian 13](docs/DEBIAN_13_VALIDATION.md)
 - [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md)
 - [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md)
 

@@ -12,7 +12,7 @@
 
 | Platform | Level | Notes |
 | --- | --- | --- |
-| Debian 13 | Target | systemd journal-aware Fail2Ban configuration; manual validation pending |
+| Debian 13 | Compatible | fresh minimal installation prerequisites; default and custom SSH ports; initially inactive UFW; journald Fail2Ban; repeated apply, rollback, recovery, and reboot persistence manually validated |
 | Debian 12 | Compatible | default, dual, and custom-only SSH ports; active and initially inactive UFW; journald Fail2Ban; reboot persistence; verification and rollback manually validated; remaining scenarios documented separately |
 | Debian 11 | Target | security fixes only after capability detection; manual validation pending |
 | Debian 10 | Unsupported target for 2.x | immutable legacy source remains for reference; migration assistant must stop before unsupported installation |
@@ -44,4 +44,4 @@ High-risk modules are not marked supported until these scenarios pass where appl
 
 Recognizing `/etc/os-release` is not sufficient. A supported platform must have tested adapters, safe failure behavior, post-change verification, and documented recovery steps.
 
-Current manual validation records are available for [Debian 12](docs/DEBIAN_12_VALIDATION.md), [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md), and [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md).
+Current manual validation records are available for [Debian 12](docs/DEBIAN_12_VALIDATION.md), [Debian 13](docs/DEBIAN_13_VALIDATION.md), [Ubuntu 22.04](docs/UBUNTU_22_04_VALIDATION.md), and [Ubuntu 24.04](docs/UBUNTU_24_04_VALIDATION.md).

@@ -18,6 +18,7 @@
 ## 实机验证记录
 
 - [Debian 12](DEBIAN_12_VALIDATION.md)
+- [Debian 13](DEBIAN_13_VALIDATION.md)
 - [Ubuntu 22.04](UBUNTU_22_04_VALIDATION.md)
 - [Ubuntu 24.04](UBUNTU_24_04_VALIDATION.md)
 - [Debian/Ubuntu 测试计划](DEBIAN_TEST_PLAN.md)
