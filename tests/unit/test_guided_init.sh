@@ -9,7 +9,7 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 CALL_LOG="$TEST_ROOT/calls.log"
 
 VPS_PLATFORM_ROOT=$PROJECT_ROOT
-VERSION=2.0.0-beta.4
+VERSION=2.0.0-beta.5
 export VPS_PLATFORM_ROOT VERSION CALL_LOG
 
 # shellcheck source=../../core/ui.sh

@@ -83,12 +83,21 @@ ssh_key_user_fields() {
     [[ "$SSH_KEY_UID" =~ ^[0-9]+$ && "$SSH_KEY_GID" =~ ^[0-9]+$ && "$SSH_KEY_HOME" == /* ]]
 }
 
+ssh_key_secure_home() {
+    vps_ssh_secure_home "$SSH_KEY_HOME" "$SSH_KEY_UID" "$SSH_KEY_GID"
+}
+
+ssh_key_paths_verify() {
+    vps_ssh_paths_verify "$SSH_KEY_HOME" "$SSH_KEY_UID" "$SSH_KEY_GID"
+}
+
 ssh_key_plan() {
     ssh_key_parse_args "$@" || return $?
     ssh_key_user_fields || return 20
     printf 'SSH 公钥导入计划：\n'
     printf '  - 从 https://github.com/%s.keys 获取公开 SSH 密钥。\n' "$SSH_KEY_GITHUB_USER"
     printf '  - 验证密钥格式并显示指纹。\n'
+    printf '  - 检查并修复目标用户主目录的所有者和可写权限。\n'
     printf '  - 去重后写入服务器用户 %s 的 %s/.ssh/authorized_keys。\n' \
         "$SSH_KEY_TARGET_USER" "$SSH_KEY_HOME"
     printf '  - 保留已有公钥，并创建可回滚备份。\n'
@@ -140,6 +149,7 @@ ssh_key_configure() {
     if ! ssh_key_download "$imported_file"; then rm -rf -- "$temporary_dir"; return 30; fi
     printf '即将导入以下密钥指纹：\n'
     if ! ssh_key_show_fingerprints "$imported_file"; then rm -rf -- "$temporary_dir"; return 30; fi
+    if ! ssh_key_secure_home; then rm -rf -- "$temporary_dir"; return 40; fi
 
     transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || { rm -rf -- "$temporary_dir"; return 40; }
     printf '%s\n' "$SSH_KEY_TARGET_USER" > "$transaction_dir/target_user"
@@ -163,14 +173,18 @@ ssh_key_configure() {
 }
 
 ssh_key_verify() {
-    local transaction_dir authorized_keys imported_file key
+    local transaction_dir authorized_keys imported_file key target_user
     transaction_dir=$(vps_last_transaction "$MODULE_ID") || {
         printf '没有可验证的 SSH 公钥导入记录。\n' >&2
         return 60
     }
+    IFS= read -r target_user < "$transaction_dir/target_user"
+    SSH_KEY_TARGET_USER=$target_user
+    ssh_key_user_fields || return 50
     IFS= read -r authorized_keys < "$transaction_dir/authorized_keys_path"
     imported_file="$transaction_dir/imported.keys"
     [[ -f "$authorized_keys" && -f "$imported_file" ]] || return 50
+    ssh_key_paths_verify || return $?
     while IFS= read -r key || [[ -n "$key" ]]; do
         grep -Fxq -- "$key" "$authorized_keys" || {
             printf '授权文件中缺少已导入的公钥。\n' >&2

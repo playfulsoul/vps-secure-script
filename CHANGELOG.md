@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.0.0-beta.5 - 2026-08-22
+
+- 修复 macOS 构建的发布包在 root 直接解压时可能把 `/root` 所有者改为 `501:staff` 的问题。
+- GitHub 公钥导入现在会检查并修复目标用户主目录所有者，并在验证时检查完整 SSH 路径权限。
+
 - Point the standalone 1.x migration assistant directly to the published `2.0.0-beta.4` release.
 - Add public testing and release guides, contribution/security/support policies, and structured GitHub issue and pull-request templates.
 - Make the beta installation instructions work on minimal Debian/Ubuntu images without preinstalled curl and stop the command chain after the first failed step.
