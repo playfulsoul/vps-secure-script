@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.5` security fix.
+
 ## 2.0.0-beta.5 - 2026-08-22
 
 - 修复 macOS 构建的发布包在 root 直接解压时可能把 `/root` 所有者改为 `501:staff` 的问题。
