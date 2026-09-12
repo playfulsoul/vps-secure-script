@@ -41,7 +41,7 @@ VPS 管理与安全平台
   vps init
   vps ssh status
   vps ssh key import-github <GitHub用户名> [--user <服务器用户>] --yes
-  vps firewall <plan|status|apply|verify|rollback>
+  vps firewall <plan|preflight|status|apply|verify|repair-persistence|rollback>
   vps fail2ban <plan|preflight|status|apply|verify|rollback>
   vps update <check|status|apply|rollback>
 
@@ -253,7 +253,12 @@ main() {
             ;;
         firewall)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
-            run_module_command security.firewall "$@"
+            if [[ ${1:-} == repair-persistence ]]; then
+                shift
+                run_module_command security.firewall configure "$@"
+            else
+                run_module_command security.firewall "$@"
+            fi
             ;;
         fail2ban)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }

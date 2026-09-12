@@ -84,7 +84,15 @@ case ${1:-} in
         ;;
 esac
 EOF
-chmod +x "$readiness_root/fail2ban-client"
+cat > "$readiness_root/iptables" <<'EOF'
+#!/usr/bin/env bash
+set -u
+[[ "$*" == '-S INPUT' ]] || exit 64
+printf '%s\n' \
+    '-A INPUT -j f2b-sshd' \
+    '-A INPUT -j f2b-sshd'
+EOF
+chmod +x "$readiness_root/fail2ban-client" "$readiness_root/iptables"
 actual=$(PATH="$readiness_root:$PATH" \
     VPS_PLATFORM_ROOT="$PROJECT_ROOT" \
     VPS_MODULE_ID=security.fail2ban \
@@ -94,8 +102,10 @@ actual=$(PATH="$readiness_root:$PATH" \
     bash -c '
         source "$1" backup >/dev/null
         fail2ban_verify
-    ' _ "$FAIL2BAN_MODULE")
+    ' _ "$FAIL2BAN_MODULE" 2>&1)
 assert_contains "$actual" '已通过验证' "Fail2Ban verification waits for a delayed service socket"
+assert_contains "$actual" '不能判断故障由 Fail2Ban 引起' \
+    "Fail2Ban duplicate-hook warning avoids unsupported causal claims"
 actual=$(<"$readiness_counter")
 assert_eq '3' "$actual" "Fail2Ban readiness check uses bounded retries"
 rm -rf "$readiness_root"

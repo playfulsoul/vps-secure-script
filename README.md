@@ -54,6 +54,8 @@ SSH 防暴力破解：运行正常
 - 无法可靠确认 SSH 端口时停止，不冒险启用防火墙。
 - 只放行确认过的 SSH 端口，不默认开放 80 或 443。
 - 保留现有防火墙规则和用户配置。
+- 同时检查 UFW 持久配置、开机服务和内核实际运行规则，不把 `ufw status` 单独视为成功证明。
+- 发现其他防火墙持久化服务时停止普通应用流程，经用户明确确认后才切换开机规则所有者；不会清空整个规则表。
 - Fail2Ban 使用项目自己的配置片段，不覆盖 `jail.local`。
 - BBR 仅在内核支持时提供，并在应用后读取内核状态验证。
 - 已有 Swap 时保持现状；新建 Swap 前检查磁盘空间并保留安全余量。
@@ -209,9 +211,13 @@ Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更
 vps module list
 vps doctor
 vps firewall plan
+vps firewall preflight
 sudo vps firewall apply --yes
+sudo vps firewall repair-persistence --yes
 vps fail2ban status
 ```
+
+`firewall preflight` 是只读检查。只有它报告 UFW 未负责开机恢复、存在并行持久化服务，或持久配置与运行规则不一致时，才考虑执行 `repair-persistence`。修复会先保存运行规则副本，只调整相关服务的开机启用状态并重新加载 UFW；不会停止当前防火墙服务或恢复、清空整张规则表。
 
 ## 模块化扩展
 

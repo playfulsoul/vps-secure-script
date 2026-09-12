@@ -371,22 +371,26 @@ vps_ui_security_menu() {
         printf '  1. 查看 SSH 端口\n'
         printf '  2. 从 GitHub 导入登录公钥\n'
         printf '  3. 安装并启用防火墙\n'
-        printf '  4. 查看防火墙状态\n'
-        printf '  5. 安装并启用 SSH 防暴力破解\n'
-        printf '  6. 查看 SSH 防护状态\n'
-        printf '  7. 撤销上一次防火墙修改\n'
-        printf '  8. 撤销上一次 Fail2Ban 修改\n'
+        printf '  4. 检查防火墙运行与重启风险\n'
+        printf '  5. 修复防火墙启动冲突\n'
+        printf '  6. 查看防火墙状态\n'
+        printf '  7. 安装并启用 SSH 防暴力破解\n'
+        printf '  8. 查看 SSH 防护状态\n'
+        printf '  9. 撤销上一次防火墙修改\n'
+        printf ' 10. 撤销上一次 Fail2Ban 修改\n'
         printf '  0. 返回\n'
         read -r -p '请选择: ' choice
         case "$choice" in
             1) vps_ui_show_result 'SSH 端口状态' vps_module_run security.ssh status ;;
             2) vps_ui_show_result 'GitHub 登录公钥' vps_ui_github_key ;;
             3) vps_ui_show_result '启用防火墙' vps_ui_run_action security.firewall apply ;;
-            4) vps_ui_show_result '防火墙状态' vps_module_run security.firewall status ;;
-            5) vps_ui_show_result '启用 SSH 防暴力破解' vps_ui_run_action security.fail2ban apply ;;
-            6) vps_ui_show_result 'SSH 防护状态' vps_module_run security.fail2ban status ;;
-            7) vps_ui_show_result '撤销防火墙修改' vps_ui_run_action security.firewall rollback ;;
-            8) vps_ui_show_result '撤销 Fail2Ban 修改' vps_ui_run_action security.fail2ban rollback ;;
+            4) vps_ui_show_result '防火墙运行与重启风险' vps_module_run security.firewall preflight ;;
+            5) vps_ui_show_result '修复防火墙启动冲突' vps_ui_run_action security.firewall configure ;;
+            6) vps_ui_show_result '防火墙状态' vps_module_run security.firewall status ;;
+            7) vps_ui_show_result '启用 SSH 防暴力破解' vps_ui_run_action security.fail2ban apply ;;
+            8) vps_ui_show_result 'SSH 防护状态' vps_module_run security.fail2ban status ;;
+            9) vps_ui_show_result '撤销防火墙修改' vps_ui_run_action security.firewall rollback ;;
+            10) vps_ui_show_result '撤销 Fail2Ban 修改' vps_ui_run_action security.fail2ban rollback ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac

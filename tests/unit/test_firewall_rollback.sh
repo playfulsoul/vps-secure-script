@@ -102,6 +102,11 @@ actual=$(PATH="$test_root/bin:$PATH" \
         vps_require_root() { return 0; }
         firewall_check() { return 0; }
         firewall_ports() { printf "32876\n"; }
+        firewall_persistence_conflicts() { return 0; }
+        firewall_ufw_service_enabled() { return 0; }
+        firewall_runtime_config_rules_verify() { return 0; }
+        firewall_verify() { return 0; }
+        firewall_backup_runtime() { return 0; }
         firewall_apply
         printf "last=%s\n" "$(vps_last_transaction security.firewall)"
         printf "baseline=%s\n" "$baseline"

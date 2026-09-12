@@ -174,7 +174,23 @@ fail2ban_wait_ready() {
     return 1
 }
 
+fail2ban_sshd_input_hook_count() {
+    command -v iptables >/dev/null 2>&1 || {
+        printf '0\n'
+        return 0
+    }
+    iptables -S INPUT 2>/dev/null | awk '
+        $1 == "-A" && $2 == "INPUT" {
+            for (i = 3; i < NF; i++) {
+                if ($i == "-j" && $(i + 1) == "f2b-sshd") count++
+            }
+        }
+        END { print count + 0 }
+    '
+}
+
 fail2ban_verify() {
+    local hook_count
     command -v fail2ban-client >/dev/null 2>&1 || return 50
     fail2ban_wait_ready || {
         printf 'Fail2Ban 服务在等待就绪后仍未响应。\n' >&2
@@ -185,6 +201,11 @@ fail2ban_verify() {
         return 50
     }
     printf 'Fail2Ban 服务和 sshd jail 已通过验证。\n'
+    hook_count=$(fail2ban_sshd_input_hook_count)
+    if [[ "$hook_count" =~ ^[0-9]+$ ]] && (( hook_count > 1 )); then
+        printf '警告：检测到 %s 个 f2b-sshd INPUT 挂载点。仅凭此现象不能判断故障由 Fail2Ban 引起；请同时运行防火墙启动与运行规则预检。\n' \
+            "$hook_count" >&2
+    fi
 }
 
 fail2ban_restore_dir() {
