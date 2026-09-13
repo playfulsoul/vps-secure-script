@@ -2,7 +2,7 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前开发版本为 `2.0.0-beta.6`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前开发版本为 `2.0.0-beta.6.1`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 > Beta 版本已经在 Debian 12、Debian 13、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -20,7 +20,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.0-beta.6
+  🎯 VPS 管理与安全平台  2.0.0-beta.6.1
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -81,16 +81,16 @@ apt-get install -y ca-certificates curl
 ```bash
 mkdir -p ~/vps-secure-install &&
 cd ~/vps-secure-install &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6/vps-secure-platform-2.0.0-beta.6.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6/vps-secure-platform-2.0.0-beta.6.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.0-beta.6.tar.gz.sha256 &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.6.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6.1/vps-secure-platform-2.0.0-beta.6.1.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6.1/vps-secure-platform-2.0.0-beta.6.1.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.0-beta.6.1.tar.gz.sha256 &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.6.1.tar.gz &&
 ./install.sh &&
 vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.0-beta.6.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.0-beta.6.1.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 
@@ -168,6 +168,8 @@ sudo vps ssh key import-github <GitHub用户名> --user root --yes
 ## 自动检查和更新
 
 已安装用户输入 `vps` 时，程序每天最多检查一次 GitHub Release。发现新版本会在首页提示，但不会擅自更新；网络不可用也不会影响正常使用。
+
+手动更新会为 GitHub 元数据和 Release 文件分别使用适合其大小的超时。下载暂时中断时会自动退避重试，并在同一次更新中续传发布包；完整包仍须通过发布的 SHA-256 校验后才会安装。后台检查失败后会短时冷却，避免弱网环境下每次打开菜单都等待网络超时。
 
 在菜单中选择 **8. 程序更新与恢复**，可以检查并安装更新。更新包必须通过 SHA-256 校验，安装器会保留上一版本备份。
 

@@ -2,6 +2,9 @@
 
 VPS_UPDATE_REPOSITORY=${VPS_UPDATE_REPOSITORY:-playfulsoul/vps-secure-script}
 VPS_UPDATE_CACHE_TTL=${VPS_UPDATE_CACHE_TTL:-86400}
+VPS_UPDATE_FAILURE_CACHE_TTL=${VPS_UPDATE_FAILURE_CACHE_TTL:-900}
+VPS_UPDATE_DOWNLOAD_ATTEMPTS=${VPS_UPDATE_DOWNLOAD_ATTEMPTS:-4}
+VPS_UPDATE_DOWNLOAD_RETRY_DELAY=${VPS_UPDATE_DOWNLOAD_RETRY_DELAY:-2}
 
 vps_update_channel() {
     if [[ -n "${VPS_UPDATE_CHANNEL:-}" ]]; then
@@ -76,31 +79,132 @@ vps_update_extract_version() {
     printf '%s\n' "$tag"
 }
 
+vps_update_cache_is_fresh() {
+    local file=$1 ttl=$2 now=${3:-$(date +%s)} modified
+    [[ "$ttl" =~ ^[0-9]+$ && "$now" =~ ^[0-9]+$ ]] || return 1
+    [[ -r "$file" ]] || return 1
+    modified=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null || printf '0')
+    [[ "$modified" =~ ^[0-9]+$ ]] && (( now - modified < ttl ))
+}
+
+vps_update_record_fetch_failure() {
+    local cache_dir=$1 marker temporary_marker
+    marker="$cache_dir/last-fetch-failure"
+    temporary_marker=$(mktemp "$cache_dir/last-fetch-failure.XXXXXX") || return 0
+    if ! mv -f -- "$temporary_marker" "$marker"; then
+        rm -f -- "$temporary_marker"
+    fi
+}
+
+vps_update_fetch_metadata() {
+    local output=$1 mode=${2:-automatic} attempts=1 max_time=3 attempt status=0
+    local deadline remaining now
+    [[ "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY" =~ ^[0-9]+$ ]] || return 10
+    if [[ "$mode" == explicit ]]; then
+        attempts=3
+        max_time=30
+    fi
+    deadline=$(( $(date +%s) + max_time ))
+
+    for (( attempt = 1; attempt <= attempts; attempt++ )); do
+        now=$(date +%s)
+        remaining=$(( deadline - now ))
+        (( remaining > 0 )) || break
+        if curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+            --connect-timeout 5 --max-time "$remaining" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$(vps_update_api_url)" -o "$output"; then
+            return 0
+        else
+            status=$?
+        fi
+        now=$(date +%s)
+        if (( attempt < attempts && now + VPS_UPDATE_DOWNLOAD_RETRY_DELAY < deadline )); then
+            sleep "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY"
+        fi
+    done
+    (( status != 0 )) || status=28
+    return "$status"
+}
+
+vps_update_download_asset() {
+    local url=$1 destination=$2 max_time=$3 resume=${4:-no}
+    local partial="$destination.part" attempt status=0 deadline remaining now
+
+    [[ "$max_time" =~ ^[1-9][0-9]*$ ]] || return 40
+    [[ "$VPS_UPDATE_DOWNLOAD_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || return 40
+    [[ "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY" =~ ^[0-9]+$ ]] || return 40
+    rm -f -- "$partial"
+    deadline=$(( $(date +%s) + max_time ))
+
+    for (( attempt = 1; attempt <= VPS_UPDATE_DOWNLOAD_ATTEMPTS; attempt++ )); do
+        now=$(date +%s)
+        remaining=$(( deadline - now ))
+        (( remaining > 0 )) || break
+        [[ "$resume" == yes ]] || rm -f -- "$partial"
+        local curl_arguments=(
+            --proto '=https' --tlsv1.2 --fail --location --show-error
+            --connect-timeout 10 --max-time "$remaining"
+        )
+        [[ "$resume" != yes ]] || curl_arguments+=(--continue-at -)
+
+        if curl "${curl_arguments[@]}" "$url" -o "$partial"; then
+            mv -f -- "$partial" "$destination"
+            return 0
+        else
+            status=$?
+        fi
+
+        # A server that refuses byte ranges cannot resume this partial file.
+        # Discard it once and let the next bounded attempt start cleanly.
+        if [[ "$resume" == yes && "$status" -eq 33 ]]; then
+            rm -f -- "$partial"
+        fi
+        now=$(date +%s)
+        if (( attempt < VPS_UPDATE_DOWNLOAD_ATTEMPTS && \
+              now + VPS_UPDATE_DOWNLOAD_RETRY_DELAY < deadline )); then
+            printf '下载中断，将在 %s 秒后重试（%s/%s）……\n' \
+                "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY" "$attempt" "$VPS_UPDATE_DOWNLOAD_ATTEMPTS" >&2
+            sleep "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY"
+        fi
+    done
+
+    rm -f -- "$partial"
+    (( status != 0 )) || status=28
+    return "$status"
+}
+
 vps_update_fetch_version() {
-    local force=${1:-no} cache_dir response_file now modified
+    local force=${1:-no} cache_dir response_file failure_marker now temporary_response mode=automatic
     cache_dir=$(vps_update_cache_dir)
     response_file="$cache_dir/release.json"
+    failure_marker="$cache_dir/last-fetch-failure"
     now=$(date +%s)
 
-    if [[ "$force" != yes && -r "$response_file" ]]; then
-        modified=$(stat -c %Y "$response_file" 2>/dev/null || stat -f %m "$response_file" 2>/dev/null || printf '0')
-        if [[ "$modified" =~ ^[0-9]+$ ]] && (( now - modified < VPS_UPDATE_CACHE_TTL )); then
+    if [[ "$force" != yes ]]; then
+        if vps_update_cache_is_fresh "$response_file" "$VPS_UPDATE_CACHE_TTL" "$now"; then
             vps_update_extract_version "$response_file"
             return
         fi
+        # A failed background check must not delay every interactive menu open.
+        vps_update_cache_is_fresh "$failure_marker" "$VPS_UPDATE_FAILURE_CACHE_TTL" "$now" && return 10
+    else
+        mode=explicit
     fi
 
     command -v curl >/dev/null 2>&1 || return 10
     mkdir -p "$cache_dir" 2>/dev/null || return 10
-    if ! curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
-        --connect-timeout 2 --max-time 5 \
-        -H 'Accept: application/vnd.github+json' \
-        -H 'X-GitHub-Api-Version: 2026-03-10' \
-        "$(vps_update_api_url)" -o "$response_file.tmp.$$"; then
-        rm -f "$response_file.tmp.$$"
+    chmod 700 "$cache_dir" 2>/dev/null || true
+    temporary_response=$(mktemp "$cache_dir/release.json.XXXXXX") || return 10
+    if ! vps_update_fetch_metadata "$temporary_response" "$mode" || \
+       ! vps_update_extract_version "$temporary_response" >/dev/null; then
+        rm -f -- "$temporary_response"
+        vps_update_record_fetch_failure "$cache_dir"
         return 10
     fi
-    mv "$response_file.tmp.$$" "$response_file" || return 10
+    mv -f -- "$temporary_response" "$response_file" || return 10
+    rm -f -- "$failure_marker"
     vps_update_extract_version "$response_file"
 }
 
@@ -133,14 +237,17 @@ vps_update_notice() {
 }
 
 vps_update_apply() {
-    local latest archive_name base_url temporary_dir checksum_file archive expected actual extract_dir
+    local latest archive_name base_url temporary_dir checksum_file archive expected actual extract_dir old_umask
     (( EUID == 0 )) || {
         printf '安装平台更新需要 root 权限，请使用 sudo vps update apply --yes。\n' >&2
         return 30
     }
     command -v curl >/dev/null 2>&1 || { printf '更新需要 curl。\n' >&2; return 20; }
 
-    latest=$(vps_update_fetch_version yes) || return 10
+    latest=$(vps_update_fetch_version yes) || {
+        printf '暂时无法连接 GitHub 获取更新信息，现有版本未改变。网络恢复后可重新执行更新。\n' >&2
+        return 10
+    }
     if ! vps_version_is_newer "$latest" "$VERSION"; then
         printf '当前已是所选通道的最新版本: %s\n' "$VERSION"
         return 0
@@ -148,24 +255,33 @@ vps_update_apply() {
 
     archive_name="vps-secure-platform-$latest.tar.gz"
     base_url="https://github.com/$VPS_UPDATE_REPOSITORY/releases/download/v$latest"
-    temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-update.XXXXXX") || return 40
+    old_umask=$(umask)
+    umask 077
+    if ! temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-update.XXXXXX"); then
+        umask "$old_umask"
+        printf '无法创建安全的更新临时目录，现有版本未改变。\n' >&2
+        return 40
+    fi
+    umask "$old_umask"
     archive="$temporary_dir/$archive_name"
     checksum_file="$archive.sha256"
     extract_dir="$temporary_dir/source"
     mkdir -p "$extract_dir" || { rm -rf -- "$temporary_dir"; return 40; }
 
     printf '正在下载并校验 VPS Secure %s……\n' "$latest"
-    if ! curl --proto '=https' --tlsv1.2 --fail --location --show-error \
-        --connect-timeout 5 --max-time 120 "$base_url/$archive_name" -o "$archive" || \
-       ! curl --proto '=https' --tlsv1.2 --fail --location --show-error \
-        --connect-timeout 5 --max-time 30 "$base_url/$archive_name.sha256" -o "$checksum_file"; then
+    if ! vps_update_download_asset "$base_url/$archive_name" "$archive" 300 yes || \
+       ! vps_update_download_asset "$base_url/$archive_name.sha256" "$checksum_file" 30 no; then
         rm -rf -- "$temporary_dir"
-        printf '更新文件下载失败，现有版本未改变。\n' >&2
+        printf '更新文件多次下载失败，现有版本未改变。网络恢复后可重新执行更新。\n' >&2
         return 40
     fi
 
     expected=$(awk 'NR == 1 { print $1 }' "$checksum_file")
-    [[ "$expected" =~ ^[A-Fa-f0-9]{64}$ ]] || { rm -rf -- "$temporary_dir"; return 40; }
+    [[ "$expected" =~ ^[A-Fa-f0-9]{64}$ ]] || {
+        rm -rf -- "$temporary_dir"
+        printf '更新包校验文件无效，已拒绝安装；现有版本未改变。\n' >&2
+        return 40
+    }
     if command -v sha256sum >/dev/null 2>&1; then
         actual=$(sha256sum "$archive" | awk '{ print $1 }')
     else
