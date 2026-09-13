@@ -10,7 +10,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$($CLI --version)
-assert_eq 'vps-secure 2.0.0-beta.5' "$actual" "CLI reports the platform version"
+assert_eq 'vps-secure 2.0.0-beta.6' "$actual" "CLI reports the platform version"
 
 actual=$($CLI module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
@@ -60,6 +60,12 @@ assert_contains "$actual" '[完成] 操作已完成' "module result is acknowled
 
 actual=$($CLI module info security.ssh)
 assert_contains "$actual" 'high-risk' "CLI exposes module privilege level"
+
+actual=$($CLI help)
+assert_contains "$actual" 'repair-persistence' "CLI documents the explicit firewall persistence repair"
+actual=$($CLI firewall repair-persistence 2>&1 || true)
+assert_contains "$actual" '确认计划后请添加 --yes' \
+    "firewall persistence repair requires explicit confirmation"
 
 actual=$($CLI update status)
 assert_contains "$actual" '更新通道: beta' "prerelease builds use the beta update channel"

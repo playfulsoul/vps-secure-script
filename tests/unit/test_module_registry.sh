@@ -17,7 +17,7 @@ assert_contains "$actual" $'system.doctor\tSystem readiness doctor\t2.0.0-beta.1
     "module registry discovers the system doctor"
 assert_contains "$actual" $'security.ssh\tOpenSSH access and public keys\t2.0.0-beta.2\tsecurity\tbuiltin' \
     "module registry discovers the SSH module"
-assert_contains "$actual" $'security.firewall\tHost firewall management\t2.0.0-beta.1\tsecurity\tbuiltin' \
+assert_contains "$actual" $'security.firewall\tHost firewall management\t2.0.0-beta.2\tsecurity\tbuiltin' \
     "module registry discovers the firewall module"
 assert_contains "$actual" $'security.fail2ban\tFail2Ban SSH protection\t2.0.0-beta.1\tsecurity\tbuiltin' \
     "module registry discovers the Fail2Ban module"

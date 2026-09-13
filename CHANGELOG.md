@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+## 2.0.0-beta.6 - 2026-09-13
+
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.5` security fix.
+- Verify UFW against the active IPv4/IPv6 kernel chains instead of trusting displayed configuration alone.
+- Detect competing firewall persistence services even when the current boot order happens to leave UFW working.
+- Add an explicitly confirmed, backed-up persistence repair that enables UFW at boot, disables competing boot loaders without stopping them, reloads UFW, verifies the result, and supports service-state rollback without flushing the rules table.
+- Warn about duplicate Fail2Ban SSH input hooks without treating them as proof that Fail2Ban caused a connectivity failure.
 
 ## 2.0.0-beta.5 - 2026-08-22
 

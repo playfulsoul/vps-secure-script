@@ -2,7 +2,7 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前开发版本为 `2.0.0-beta.5`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前开发版本为 `2.0.0-beta.6`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 > Beta 版本已经在 Debian 12、Debian 13、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -20,7 +20,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.0-beta.5
+  🎯 VPS 管理与安全平台  2.0.0-beta.6
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -54,6 +54,8 @@ SSH 防暴力破解：运行正常
 - 无法可靠确认 SSH 端口时停止，不冒险启用防火墙。
 - 只放行确认过的 SSH 端口，不默认开放 80 或 443。
 - 保留现有防火墙规则和用户配置。
+- 同时检查 UFW 持久配置、开机服务和内核实际运行规则，不把 `ufw status` 单独视为成功证明。
+- 发现其他防火墙持久化服务时停止普通应用流程，经用户明确确认后才切换开机规则所有者；不会清空整个规则表。
 - Fail2Ban 使用项目自己的配置片段，不覆盖 `jail.local`。
 - BBR 仅在内核支持时提供，并在应用后读取内核状态验证。
 - 已有 Swap 时保持现状；新建 Swap 前检查磁盘空间并保留安全余量。
@@ -79,16 +81,16 @@ apt-get install -y ca-certificates curl
 ```bash
 mkdir -p ~/vps-secure-install &&
 cd ~/vps-secure-install &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.5/vps-secure-platform-2.0.0-beta.5.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.5/vps-secure-platform-2.0.0-beta.5.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.0-beta.5.tar.gz.sha256 &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.5.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6/vps-secure-platform-2.0.0-beta.6.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6/vps-secure-platform-2.0.0-beta.6.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.0-beta.6.tar.gz.sha256 &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.6.tar.gz &&
 ./install.sh &&
 vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.0-beta.5.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.0-beta.6.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 
@@ -209,9 +211,13 @@ Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更
 vps module list
 vps doctor
 vps firewall plan
+vps firewall preflight
 sudo vps firewall apply --yes
+sudo vps firewall repair-persistence --yes
 vps fail2ban status
 ```
+
+`firewall preflight` 是只读检查。只有它报告 UFW 未负责开机恢复、存在并行持久化服务，或持久配置与运行规则不一致时，才考虑执行 `repair-persistence`。修复会先保存运行规则副本，只调整相关服务的开机启用状态并重新加载 UFW；不会停止当前防火墙服务或恢复、清空整张规则表。
 
 ## 模块化扩展
 
