@@ -18,6 +18,12 @@ source "$VPS_PLATFORM_ROOT/core/build_identity.sh"
 source "$VPS_PLATFORM_ROOT/core/modules.sh"
 # shellcheck source=../core/runtime.sh
 source "$VPS_PLATFORM_ROOT/core/runtime.sh"
+# shellcheck source=../core/platform.sh
+source "$VPS_PLATFORM_ROOT/core/platform.sh"
+# shellcheck source=../core/ssh.sh
+source "$VPS_PLATFORM_ROOT/core/ssh.sh"
+# shellcheck source=../core/report.sh
+source "$VPS_PLATFORM_ROOT/core/report.sh"
 # shellcheck source=../core/installer.sh
 source "$VPS_PLATFORM_ROOT/core/installer.sh"
 # shellcheck source=../core/update.sh
@@ -40,6 +46,7 @@ VPS 管理与安全平台
   vps module run <模块ID> <操作> [参数]
   vps module install <模块包或HTTPS地址> --sha256 <摘要> --yes
   vps doctor
+  vps report [--output <安全文件名.txt>]
   vps status
   vps init
   vps ssh status
@@ -221,6 +228,9 @@ main() {
             ;;
         doctor)
             vps_module_run system.doctor doctor "$@"
+            ;;
+        report)
+            vps_report_command "$@"
             ;;
         status)
             vps_ui_status_dashboard
