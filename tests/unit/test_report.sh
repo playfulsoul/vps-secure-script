@@ -10,6 +10,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 test_root=$(mktemp -d)
+test_root=$(cd -- "$test_root" && pwd -P)
 trap 'chmod -R u+rwX "$test_root" 2>/dev/null || true; rm -rf -- "$test_root"' EXIT
 mkdir -p "$test_root/bin" "$test_root/state/modules/security-ssh/transactions/tx-1" \
     "$test_root/third-party/example"
@@ -207,6 +208,84 @@ else
     pass "symlink rejection leaves the outside directory unchanged"
 fi
 
+mkdir -m 700 "$test_root/ancestor-real"
+ln -s "$test_root/ancestor-real" "$test_root/ancestor-link"
+if VPS_STATE_DIR="$test_root/ancestor-link/state" \
+    "$CLI" report --output ancestor.txt >/dev/null 2>&1; then
+    fail "report rejects a symlink ancestor"
+else
+    pass "report rejects a symlink ancestor"
+fi
+if [[ -e "$test_root/ancestor-real/state/reports/ancestor.txt" ]]; then
+    fail "symlink ancestor rejection must not create an external report"
+else
+    pass "symlink ancestor rejection leaves the resolved target unchanged"
+fi
+
+world_state="$test_root/world-state"
+mkdir -m 700 "$world_state"
+chmod 777 "$world_state"
+world_state_mode_before=$(stat -c %a "$world_state" 2>/dev/null || stat -f %Lp "$world_state")
+if VPS_STATE_DIR="$world_state" "$CLI" report --output world.txt >/dev/null 2>&1; then
+    fail "report rejects a world-writable state root"
+else
+    pass "report rejects a world-writable state root"
+fi
+world_state_mode_after=$(stat -c %a "$world_state" 2>/dev/null || stat -f %Lp "$world_state")
+assert_eq "$world_state_mode_before" "$world_state_mode_after" \
+    "untrusted state-root permissions are not changed"
+if [[ -e "$world_state/reports" ]]; then
+    fail "untrusted state root must not receive a reports directory"
+else
+    pass "untrusted state root remains otherwise unchanged"
+fi
+
+world_parent="$test_root/world-parent"
+mkdir -m 700 "$world_parent" "$world_parent/state"
+chmod 777 "$world_parent"
+if VPS_STATE_DIR="$world_parent/state" \
+    "$CLI" report --output parent.txt >/dev/null 2>&1; then
+    fail "report rejects a state root beneath an untrusted parent"
+else
+    pass "report rejects a state root beneath an untrusted parent"
+fi
+if [[ -e "$world_parent/state/reports" ]]; then
+    fail "untrusted parent must not receive report output"
+else
+    pass "untrusted parent and its state directory remain unchanged"
+fi
+
+world_reports_state="$test_root/world-reports-state"
+mkdir -m 700 "$world_reports_state" "$world_reports_state/reports"
+chmod 777 "$world_reports_state/reports"
+printf 'keep\n' > "$world_reports_state/reports/original.txt"
+world_reports_mode_before=$(stat -c %a "$world_reports_state/reports" 2>/dev/null || \
+    stat -f %Lp "$world_reports_state/reports")
+if VPS_STATE_DIR="$world_reports_state" \
+    "$CLI" report --output world.txt >/dev/null 2>&1; then
+    fail "report rejects a world-writable existing reports directory"
+else
+    pass "report rejects a world-writable existing reports directory"
+fi
+world_reports_mode_after=$(stat -c %a "$world_reports_state/reports" 2>/dev/null || \
+    stat -f %Lp "$world_reports_state/reports")
+assert_eq "$world_reports_mode_before" "$world_reports_mode_after" \
+    "existing untrusted reports permissions are not changed"
+assert_eq 'keep' "$(<"$world_reports_state/reports/original.txt")" \
+    "existing content in an untrusted reports directory is preserved"
+
+if [[ "$(uname -s)" == Linux && $EUID -eq 0 ]]; then
+    foreign_state="$test_root/foreign-state"
+    mkdir -m 700 "$foreign_state"
+    chown 65534 "$foreign_state"
+    if VPS_STATE_DIR="$foreign_state" "$CLI" report --output foreign.txt >/dev/null 2>&1; then
+        fail "report rejects a state root owned by another user"
+    else
+        pass "report rejects a state root owned by another user"
+    fi
+    chown "$EUID" "$foreign_state"
+fi
+
 printf 'not-a-directory\n' > "$test_root/path-component"
 if VPS_STATE_DIR="$test_root/path-component/state" \
     "$CLI" report --output unwritable.txt >/dev/null 2>&1; then
@@ -236,6 +315,32 @@ source "$PROJECT_ROOT/core/modules.sh"
 source "$PROJECT_ROOT/core/runtime.sh"
 source "$PROJECT_ROOT/core/ssh.sh"
 source "$PROJECT_ROOT/core/report.sh"
+race_state="$test_root/race-state"
+mkdir -m 700 "$race_state" "$race_state/reports"
+printf 'original-directory\n' > "$race_state/reports/sentinel.txt"
+VPS_STATE_DIR="$race_state"
+export VPS_STATE_DIR
+mktemp() {
+    local template=$1 report_dir=${1%/*}
+    mv "$report_dir" "$report_dir.original"
+    mkdir -m 700 "$report_dir"
+    command mktemp "$template"
+}
+if vps_report_create raced.txt >/dev/null 2>&1; then
+    fail "report rejects a reports-directory replacement during creation"
+else
+    pass "report rejects a reports-directory replacement during creation"
+fi
+unset -f mktemp
+assert_eq 'original-directory' "$(<"$race_state/reports.original/sentinel.txt")" \
+    "directory-replacement refusal preserves original content"
+if [[ -e "$race_state/reports/raced.txt" ]] || \
+   find "$race_state/reports" -type f -name '.vps-report.*' -print -quit | grep -q .; then
+    fail "directory-replacement refusal must not leave output in the replacement"
+else
+    pass "directory-replacement refusal leaves no replacement output"
+fi
+
 VPS_STATE_DIR="$test_root/partial-state"
 export VPS_STATE_DIR VPS_PLATFORM_ROOT
 vps_report_write_content() {

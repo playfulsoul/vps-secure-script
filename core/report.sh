@@ -161,57 +161,76 @@ vps_report_path_is_safe() {
     done
 }
 
-vps_report_path_is_lexically_safe() {
-    local path=$1 part
-    local parts=()
-    [[ "$path" == /* ]] || return 1
-    IFS=/ read -r -a parts <<< "${path#/}"
-    for part in "${parts[@]}"; do
-        [[ -n "$part" && "$part" != . && "$part" != .. ]] || return 1
-        [[ ! "$part" =~ [[:cntrl:]] ]] || return 1
-    done
+vps_report_file_uid() {
+    stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null
 }
 
-vps_report_prepare_dir() {
-    local report_dir=$1 parent
-    parent=$(dirname -- "$report_dir")
-    vps_report_path_is_safe "$parent" || return 1
-    if [[ ! -d "$parent" ]]; then
-        mkdir -p "$parent" || return 1
-        chmod 700 "$parent" || return 1
-        vps_report_path_is_safe "$parent" || return 1
-    fi
-    if [[ -e "$report_dir" || -L "$report_dir" ]]; then
-        [[ -d "$report_dir" && ! -L "$report_dir" ]] || return 1
+vps_report_file_mode() {
+    stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1" 2>/dev/null
+}
+
+vps_report_file_identity() {
+    if stat -c '%d:%i' "$1" >/dev/null 2>&1; then
+        stat -c '%d:%i' "$1"
     else
-        mkdir "$report_dir" || return 1
+        stat -f '%d:%i' "$1" 2>/dev/null
     fi
-    chmod 700 "$report_dir" || return 1
 }
 
-vps_report_canonical_state_root() {
-    local state_root=$1 parent base canonical_parent
-    vps_report_path_is_lexically_safe "$state_root" || return 1
+vps_report_dir_is_trusted() {
+    local path=$1 physical uid mode mode_value
+    vps_report_path_is_safe "$path" || return 1
+    [[ -d "$path" && ! -L "$path" ]] || return 1
+    physical=$(cd -- "$path" && pwd -P) || return 1
+    [[ "$physical" == "$path" ]] || return 1
+    uid=$(vps_report_file_uid "$path") || return 1
+    [[ "$uid" == "$EUID" ]] || return 1
+    mode=$(vps_report_file_mode "$path") || return 1
+    [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    mode_value=$((8#$mode))
+    (( (mode_value & 0022) == 0 ))
+}
+
+vps_report_dir_identity() {
+    local path=$1 identity
+    vps_report_dir_is_trusted "$path" || return 1
+    identity=$(vps_report_file_identity "$path") || return 1
+    printf '%s\n' "$identity"
+}
+
+vps_report_prepare_state_root() {
+    local state_root=$1 parent
+    vps_report_path_is_safe "$state_root" || return 1
     case "$state_root" in
         /|/bin|/etc|/home|/private|/private/tmp|/root|/tmp|/usr|/var) return 1 ;;
     esac
-    [[ ! -L "$state_root" ]] || return 1
-    if [[ -e "$state_root" ]]; then
-        [[ -d "$state_root" ]] || return 1
-        (cd -- "$state_root" && pwd -P)
-        return
-    fi
     parent=$(dirname -- "$state_root")
-    base=$(basename -- "$state_root")
-    [[ "$base" != . && "$base" != .. ]] || return 1
-    [[ -d "$parent" ]] || return 1
-    canonical_parent=$(cd -- "$parent" && pwd -P) || return 1
-    printf '%s/%s\n' "${canonical_parent%/}" "$base"
+    vps_report_dir_is_trusted "$parent" || return 1
+    if [[ -e "$state_root" || -L "$state_root" ]]; then
+        vps_report_dir_is_trusted "$state_root" || return 1
+    else
+        mkdir -m 700 "$state_root" || return 1
+        vps_report_dir_is_trusted "$state_root" || return 1
+    fi
+    printf '%s\n' "$state_root"
+}
+
+vps_report_prepare_dir() {
+    local state_root=$1 report_dir="$1/reports"
+    vps_report_dir_is_trusted "$state_root" || return 1
+    if [[ -e "$report_dir" || -L "$report_dir" ]]; then
+        vps_report_dir_is_trusted "$report_dir" || return 1
+    else
+        mkdir -m 700 "$report_dir" || return 1
+        vps_report_dir_is_trusted "$report_dir" || return 1
+    fi
+    printf '%s\n' "$report_dir"
 }
 
 vps_report_create() {
     local output_name=${1:-}
-    local state_root report_dir temporary target old_umask
+    local state_root report_dir report_dir_identity current_identity
+    local temporary target old_umask
 
     if [[ -z "$output_name" ]]; then
         output_name="vps-report-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
@@ -223,15 +242,19 @@ vps_report_create() {
 
     old_umask=$(umask)
     umask 077
-    state_root=$(vps_report_canonical_state_root "$(vps_state_root)") || {
+    state_root=$(vps_report_prepare_state_root "$(vps_state_root)") || {
         umask "$old_umask"
         printf '报告目录路径不安全。\n' >&2
         return 40
     }
-    report_dir="$state_root/reports"
-    vps_report_prepare_dir "$report_dir" || {
+    report_dir=$(vps_report_prepare_dir "$state_root") || {
         umask "$old_umask"
         printf '无法安全创建报告目录。\n' >&2
+        return 40
+    }
+    report_dir_identity=$(vps_report_dir_identity "$report_dir") || {
+        umask "$old_umask"
+        printf '报告目录不可信。\n' >&2
         return 40
     }
     target="$report_dir/$output_name"
@@ -246,6 +269,13 @@ vps_report_create() {
         printf '无法安全创建临时报告。\n' >&2
         return 40
     }
+    current_identity=$(vps_report_dir_identity "$report_dir" 2>/dev/null || true)
+    if [[ "$current_identity" != "$report_dir_identity" ]]; then
+        rm -f -- "$temporary"
+        umask "$old_umask"
+        printf '报告目录在创建过程中发生变化，已安全停止。\n' >&2
+        return 40
+    fi
     chmod 600 "$temporary" || {
         rm -f -- "$temporary"
         umask "$old_umask"
@@ -262,6 +292,14 @@ vps_report_create() {
         umask "$old_umask"
         return 40
     }
+    current_identity=$(vps_report_dir_identity "$report_dir" 2>/dev/null || true)
+    if [[ "$current_identity" != "$report_dir_identity" ]] || \
+       [[ -e "$target" || -L "$target" ]]; then
+        rm -f -- "$temporary"
+        umask "$old_umask"
+        printf '报告目录或目标在生成过程中发生变化，已安全停止。\n' >&2
+        return 40
+    fi
     if ! ln "$temporary" "$target"; then
         rm -f -- "$temporary"
         umask "$old_umask"
