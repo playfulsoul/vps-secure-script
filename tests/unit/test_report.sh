@@ -167,6 +167,7 @@ fi
 
 failure_state="$test_root/failure-state"
 failure_output=$(PATH="$test_root/bin:$PATH" \
+    SSH_CONNECTION='' \
     VPS_STATE_DIR="$failure_state" \
     VPS_OS_RELEASE_FILE="$test_root/missing-os-release" \
     VPS_SSHD_BIN="$test_root/bin/unavailable-sshd" \
