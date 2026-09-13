@@ -93,8 +93,14 @@ assert_eq '2.0.0-beta.3' "$actual" "explicit metadata check recovers from two fi
 assert_contains "$(<"$temporary_root/metadata-errors")" '9836 out of 50385 bytes received' \
     "metadata retry test reproduces the reported partial-response timeout"
 assert_eq '3' "$(<"$temporary_root/metadata-count")" "explicit metadata check uses bounded retries"
-assert_eq $'30\n30\n30' "$(<"$temporary_root/metadata-max-times")" \
-    "explicit metadata checks do not reuse the short background timeout"
+metadata_timeouts_valid=yes
+while IFS= read -r configured_timeout; do
+    if (( configured_timeout <= 5 || configured_timeout > 30 )); then
+        metadata_timeouts_valid=no
+    fi
+done < "$temporary_root/metadata-max-times"
+assert_eq yes "$metadata_timeouts_valid" \
+    "explicit metadata checks use the longer bounded total timeout"
 
 rm -f "$temporary_root/metadata-count" "$temporary_root/metadata-max-times"
 if PATH="$fake_bin:$PATH" VPS_TEST_ROOT="$temporary_root" \

@@ -98,15 +98,20 @@ vps_update_record_fetch_failure() {
 
 vps_update_fetch_metadata() {
     local output=$1 mode=${2:-automatic} attempts=1 max_time=3 attempt status=0
+    local deadline remaining now
     [[ "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY" =~ ^[0-9]+$ ]] || return 10
     if [[ "$mode" == explicit ]]; then
         attempts=3
         max_time=30
     fi
+    deadline=$(( $(date +%s) + max_time ))
 
     for (( attempt = 1; attempt <= attempts; attempt++ )); do
+        now=$(date +%s)
+        remaining=$(( deadline - now ))
+        (( remaining > 0 )) || break
         if curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
-            --connect-timeout 5 --max-time "$max_time" \
+            --connect-timeout 5 --max-time "$remaining" \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2026-03-10' \
             "$(vps_update_api_url)" -o "$output"; then
@@ -114,25 +119,33 @@ vps_update_fetch_metadata() {
         else
             status=$?
         fi
-        (( attempt == attempts )) || sleep "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY"
+        now=$(date +%s)
+        if (( attempt < attempts && now + VPS_UPDATE_DOWNLOAD_RETRY_DELAY < deadline )); then
+            sleep "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY"
+        fi
     done
+    (( status != 0 )) || status=28
     return "$status"
 }
 
 vps_update_download_asset() {
     local url=$1 destination=$2 max_time=$3 resume=${4:-no}
-    local partial="$destination.part" attempt status=0
+    local partial="$destination.part" attempt status=0 deadline remaining now
 
     [[ "$max_time" =~ ^[1-9][0-9]*$ ]] || return 40
     [[ "$VPS_UPDATE_DOWNLOAD_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || return 40
     [[ "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY" =~ ^[0-9]+$ ]] || return 40
     rm -f -- "$partial"
+    deadline=$(( $(date +%s) + max_time ))
 
     for (( attempt = 1; attempt <= VPS_UPDATE_DOWNLOAD_ATTEMPTS; attempt++ )); do
+        now=$(date +%s)
+        remaining=$(( deadline - now ))
+        (( remaining > 0 )) || break
         [[ "$resume" == yes ]] || rm -f -- "$partial"
         local curl_arguments=(
             --proto '=https' --tlsv1.2 --fail --location --show-error
-            --connect-timeout 10 --max-time "$max_time"
+            --connect-timeout 10 --max-time "$remaining"
         )
         [[ "$resume" != yes ]] || curl_arguments+=(--continue-at -)
 
@@ -148,7 +161,9 @@ vps_update_download_asset() {
         if [[ "$resume" == yes && "$status" -eq 33 ]]; then
             rm -f -- "$partial"
         fi
-        if (( attempt < VPS_UPDATE_DOWNLOAD_ATTEMPTS )); then
+        now=$(date +%s)
+        if (( attempt < VPS_UPDATE_DOWNLOAD_ATTEMPTS && \
+              now + VPS_UPDATE_DOWNLOAD_RETRY_DELAY < deadline )); then
             printf '下载中断，将在 %s 秒后重试（%s/%s）……\n' \
                 "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY" "$attempt" "$VPS_UPDATE_DOWNLOAD_ATTEMPTS" >&2
             sleep "$VPS_UPDATE_DOWNLOAD_RETRY_DELAY"
@@ -156,6 +171,7 @@ vps_update_download_asset() {
     done
 
     rm -f -- "$partial"
+    (( status != 0 )) || status=28
     return "$status"
 }
 
