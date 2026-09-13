@@ -3,9 +3,16 @@
 set -u
 
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../core/build_identity.sh
+source "$PROJECT_ROOT/core/build_identity.sh"
 VERSION=$(<"$PROJECT_ROOT/VERSION")
 DIST_DIR=${VPS_DIST_DIR:-$PROJECT_ROOT/dist}
-ARCHIVE="$DIST_DIR/vps-secure-platform-$VERSION.tar.gz"
+IDENTITY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/vps-build-identity.XXXXXX") || exit 40
+trap 'rm -rf -- "$IDENTITY_DIR"' EXIT
+vps_build_manifest "$PROJECT_ROOT" "$IDENTITY_DIR/BUILD_MANIFEST.sha256" || exit $?
+BUILD_ID="sha256-$(vps_build_sha256_file "$IDENTITY_DIR/BUILD_MANIFEST.sha256")" || exit $?
+printf '%s\n' "$BUILD_ID" > "$IDENTITY_DIR/BUILD_ID"
+ARCHIVE="$DIST_DIR/vps-secure-platform-$VERSION-build.$BUILD_ID.tar.gz"
 ARCHIVE_NAME=${ARCHIVE##*/}
 TAR_OPTIONS=(-czf "$ARCHIVE")
 ARCHIVE_MEMBERS=()
@@ -27,7 +34,7 @@ mkdir -p "$DIST_DIR"
 while IFS= read -r -d '' member; do
     member=${member#"$PROJECT_ROOT"/}
     case $member in
-        .git|dist|.DS_Store) continue ;;
+        .git|dist|.DS_Store|BUILD_ID|BUILD_MANIFEST.sha256) continue ;;
     esac
     ARCHIVE_MEMBERS+=("$member")
 done < <(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -print0)
@@ -39,7 +46,8 @@ done < <(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -print0)
 
 tar "${TAR_OPTIONS[@]}" \
     --exclude=.git --exclude=dist --exclude=.DS_Store \
-    -C "$PROJECT_ROOT" "${ARCHIVE_MEMBERS[@]}"
+    -C "$PROJECT_ROOT" "${ARCHIVE_MEMBERS[@]}" \
+    -C "$IDENTITY_DIR" BUILD_ID BUILD_MANIFEST.sha256
 
 if command -v sha256sum >/dev/null 2>&1; then
     (cd "$DIST_DIR" && sha256sum "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256")

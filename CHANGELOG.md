@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Give every content-distinct installable bundle a SHA-256 build identity that is visible in the archive name, checksum filename, installer output, CLI version output, and update status.
+- Reject bundles whose recorded build identity no longer matches their content, and distinguish same-version builds during update comparison.
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.5` security fix.
 - Verify UFW against the active IPv4/IPv6 kernel chains instead of trusting displayed configuration alone.
 - Detect competing firewall persistence services even when the current boot order happens to leave UFW working.

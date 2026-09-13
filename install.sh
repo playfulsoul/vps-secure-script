@@ -3,6 +3,8 @@
 set -u
 
 SOURCE_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=core/build_identity.sh
+source "$SOURCE_ROOT/core/build_identity.sh"
 INSTALL_ROOT=${VPS_INSTALL_ROOT:-/usr/lib/vps-secure}
 BIN_DIR=${VPS_BIN_DIR:-/usr/local/bin}
 LINK_PATH="$BIN_DIR/vps"
@@ -19,9 +21,10 @@ require_root_for_system_paths() {
 }
 
 main() {
-    local staging backup version timestamp
+    local staging backup version build_id timestamp
     require_root_for_system_paths || return $?
     version=$(<"$SOURCE_ROOT/VERSION")
+    build_id=$(vps_verify_build_identity "$SOURCE_ROOT") || return $?
     timestamp=$(date -u +%Y%m%dT%H%M%SZ)
     staging="${INSTALL_ROOT}.new.$$"
     backup="${INSTALL_ROOT}.backup.${timestamp}"
@@ -41,6 +44,12 @@ main() {
     cp "$SOURCE_ROOT/VERSION" "$SOURCE_ROOT/README.md" \
         "$SOURCE_ROOT/ARCHITECTURE.md" "$SOURCE_ROOT/MODULE_SPEC.md" \
         "$SOURCE_ROOT/COMPATIBILITY.md" "$staging/" || return 40
+    printf '%s\n' "$build_id" > "$staging/BUILD_ID" || return 40
+    if [[ -r "$SOURCE_ROOT/BUILD_MANIFEST.sha256" ]]; then
+        cp "$SOURCE_ROOT/BUILD_MANIFEST.sha256" "$staging/" || return 40
+    else
+        vps_build_manifest "$SOURCE_ROOT" "$staging/BUILD_MANIFEST.sha256" || return 40
+    fi
     chmod 755 "$staging/bin/vps"
     find "$staging/modules" -type f -name module.sh -exec chmod 755 {} +
 
@@ -55,6 +64,7 @@ main() {
     ln -sfn "$INSTALL_ROOT/bin/vps" "$LINK_PATH" || return 40
 
     printf 'VPS 管理与安全平台 %s 已安装。\n' "$version"
+    printf '构建身份: %s\n' "$build_id"
     printf '命令入口: %s\n' "$LINK_PATH"
     [[ ! -e "$backup" ]] || printf '上一版本备份: %s\n' "$backup"
 }
