@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.0.0-beta.6 - 2026-09-13
+
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.5` security fix.
 - Verify UFW against the active IPv4/IPv6 kernel chains instead of trusting displayed configuration alone.
 - Detect competing firewall persistence services even when the current boot order happens to leave UFW working.
