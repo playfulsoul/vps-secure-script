@@ -10,7 +10,10 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$PROJECT_ROOT/vps_secure.sh" --version)
 assert_contains "$actual" 'legacy migration v1.0.3' "legacy raw entry is a migration assistant"
-assert_contains "$actual" '2.0.0-beta.6' "legacy migration points directly to the current published package"
+assert_contains "$actual" '2.0.0-beta.6.1' "legacy migration points directly to the current published package"
+assert_contains "$(<"$PROJECT_ROOT/vps_secure.sh")" \
+    'b5c697c6ef5149d14d4e527e34857d7b9a2188d9d29631aee4aab1f1b739bca2' \
+    "legacy migration pins the verified public archive SHA-256"
 
 actual=$(printf '0\n' | "$PROJECT_ROOT/vps_secure.sh")
 assert_contains "$actual" '1.x 单文件版本已经停止功能更新' "legacy users receive an end-of-maintenance notice"
@@ -19,9 +22,9 @@ assert_contains "$actual" '不会' "migration notice explains preserved server c
 temporary_root=$(mktemp -d)
 fixture_root="$temporary_root/fixture"
 fake_bin="$temporary_root/bin"
-archive_name='vps-secure-platform-2.0.0-beta.6.tar.gz'
+archive_name='vps-secure-platform-2.0.0-beta.6.1.tar.gz'
 mkdir -p "$fixture_root" "$fake_bin"
-printf '%s\n' '2.0.0-beta.6' > "$fixture_root/VERSION"
+printf '%s\n' '2.0.0-beta.6.1' > "$fixture_root/VERSION"
 cat > "$fixture_root/install.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' installed > "$VPS_MIGRATION_TEST_MARKER"
@@ -57,6 +60,7 @@ actual=$(PATH="$fake_bin:$PATH" \
     VPS_MIGRATION_SKIP_PLATFORM_CHECK=yes \
     VPS_MIGRATION_FIXTURE="$temporary_root" \
     VPS_MIGRATION_ARCHIVE="$archive_name" \
+    VPS_MIGRATION_TARGET_SHA256="$checksum" \
     VPS_MIGRATION_TEST_MARKER="$marker" \
     VPS_MIGRATION_LINK_PATH="$temporary_root/vps" \
     VPS_MIGRATION_INSTALLED_ROOT="$temporary_root/not-installed" \
@@ -71,16 +75,39 @@ actual=$(PATH="$fake_bin:$PATH" \
     VPS_MIGRATION_SKIP_PLATFORM_CHECK=yes \
     VPS_MIGRATION_FIXTURE="$temporary_root" \
     VPS_MIGRATION_ARCHIVE="$archive_name" \
+    VPS_MIGRATION_TARGET_SHA256="$checksum" \
     VPS_MIGRATION_TEST_MARKER="$bad_marker" \
     VPS_MIGRATION_LINK_PATH="$temporary_root/vps" \
     VPS_MIGRATION_INSTALLED_ROOT="$temporary_root/not-installed" \
     "$PROJECT_ROOT/vps_secure.sh" --install --yes 2>&1 || true)
 if [[ -e "$bad_marker" ]]; then
-    fail "migration must not run an archive with a mismatched checksum"
+    fail "migration must reject a release checksum that differs from the pinned digest"
 else
-    pass "migration rejects an archive with a mismatched checksum"
+    pass "migration rejects a release checksum that differs from the pinned digest"
 fi
-assert_contains "$actual" 'SHA-256 校验失败' "migration explains checksum rejection"
+assert_contains "$actual" '发布校验文件与内置 SHA-256 不一致' \
+    "migration explains pinned release checksum rejection"
+
+printf '%s  %s\n' "$checksum" "$archive_name" > "$temporary_root/$archive_name.sha256"
+printf '%s\n' 'tampered' >> "$temporary_root/$archive_name"
+tampered_marker="$temporary_root/tampered-should-not-install"
+actual=$(PATH="$fake_bin:$PATH" \
+    VPS_MIGRATION_ALLOW_NON_ROOT=yes \
+    VPS_MIGRATION_SKIP_PLATFORM_CHECK=yes \
+    VPS_MIGRATION_FIXTURE="$temporary_root" \
+    VPS_MIGRATION_ARCHIVE="$archive_name" \
+    VPS_MIGRATION_TARGET_SHA256="$checksum" \
+    VPS_MIGRATION_TEST_MARKER="$tampered_marker" \
+    VPS_MIGRATION_LINK_PATH="$temporary_root/vps" \
+    VPS_MIGRATION_INSTALLED_ROOT="$temporary_root/not-installed" \
+    "$PROJECT_ROOT/vps_secure.sh" --install --yes 2>&1 || true)
+if [[ -e "$tampered_marker" ]]; then
+    fail "migration must not run an archive that differs from the pinned digest"
+else
+    pass "migration rejects an archive that differs from the pinned digest"
+fi
+assert_contains "$actual" '安装包 SHA-256 校验失败' \
+    "migration explains archive checksum rejection"
 
 printf '%s\n' 'ID=centos' 'VERSION_ID="9"' > "$temporary_root/os-release"
 actual=$(VPS_MIGRATION_ALLOW_NON_ROOT=yes \
@@ -90,12 +117,12 @@ assert_contains "$actual" '当前支持 Debian 11+ 和 Ubuntu 22.04+' \
     "migration stops before installing on an unsupported platform"
 
 mkdir -p "$temporary_root/already-installed"
-printf '%s\n' '2.0.0-beta.6' > "$temporary_root/already-installed/VERSION"
+printf '%s\n' '2.0.0-beta.6.1' > "$temporary_root/already-installed/VERSION"
 actual=$(VPS_MIGRATION_ALLOW_NON_ROOT=yes \
     VPS_MIGRATION_SKIP_PLATFORM_CHECK=yes \
     VPS_MIGRATION_INSTALLED_ROOT="$temporary_root/already-installed" \
     "$PROJECT_ROOT/vps_secure.sh" --install --yes 2>&1 || true)
-assert_contains "$actual" '2.0.0-beta.6 已经安装' \
+assert_contains "$actual" '2.0.0-beta.6.1 已经安装' \
     "migration assistant does not replace an existing 2.x installation"
 
 rm -rf -- "$temporary_root"
