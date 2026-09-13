@@ -7,6 +7,7 @@ PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
 SSH_CORE="$PROJECT_ROOT/core/ssh.sh"
 FIREWALL_MODULE="$PROJECT_ROOT/modules/builtin/security-firewall/module.sh"
 FAIL2BAN_MODULE="$PROJECT_ROOT/modules/builtin/security-fail2ban/module.sh"
+CERTIFICATE_MODULE="$PROJECT_ROOT/modules/builtin/security-certificate/module.sh"
 
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
@@ -114,6 +115,18 @@ if grep -q 'systemctl enable --now fail2ban' "$FAIL2BAN_MODULE"; then
     fail "Fail2Ban apply must not start and immediately restart the service"
 else
     pass "Fail2Ban apply avoids redundant service startup"
+fi
+
+if grep -q -- '--force' "$CERTIFICATE_MODULE"; then
+    fail "scheduled certificate renewal must not contain a force-renew path"
+else
+    pass "scheduled certificate renewal contains no force-renew path"
+fi
+
+if grep -Eq '(cp|install).*(ACME_KEY_FILE).*(transaction|snapshot)' "$CERTIFICATE_MODULE"; then
+    fail "certificate transaction backups must not copy private key material"
+else
+    pass "certificate transaction backups do not copy private key material"
 fi
 
 finish_tests

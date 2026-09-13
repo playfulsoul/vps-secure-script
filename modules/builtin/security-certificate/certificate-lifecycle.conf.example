@@ -1,0 +1,25 @@
+# Values are parsed as literal text; this file is never sourced as shell code.
+domain=node.example.invalid
+acme_client=/root/.acme.sh/acme.sh
+acme_domain_conf=/root/.acme.sh/node.example.invalid_ecc/node.example.invalid.conf
+acme_cert_file=/root/.acme.sh/node.example.invalid_ecc/fullchain.cer
+acme_key_file=/root/.acme.sh/node.example.invalid_ecc/node.example.invalid.key
+acme_ecc=yes
+deploy_root=/etc/vps-secure/certificates/node
+service_unit=x-ui.service
+service_action=restart
+cron_kind=system
+cron_file=/etc/cron.d/vps-secure-certificate
+cron_user=root
+vps_command=/usr/local/bin/vps
+min_validity_seconds=604800
+
+# Optional layered health checks. Addresses and ports are not printed.
+# local_port=443
+# direct_host=203.0.113.10
+# direct_port=443
+# forward_host=198.51.100.20
+# forward_port=443
+# panel_healthcheck=/usr/local/libexec/vps-secure/check-panel
+# reality_healthcheck=/usr/local/libexec/vps-secure/check-reality
+# vless_healthcheck=/usr/local/libexec/vps-secure/check-vless-tls

@@ -46,6 +46,7 @@ VPS 管理与安全平台
   vps ssh key import-github <GitHub用户名> [--user <服务器用户>] --yes
   vps firewall <plan|preflight|status|apply|verify|repair-persistence|rollback>
   vps fail2ban <plan|preflight|status|apply|verify|rollback>
+  vps certificate <plan|preflight|status|backup|apply|verify|rollback>
   vps update <check|status|apply|rollback>
 
 模块操作：check plan preflight apply verify status backup rollback configure
@@ -266,6 +267,10 @@ main() {
         fail2ban)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
             run_module_command security.fail2ban "$@"
+            ;;
+        certificate)
+            [[ $# -ge 1 ]] || { show_help >&2; return 64; }
+            run_module_command security.certificate "$@"
             ;;
         update)
             case ${1:-} in

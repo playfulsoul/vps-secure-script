@@ -69,6 +69,8 @@ assert_contains "$actual" 'high-risk' "CLI exposes module privilege level"
 
 actual=$($CLI help)
 assert_contains "$actual" 'repair-persistence' "CLI documents the explicit firewall persistence repair"
+assert_contains "$actual" 'vps certificate <plan|preflight|status|backup|apply|verify|rollback>' \
+    "CLI documents the independent certificate lifecycle workflow"
 actual=$($CLI firewall repair-persistence 2>&1 || true)
 assert_contains "$actual" '确认计划后请添加 --yes' \
     "firewall persistence repair requires explicit confirmation"
