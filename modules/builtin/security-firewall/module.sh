@@ -349,10 +349,12 @@ firewall_rollback_dir() {
 
 firewall_backup_runtime() {
     local transaction_dir=$1
-    command -v iptables-save >/dev/null 2>&1 && \
+    if command -v iptables-save >/dev/null 2>&1; then
         iptables-save > "$transaction_dir/iptables.before" 2>/dev/null || true
-    command -v ip6tables-save >/dev/null 2>&1 && \
+    fi
+    if command -v ip6tables-save >/dev/null 2>&1; then
         ip6tables-save > "$transaction_dir/ip6tables.before" 2>/dev/null || true
+    fi
 }
 
 firewall_persistence_configure() {
