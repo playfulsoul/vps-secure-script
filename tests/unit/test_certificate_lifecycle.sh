@@ -10,6 +10,7 @@ CERTIFICATE_MODULE="$PROJECT_ROOT/modules/builtin/security-certificate/module.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 test_root=$(mktemp -d)
+test_root=$(readlink -f "$test_root")
 tls_server_pid=''
 cleanup() {
     [[ -z "$tls_server_pid" ]] || kill "$tls_server_pid" >/dev/null 2>&1 || true
@@ -18,7 +19,8 @@ cleanup() {
 trap cleanup EXIT
 bin_dir="$test_root/bin"
 fixture_dir="$test_root/fixtures"
-deploy_root="$test_root/deploy"
+deploy_base="$test_root/managed-certificates"
+deploy_root="$deploy_base/node"
 runtime_state="$test_root/runtime-state"
 fake_state="$test_root/fake-state"
 mkdir -p "$bin_dir" "$fixture_dir" "$deploy_root/generations/old" "$runtime_state" "$fake_state"
@@ -64,6 +66,9 @@ case ${1:-} in
         printf '%s\n' "$count" > "$VPS_TEST_CERT_STATE/service-count"
         if [[ -e "$VPS_TEST_CERT_STATE/fail-service-once" && "$count" == 1 ]]; then
             rm -f "$VPS_TEST_CERT_STATE/fail-service-once"
+            exit 1
+        fi
+        if [[ -e "$VPS_TEST_CERT_STATE/fail-service-restore" && "$count" == 2 ]]; then
             exit 1
         fi
         ;;
@@ -160,7 +165,10 @@ run_certificate() {
     VPS_OS_RELEASE_FILE="$test_root/os-release" \
     VPS_STATE_DIR="$runtime_state" \
     VPS_CERT_CONFIG_FILE="$config_file" \
+    VPS_CERT_DEPLOY_BASE="$deploy_base" \
     VPS_CERT_ALLOW_UNSAFE_TEST_HOOKS=yes \
+    VPS_CERT_COMMAND_TRUST_ROOT="$test_root" \
+    VPS_CERT_DEPLOY_TRUST_ROOT="$test_root" \
     VPS_CERT_SYSTEM_CRON_ROOT="$test_root/etc" \
     VPS_TEST_CERT_STATE="$fake_state" \
     VPS_TEST_CERT_FIXTURES="$fixture_dir" \
@@ -184,10 +192,89 @@ current_fingerprint() {
         sed 's/^[^=]*=//; s/://g'
 }
 
+assert_recovery_evidence() {
+    local transaction_dir=$1 label=$2
+    if [[ -f "$transaction_dir/previous_target" &&
+          -f "$transaction_dir/new_target" &&
+          -f "$transaction_dir/restore-context" &&
+          -f "$transaction_dir/compensation-status" ]]; then
+        pass "$label retains complete recovery evidence"
+    else
+        fail "$label must retain complete recovery evidence"
+    fi
+}
+
 old_fingerprint=$(openssl x509 -in "$fixture_dir/old.pem" -noout -fingerprint -sha256 |
     sed 's/^[^=]*=//; s/://g')
 renewed_fingerprint=$(openssl x509 -in "$fixture_dir/renewed.pem" -noout -fingerprint -sha256 |
     sed 's/^[^=]*=//; s/://g')
+
+# Deployment roots are resolved and bounded before any mutation.
+actual=$(VPS_CERT_DEPLOY_ROOT="$deploy_base/.." run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "deployment root rejects a parent-directory leaf"
+actual=$(VPS_CERT_DEPLOY_ROOT="$deploy_base/." run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "deployment root rejects a current-directory leaf"
+
+mv "$deploy_base" "$deploy_base.real"
+ln -s "$deploy_base.real" "$deploy_base"
+actual=$(run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "deployment base rejects a symbolic link"
+rm "$deploy_base"
+mv "$deploy_base.real" "$deploy_base"
+
+mv "$deploy_root" "$deploy_base/node.real"
+ln -s "$deploy_base/node.real" "$deploy_root"
+actual=$(run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "deployment node directory rejects a symbolic link"
+rm "$deploy_root"
+mv "$deploy_base/node.real" "$deploy_root"
+
+mv "$deploy_root/generations" "$deploy_root/generations.real"
+ln -s "$deploy_root/generations.real" "$deploy_root/generations"
+actual=$(run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "generation directory rejects a symbolic link"
+rm "$deploy_root/generations"
+mv "$deploy_root/generations.real" "$deploy_root/generations"
+
+# Root-scheduled executables must resolve inside a trusted, non-writable chain.
+cp "$bin_dir/vps-fixture" "$bin_dir/vps-world-writable"
+chmod 777 "$bin_dir/vps-world-writable"
+actual=$(VPS_CERT_VPS_COMMAND="$bin_dir/vps-world-writable" \
+    run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "world-writable vps command target is rejected"
+
+cp "$bin_dir/acme-fixture" "$bin_dir/acme-world-writable"
+chmod 777 "$bin_dir/acme-world-writable"
+actual=$(VPS_CERT_ACME_CLIENT="$bin_dir/acme-world-writable" \
+    run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "world-writable ACME client target is rejected"
+
+actual=$(VPS_CERT_VPS_COMMAND="$bin_dir/vps-fixture;unexpected" \
+    run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "cron command path rejects shell metacharacters"
+
+ln -s /bin/true "$bin_dir/vps-outside-trust"
+actual=$(VPS_CERT_VPS_COMMAND="$bin_dir/vps-outside-trust" \
+    run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '30' "$result" "command symlink target outside the trusted root is rejected"
+
+mkdir -p "$test_root/controlled-install/bin"
+cp "$bin_dir/vps-fixture" "$test_root/controlled-install/bin/vps"
+chmod 755 "$test_root/controlled-install/bin/vps"
+ln -s "$test_root/controlled-install/bin/vps" "$bin_dir/vps-safe-link"
+actual=$(VPS_CERT_VPS_COMMAND="$bin_dir/vps-safe-link" \
+    run_certificate certificate_check 2>&1)
+result=$?
+assert_eq '0' "$result" "safe command symlink to a controlled install target is accepted"
 
 # No renewal: install the owned personal-crontab entry without reloading service.
 actual=$(VPS_TEST_ACME_MODE=skip run_certificate certificate_apply 2>&1)
@@ -316,7 +403,7 @@ assert_eq "$before_target" "$(current_target)" \
     "rollback-point registration failure restores the previous deployment"
 assert_eq '2' "$(<"$fake_state/service-count")" \
     "rollback-point registration failure reloads the new and restored generations"
-assert_contains "$actual" '已恢复应用前的部署状态' \
+assert_contains "$actual" '已核对恢复旧部署链接、旧定时入口与旧服务状态' \
     "rollback-point registration failure reports restoration"
 
 # Issuance failure leaves the deployed generation unchanged and hides client output.
@@ -413,6 +500,29 @@ assert_eq "$before_target" "$(current_target)" "service reload failure restores 
 assert_eq '2' "$(<"$fake_state/service-count")" \
     "service failure path retries only after restoring the old generation"
 
+# A post-deployment TLS mismatch also uses the verified compensation path.
+verify_fail_port=$((tls_port + 2))
+openssl s_server -accept "127.0.0.1:$verify_fail_port" \
+    -cert "$fixture_dir/old.pem" -key "$fixture_dir/old.key" \
+    -quiet >/dev/null 2>&1 &
+tls_server_pid=$!
+sleep 0.2
+rm -f "$fake_state/service-count"
+actual=$(VPS_TEST_ACME_MODE=renew \
+    VPS_CERT_DIRECT_HOST=127.0.0.1 VPS_CERT_DIRECT_PORT="$verify_fail_port" \
+    run_certificate certificate_apply 2>&1)
+result=$?
+kill "$tls_server_pid" >/dev/null 2>&1 || true
+wait "$tls_server_pid" 2>/dev/null || true
+tls_server_pid=''
+assert_eq '50' "$result" "post-deployment TLS mismatch fails the transaction"
+assert_eq "$before_target" "$(current_target)" \
+    "post-deployment verify failure restores the previous deployment"
+assert_eq '2' "$(<"$fake_state/service-count")" \
+    "post-deployment verify failure reloads new and restored generations"
+assert_contains "$actual" '已核对恢复旧部署链接、旧定时入口与旧服务状态' \
+    "post-deployment verify failure reports only verified restoration"
+
 # System cron has a username field and its command survives /bin/sh parsing.
 system_cron="$test_root/etc/cron.d/vps-secure-certificate"
 mkdir -p "$(dirname -- "$system_cron")"
@@ -456,6 +566,66 @@ result=$?
 assert_eq '60' "$result" "rollback refuses a previous certificate below the configured validity floor"
 assert_eq "$renewed_target" "$(current_target)" "refused rollback leaves the working generation active"
 assert_contains "$actual" '需要人工确认' "unsafe rollback stops at an explicit confirmation boundary"
+
+# Failed compensation retains the transaction context and both usable generations.
+ln -sfn generations/old "$deploy_root/current"
+rm -f "$fake_state/service-count"
+actual=$(VPS_TEST_ACME_MODE=renew VPS_TEST_CERT_RECORD_FAIL=yes \
+    VPS_TEST_CERT_FAIL_SWITCH_TARGET=generations/old \
+    run_certificate certificate_apply 2>&1)
+result=$?
+assert_eq '40' "$result" "failed switch-back keeps the transaction failed"
+switch_status=$(find "$runtime_state/modules/security-certificate/transactions" \
+    -name compensation-status -type f -print | sort | tail -n 1)
+assert_recovery_evidence "${switch_status%/*}" "switch-back failure"
+assert_contains "$(<"$switch_status")" 'link_restored=no' \
+    "switch-back failure is recorded in compensation evidence"
+assert_contains "$actual" '已保留事务上下文及可用证书代' \
+    "switch-back failure requires manual recovery without claiming restoration"
+switch_new_target=$(<"${switch_status%/*}/new_target")
+if [[ -d "$deploy_root/generations/old" && -d "$deploy_root/$switch_new_target" ]]; then
+    pass "switch-back failure preserves old and new generations"
+else
+    fail "switch-back failure must preserve old and new generations"
+fi
+
+ln -sfn generations/old "$deploy_root/current"
+rm -f "$fake_state/service-count"
+actual=$(VPS_TEST_ACME_MODE=renew VPS_TEST_CERT_RECORD_FAIL=yes \
+    VPS_TEST_CERT_FAIL_CRON_RESTORE=yes run_certificate certificate_apply 2>&1)
+result=$?
+assert_eq '40' "$result" "failed cron restoration keeps the transaction failed"
+cron_status=$(find "$runtime_state/modules/security-certificate/transactions" \
+    -name compensation-status -type f -print | sort | tail -n 1)
+assert_recovery_evidence "${cron_status%/*}" "cron restoration failure"
+assert_contains "$(<"$cron_status")" 'cron_restored=no' \
+    "cron restoration failure is recorded in compensation evidence"
+cron_new_target=$(<"${cron_status%/*}/new_target")
+if [[ -d "$deploy_root/generations/old" && -d "$deploy_root/$cron_new_target" ]]; then
+    pass "cron restoration failure preserves old and new generations"
+else
+    fail "cron restoration failure must preserve old and new generations"
+fi
+
+ln -sfn generations/old "$deploy_root/current"
+rm -f "$fake_state/service-count"
+: > "$fake_state/fail-service-restore"
+actual=$(VPS_TEST_ACME_MODE=renew VPS_TEST_CERT_RECORD_FAIL=yes \
+    run_certificate certificate_apply 2>&1)
+result=$?
+rm -f "$fake_state/fail-service-restore"
+assert_eq '40' "$result" "failed old-service reload keeps the transaction failed"
+service_status=$(find "$runtime_state/modules/security-certificate/transactions" \
+    -name compensation-status -type f -print | sort | tail -n 1)
+assert_recovery_evidence "${service_status%/*}" "old-service reload failure"
+assert_contains "$(<"$service_status")" 'service_restored=no' \
+    "old-service reload failure is recorded in compensation evidence"
+service_new_target=$(<"${service_status%/*}/new_target")
+if [[ -d "$deploy_root/generations/old" && -d "$deploy_root/$service_new_target" ]]; then
+    pass "old-service reload failure preserves old and new generations"
+else
+    fail "old-service reload failure must preserve old and new generations"
+fi
 
 trap - EXIT
 cleanup

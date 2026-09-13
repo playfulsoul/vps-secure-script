@@ -18,6 +18,12 @@ The module requires an explicit root-owned configuration file at
 private-key paths, listener ports, or protocol credentials automatically. See
 `certificate-lifecycle.conf.example` for the supported keys.
 
+The deployment base, node directory, and generation directory must resolve to
+the expected non-symlink path, remain root-owned, and reject group or other
+write access. The configured ACME client and scheduled `vps` command must
+resolve through a root-controlled, non-writable path chain. Shell metacharacters
+are not accepted in either command path.
+
 The module accepts an exact DNS hostname, not a wildcard name, and verifies
 that every staged certificate covers that hostname.
 
@@ -39,6 +45,11 @@ For safety, `apply` requires `current` to already reference one valid managed
 generation. Moving an existing service onto this managed path is a separate,
 explicit onboarding change; the lifecycle transaction will not guess or
 rewrite the service's current certificate configuration.
+
+Compensation is considered complete only after the previous link, owned cron
+entry, and service state are all restored and checked. If any step fails, the
+transaction context, compensation status, and both usable generations remain
+available for manual recovery.
 
 This module is independent from firewall ownership and repair. A successful
 certificate transaction does not imply firewall or proxy-protocol health.

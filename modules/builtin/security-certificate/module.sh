@@ -12,6 +12,7 @@ CONFIG_FILE=${VPS_CERT_CONFIG_FILE:-/etc/vps-secure/certificate-lifecycle.conf}
 CRON_TAG='# vps-secure:security.certificate'
 
 certificate_reset_config() {
+    CERT_DEPLOY_BASE=${VPS_CERT_DEPLOY_BASE:-/etc/vps-secure/certificates}
     CERT_DOMAIN=${VPS_CERT_DOMAIN:-}
     CERT_ACME_CLIENT=${VPS_CERT_ACME_CLIENT:-}
     CERT_ACME_DOMAIN_CONF=${VPS_CERT_ACME_DOMAIN_CONF:-}
@@ -102,6 +103,83 @@ certificate_path_is_absolute() {
     [[ ${1:-} == /* && ${1:-} != *$'\n'* ]]
 }
 
+certificate_command_path_syntax_safe() {
+    [[ ${1:-} =~ ^/[A-Za-z0-9._/+:-]+$ ]]
+}
+
+certificate_stat_uid() {
+    stat -Lc %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null
+}
+
+certificate_stat_mode() {
+    stat -Lc %a "$1" 2>/dev/null || stat -f %Lp "$1" 2>/dev/null
+}
+
+certificate_owned_path_safe() {
+    local path=$1 expected_uid=$2 uid mode
+    uid=$(certificate_stat_uid "$path") || return 1
+    mode=$(certificate_stat_mode "$path") || return 1
+    [[ "$uid" == "$expected_uid" && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+    (( (8#$mode & 0022) == 0 ))
+}
+
+certificate_owned_chain_safe() {
+    local path=$1 stop=$2 expected_uid=$3
+    while :; do
+        certificate_owned_path_safe "$path" "$expected_uid" || return 1
+        [[ "$path" == "$stop" ]] && return 0
+        if [[ "$stop" == / ]]; then
+            [[ "$path" == /* ]] || return 1
+        else
+            [[ "$path" == "$stop"/* ]] || return 1
+        fi
+        path=${path%/*}
+        [[ -n "$path" ]] || path=/
+    done
+}
+
+certificate_root_executable_safe() {
+    local command_path=$1 trust_root expected_uid resolved command_parent
+    certificate_command_path_syntax_safe "$command_path" || return 1
+    trust_root=${VPS_CERT_COMMAND_TRUST_ROOT:-/}
+    trust_root=$(readlink -f -- "$trust_root" 2>/dev/null) || return 1
+    resolved=$(readlink -f -- "$command_path" 2>/dev/null) || return 1
+    [[ -f "$resolved" && -x "$resolved" ]] || return 1
+    if [[ ${VPS_CERT_ALLOW_UNSAFE_TEST_HOOKS:-no} == yes ]]; then
+        expected_uid=$(id -u)
+    else
+        expected_uid=0
+    fi
+    [[ "$resolved" == "$trust_root"/* ]] || [[ "$trust_root" == / && "$resolved" == /* ]] || return 1
+    certificate_owned_chain_safe "$resolved" "$trust_root" "$expected_uid" || return 1
+    command_parent=$(readlink -f -- "${command_path%/*}" 2>/dev/null) || return 1
+    [[ "$command_parent" == "$trust_root" || "$command_parent" == "$trust_root"/* ]] ||
+        [[ "$trust_root" == / && "$command_parent" == /* ]] || return 1
+    certificate_owned_chain_safe "$command_parent" "$trust_root" "$expected_uid"
+}
+
+certificate_deploy_boundary_safe() {
+    local base_real deploy_real trust_root path expected_uid
+    [[ -d "$CERT_DEPLOY_BASE" && ! -L "$CERT_DEPLOY_BASE" ]] || return 1
+    [[ -d "$CERT_DEPLOY_ROOT" && ! -L "$CERT_DEPLOY_ROOT" ]] || return 1
+    [[ -d "$CERT_DEPLOY_ROOT/generations" && ! -L "$CERT_DEPLOY_ROOT/generations" ]] || return 1
+    base_real=$(readlink -f -- "$CERT_DEPLOY_BASE" 2>/dev/null) || return 1
+    deploy_real=$(readlink -f -- "$CERT_DEPLOY_ROOT" 2>/dev/null) || return 1
+    [[ "$CERT_DEPLOY_BASE" == "$base_real" && "$CERT_DEPLOY_ROOT" == "$deploy_real" ]] || return 1
+    [[ "${deploy_real%/*}" == "$base_real" ]] || return 1
+    if [[ ${VPS_CERT_ALLOW_UNSAFE_TEST_HOOKS:-no} == yes ]]; then
+        expected_uid=$(id -u)
+    else
+        expected_uid=0
+    fi
+    trust_root=${VPS_CERT_DEPLOY_TRUST_ROOT:-/}
+    trust_root=$(readlink -f -- "$trust_root" 2>/dev/null) || return 1
+    certificate_owned_chain_safe "$base_real" "$trust_root" "$expected_uid" || return 1
+    for path in "$CERT_DEPLOY_BASE" "$CERT_DEPLOY_ROOT" "$CERT_DEPLOY_ROOT/generations"; do
+        certificate_owned_path_safe "$path" "$expected_uid" || return 1
+    done
+}
+
 certificate_port_valid() {
     [[ ${1:-} =~ ^[0-9]+$ ]] && (( 1 <= $1 && $1 <= 65535 ))
 }
@@ -121,7 +199,7 @@ certificate_hook_safe() {
 }
 
 certificate_config_validate() {
-    local required_paths=() path hook pair uid mode
+    local required_paths=() path hook pair uid mode deploy_leaf deploy_relative
     [[ "$CERT_DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && "$CERT_DOMAIN" == *.* ]] || {
         printf '域名配置缺失或格式无效；具体值未显示。\n' >&2
         return 30
@@ -138,12 +216,14 @@ certificate_config_validate() {
         printf '证书和私钥源路径不能相同。\n' >&2
         return 30
     }
-    if [[ ${VPS_CERT_ALLOW_UNSAFE_TEST_HOOKS:-no} != yes ]]; then
-        [[ "$CERT_DEPLOY_ROOT" =~ ^/etc/vps-secure/certificates/[A-Za-z0-9._-]+$ ]] || {
-            printf '部署根目录必须是 /etc/vps-secure/certificates 下的单个模块目录。\n' >&2
-            return 30
-        }
-    fi
+    certificate_path_is_absolute "$CERT_DEPLOY_BASE" || return 30
+    deploy_leaf=${CERT_DEPLOY_ROOT##*/}
+    deploy_relative=${CERT_DEPLOY_ROOT#"$CERT_DEPLOY_BASE"/}
+    [[ "$CERT_DEPLOY_ROOT" == "$CERT_DEPLOY_BASE"/* && "$deploy_relative" != */* &&
+       "$deploy_leaf" =~ ^[A-Za-z0-9._-]+$ && "$deploy_leaf" != . && "$deploy_leaf" != .. ]] || {
+        printf '部署根目录必须是受控证书目录下的单个安全节点目录。\n' >&2
+        return 30
+    }
     case "$CERT_ACME_CERT_FILE" in
         "$CERT_DEPLOY_ROOT"/*) printf 'ACME 源文件不能位于模块部署目录内。\n' >&2; return 30 ;;
     esac
@@ -153,10 +233,11 @@ certificate_config_validate() {
     case "$CERT_ACME_DOMAIN_CONF" in
         "$CERT_DEPLOY_ROOT"/*) printf 'ACME 域名配置不能位于模块部署目录内。\n' >&2; return 30 ;;
     esac
-    [[ "$CERT_VPS_COMMAND" != *[[:space:]]* ]] || {
-        printf 'vps 命令路径不能包含空白字符。\n' >&2
+    if ! certificate_command_path_syntax_safe "$CERT_ACME_CLIENT" ||
+       ! certificate_command_path_syntax_safe "$CERT_VPS_COMMAND"; then
+        printf 'root 执行文件路径包含不安全字符。\n' >&2
         return 30
-    }
+    fi
     [[ "$CERT_ACME_ECC" =~ ^(yes|no)$ ]] || {
         printf 'acme_ecc 只能为 yes 或 no。\n' >&2
         return 30
@@ -243,8 +324,12 @@ certificate_check() {
     }
     certificate_load_config || return $?
     certificate_config_validate || return $?
-    [[ -x "$CERT_ACME_CLIENT" ]] || {
-        printf 'ACME 客户端不存在或不可执行；具体路径未显示。\n' >&2
+    certificate_deploy_boundary_safe || {
+        printf '证书部署目录越界、为符号链接，或所有权/权限不安全。\n' >&2
+        return 30
+    }
+    certificate_root_executable_safe "$CERT_ACME_CLIENT" || {
+        printf 'ACME 客户端真实路径、所有权或权限不安全。\n' >&2
         return 30
     }
     [[ -f "$CERT_ACME_DOMAIN_CONF" && ! -L "$CERT_ACME_DOMAIN_CONF" ]] || {
@@ -264,8 +349,8 @@ certificate_check() {
             return 30
         }
     fi
-    [[ -x "$CERT_VPS_COMMAND" ]] || {
-        printf 'vps 命令不存在或不可执行；具体路径未显示。\n' >&2
+    certificate_root_executable_safe "$CERT_VPS_COMMAND" || {
+        printf 'vps 命令真实路径、所有权或权限不安全。\n' >&2
         return 30
     }
     if [[ "$CERT_CRON_KIND" == user ]]; then
@@ -516,6 +601,10 @@ certificate_cron_install() {
 
 certificate_cron_restore() {
     local transaction_dir=$1 kind existed temporary current
+    if [[ ${VPS_CERT_ALLOW_UNSAFE_TEST_HOOKS:-no} == yes &&
+          ${VPS_TEST_CERT_FAIL_CRON_RESTORE:-no} == yes ]]; then
+        return 60
+    fi
     [[ -r "$transaction_dir/cron_kind" ]] || return 60
     IFS= read -r kind < "$transaction_dir/cron_kind"
     if [[ "$kind" == system ]]; then
@@ -603,12 +692,14 @@ certificate_discard_transaction() {
     rm -f -- "$transaction_dir/previous_target" \
         "$transaction_dir/cron_kind" "$transaction_dir/cron_existed" \
         "$transaction_dir/cron.previous" "$transaction_dir/config.snapshot" \
-        "$transaction_dir/restore-context" "$transaction_dir/new_target"
+        "$transaction_dir/restore-context" "$transaction_dir/new_target" \
+        "$transaction_dir/compensation-status"
     rmdir "$transaction_dir" 2>/dev/null || true
 }
 
 certificate_remove_generation() {
     local target=$1 current=''
+    certificate_deploy_boundary_safe || return 1
     [[ "$target" =~ ^generations/[A-Za-z0-9._-]+$ && "$target" != *..* ]] || return 1
     current=$(certificate_current_target 2>/dev/null || true)
     [[ "$current" != "$target" ]] || return 1
@@ -670,6 +761,11 @@ certificate_plan() {
 
 certificate_switch_current() {
     local target=$1 temporary="$CERT_DEPLOY_ROOT/.current.$$"
+    certificate_deploy_boundary_safe || return 1
+    if [[ ${VPS_CERT_ALLOW_UNSAFE_TEST_HOOKS:-no} == yes &&
+          ${VPS_TEST_CERT_FAIL_SWITCH_TARGET:-} == "$target" ]]; then
+        return 1
+    fi
     ln -s "$target" "$temporary" || return 1
     if [[ $(uname -s) == Linux ]]; then
         # GNU mv -T treats the destination symlink itself as the target. This
@@ -688,6 +784,7 @@ certificate_switch_current() {
 }
 
 certificate_remove_current() {
+    certificate_deploy_boundary_safe || return 1
     [[ ! -e "$CERT_DEPLOY_ROOT/current" && ! -L "$CERT_DEPLOY_ROOT/current" ]] ||
         rm -f "$CERT_DEPLOY_ROOT/current"
 }
@@ -842,6 +939,65 @@ certificate_restore_transaction() {
     printf '已恢复应用前的证书部署指针与定时入口。\n'
 }
 
+certificate_compensate_transaction() {
+    local transaction_dir=$1 previous_target=$2 generation_target=$3
+    local link_restored=no cron_restored=no service_restored=no generation_removed=no
+
+    if [[ "$previous_target" == absent ]]; then
+        certificate_remove_current && link_restored=yes
+    else
+        certificate_switch_current "$previous_target" && link_restored=yes
+    fi
+    certificate_cron_restore "$transaction_dir" && cron_restored=yes
+    if [[ "$link_restored" == yes ]] && certificate_service_apply; then
+        service_restored=yes
+    fi
+
+    if [[ "$link_restored" == yes && "$cron_restored" == yes &&
+          "$service_restored" == yes ]]; then
+        certificate_remove_generation "$generation_target" && generation_removed=yes
+    fi
+    {
+        printf 'link_restored=%s\n' "$link_restored"
+        printf 'cron_restored=%s\n' "$cron_restored"
+        printf 'service_restored=%s\n' "$service_restored"
+        printf 'generation_removed=%s\n' "$generation_removed"
+    } > "$transaction_dir/compensation-status" 2>/dev/null || true
+    chmod 600 "$transaction_dir/compensation-status" 2>/dev/null || true
+
+    if [[ "$link_restored" == yes && "$cron_restored" == yes &&
+          "$service_restored" == yes && "$generation_removed" == yes ]]; then
+        certificate_discard_transaction "$transaction_dir" || {
+            printf '旧状态已恢复，但事务证据清理失败；已保留上下文供人工核对。\n' >&2
+            return 1
+        }
+        printf '已核对恢复旧部署链接、旧定时入口与旧服务状态。\n' >&2
+        return 0
+    fi
+
+    printf '自动补偿未完全成功；已保留事务上下文及可用证书代，需要人工恢复。\n' >&2
+    return 1
+}
+
+certificate_compensate_cron_only() {
+    local transaction_dir=$1 cron_restored=no
+    certificate_cron_restore "$transaction_dir" && cron_restored=yes
+    {
+        printf 'link_restored=not-required\n'
+        printf 'cron_restored=%s\n' "$cron_restored"
+        printf 'service_restored=not-required\n'
+        printf 'generation_removed=not-required\n'
+    } > "$transaction_dir/compensation-status" 2>/dev/null || true
+    chmod 600 "$transaction_dir/compensation-status" 2>/dev/null || true
+    if [[ "$cron_restored" == yes ]]; then
+        certificate_discard_transaction "$transaction_dir" || return 1
+        printf '已核对恢复原定时入口。\n' >&2
+        return 0
+    fi
+    printf '定时入口补偿失败；已保留事务上下文，需要人工恢复。\n' >&2
+    return 1
+}
+
 certificate_apply() {
     local cron_run=no transaction_dir acme_result source_fingerprint current_cert current_fingerprint
     local staging generation_name generation_target cron_changed=no cron_was_valid=no switched=no previous_target
@@ -879,21 +1035,18 @@ certificate_apply() {
         if (( acme_result == 10 )); then
             :
         else
-            certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-            certificate_discard_transaction "$transaction_dir" || true
+            certificate_compensate_cron_only "$transaction_dir" || true
             return "$acme_result"
         fi
     fi
     certificate_cron_verify || {
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     [[ "$cron_was_valid" == yes ]] || cron_changed=yes
 
     source_fingerprint=$(certificate_cert_fingerprint "$CERT_ACME_CERT_FILE") || {
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     if current_cert=$(certificate_current_cert 2>/dev/null); then
@@ -901,9 +1054,8 @@ certificate_apply() {
         if [[ -n "$current_fingerprint" && "$current_fingerprint" == "$source_fingerprint" ]]; then
             if [[ "$cron_changed" == yes ]]; then
                 if ! vps_set_last_transaction "$MODULE_ID" "$transaction_dir"; then
-                    certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-                    certificate_discard_transaction "$transaction_dir" || true
-                    printf '无法登记回滚点；已恢复原定时入口。\n' >&2
+                    printf '无法登记回滚点，开始核对定时入口补偿。\n' >&2
+                    certificate_compensate_cron_only "$transaction_dir" || true
                     return 40
                 fi
                 printf '证书尚无需部署；已安装并核对定时入口，未重载服务。事务记录: %s\n' \
@@ -919,32 +1071,32 @@ certificate_apply() {
         fi
     fi
 
+    certificate_deploy_boundary_safe || {
+        printf '部署目录在写入前未通过真实路径复核。\n' >&2
+        certificate_compensate_cron_only "$transaction_dir" || true
+        return 40
+    }
     install -d -m 700 "$CERT_DEPLOY_ROOT" "$CERT_DEPLOY_ROOT/generations" || {
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     staging="$CERT_DEPLOY_ROOT/.staging.$$"
     [[ ! -e "$staging" ]] || {
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     install -d -m 700 "$staging" || {
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     install -m 644 "$CERT_ACME_CERT_FILE" "$staging/fullchain.pem" || {
         rm -rf -- "$staging"
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     install -m 600 "$CERT_ACME_KEY_FILE" "$staging/key.pem" || {
         rm -rf -- "$staging"
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     if ! certificate_pair_valid "$staging/fullchain.pem" "$staging/key.pem" ||
@@ -952,70 +1104,50 @@ certificate_apply() {
        ! certificate_cert_valid_for "$staging/fullchain.pem" "$CERT_MIN_VALIDITY_SECONDS"; then
             rm -rf -- "$staging"
             printf '部署暂存文件验证失败；现有部署未改变。\n' >&2
-            certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-            certificate_discard_transaction "$transaction_dir" || true
+            certificate_compensate_cron_only "$transaction_dir" || true
             return 40
     fi
     generation_name="$(vps_timestamp)-${source_fingerprint:0:16}-$$"
     generation_target="generations/$generation_name"
-    mv "$staging" "$CERT_DEPLOY_ROOT/$generation_target" || {
+    printf '%s\n' "$generation_target" > "$transaction_dir/new_target" || {
         rm -rf -- "$staging"
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
-    printf '%s\n' "$generation_target" > "$transaction_dir/new_target" || {
-        certificate_remove_generation "$generation_target" || true
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+    certificate_deploy_boundary_safe || {
+        rm -rf -- "$staging"
+        certificate_compensate_cron_only "$transaction_dir" || true
+        return 40
+    }
+    mv "$staging" "$CERT_DEPLOY_ROOT/$generation_target" || {
+        rm -rf -- "$staging"
+        certificate_compensate_cron_only "$transaction_dir" || true
         return 40
     }
     certificate_switch_current "$generation_target" || {
-        certificate_remove_generation "$generation_target" || true
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        certificate_discard_transaction "$transaction_dir" || true
+        certificate_compensate_transaction "$transaction_dir" "$previous_target" \
+            "$generation_target" || true
         return 40
     }
     switched=yes
 
     if ! certificate_service_apply; then
-        printf '服务重载或重启失败，正在恢复旧部署代。\n' >&2
-        if [[ "$previous_target" == absent ]]; then
-            certificate_remove_current || true
-        else
-            certificate_switch_current "$previous_target" || true
-        fi
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        [[ "$previous_target" == absent ]] || certificate_service_apply >/dev/null 2>&1 || true
-        certificate_remove_generation "$generation_target" || true
-        certificate_discard_transaction "$transaction_dir" || true
+        printf '服务重载或重启失败，开始核对事务补偿。\n' >&2
+        certificate_compensate_transaction "$transaction_dir" "$previous_target" \
+            "$generation_target" || true
         return 40
     fi
     if ! certificate_verify; then
-        printf '部署后分层验证失败，正在恢复旧部署代。\n' >&2
-        if [[ "$previous_target" == absent ]]; then
-            certificate_remove_current || true
-        else
-            certificate_switch_current "$previous_target" || true
-        fi
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        [[ "$previous_target" == absent ]] || certificate_service_apply >/dev/null 2>&1 || true
-        certificate_remove_generation "$generation_target" || true
-        certificate_discard_transaction "$transaction_dir" || true
+        printf '部署后分层验证失败，开始核对事务补偿。\n' >&2
+        certificate_compensate_transaction "$transaction_dir" "$previous_target" \
+            "$generation_target" || true
         return 50
     fi
     [[ "$switched" == yes || "$cron_changed" == yes ]] || return 0
     if ! vps_set_last_transaction "$MODULE_ID" "$transaction_dir"; then
-        if [[ "$previous_target" == absent ]]; then
-            certificate_remove_current || true
-        else
-            certificate_switch_current "$previous_target" || true
-        fi
-        certificate_cron_restore "$transaction_dir" >/dev/null 2>&1 || true
-        [[ "$previous_target" == absent ]] || certificate_service_apply >/dev/null 2>&1 || true
-        certificate_remove_generation "$generation_target" || true
-        certificate_discard_transaction "$transaction_dir" || true
-        printf '无法登记回滚点；已恢复应用前的部署状态。\n' >&2
+        printf '无法登记回滚点，开始核对事务补偿。\n' >&2
+        certificate_compensate_transaction "$transaction_dir" "$previous_target" \
+            "$generation_target" || true
         return 40
     fi
     printf '证书已部署为新的不可变版本，并通过已配置的分层验证。事务记录: %s\n' "$transaction_dir"
