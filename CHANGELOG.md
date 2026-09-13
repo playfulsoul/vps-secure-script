@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+## 2.0.0-beta.6.1 - 2026-09-13
+
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.6` firewall persistence fix.
+- Separate short background GitHub metadata checks from longer, bounded user-requested update checks so slow API responses can retry without delaying every menu open.
+- Cool down automatic update checks after a network failure while keeping explicit checks available immediately.
+- Retry interrupted Release downloads within a fixed total time budget, resume the archive within the same update attempt, discard older partial files, and continue to require the published SHA-256 before installation.
 
 ## 2.0.0-beta.6 - 2026-09-13
 

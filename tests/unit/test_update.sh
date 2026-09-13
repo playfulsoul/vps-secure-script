@@ -30,6 +30,12 @@ else
     pass "update comparison rejects an older beta"
 fi
 
+if vps_version_is_newer 2.0.0-beta.6.1 2.0.0-beta.6; then
+    pass "update comparison accepts the beta.6.1 hotfix over beta.6"
+else
+    fail "beta.6 clients must recognize beta.6.1 as newer"
+fi
+
 release_response=$(mktemp)
 printf '%s\n' \
     '{"tag_name":"v2.0.0-beta.2","prerelease":true}' \
