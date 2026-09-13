@@ -60,6 +60,18 @@ printf '%s\n' 'port 22' 'port $sensitive_port'
 EOF
 chmod +x "$test_root/bin/sshd"
 
+# Keep socket and unavailable-sshd cases independent of the host running this
+# test. A real Debian VPS commonly has both ss and /usr/sbin/sshd available.
+cat > "$test_root/bin/ss" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+cat > "$test_root/bin/unavailable-sshd" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$test_root/bin/ss" "$test_root/bin/unavailable-sshd"
+
 call_log="$test_root/calls.log"
 for command_name in apt-get curl wget service ufw fail2ban-client hostname reboot shutdown; do
     cat > "$test_root/bin/$command_name" <<EOF
@@ -154,9 +166,10 @@ else
 fi
 
 failure_state="$test_root/failure-state"
-failure_output=$(VPS_STATE_DIR="$failure_state" \
+failure_output=$(PATH="$test_root/bin:$PATH" \
+    VPS_STATE_DIR="$failure_state" \
     VPS_OS_RELEASE_FILE="$test_root/missing-os-release" \
-    VPS_SSHD_BIN="$test_root/missing-sshd" \
+    VPS_SSHD_BIN="$test_root/bin/unavailable-sshd" \
     VPS_MODULE_PATH="$test_root/missing-modules" \
     "$CLI" report --output degraded.txt)
 assert_contains "$failure_output" '诊断报告已保存:' \
