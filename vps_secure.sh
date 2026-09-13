@@ -6,7 +6,8 @@ set -u
 # discover that a replacement is available.
 VERSION_TAG="v1.0.3"
 
-MIGRATION_TARGET_VERSION=${VPS_MIGRATION_TARGET_VERSION:-2.0.0-beta.6}
+MIGRATION_TARGET_VERSION=${VPS_MIGRATION_TARGET_VERSION:-2.0.0-beta.6.1}
+MIGRATION_TARGET_SHA256=${VPS_MIGRATION_TARGET_SHA256:-b5c697c6ef5149d14d4e527e34857d7b9a2188d9d29631aee4aab1f1b739bca2}
 MIGRATION_REPOSITORY=${VPS_MIGRATION_REPOSITORY:-playfulsoul/vps-secure-script}
 MIGRATION_RELEASE_BASE=${VPS_MIGRATION_RELEASE_BASE:-https://github.com/$MIGRATION_REPOSITORY/releases/download/v$MIGRATION_TARGET_VERSION}
 MIGRATION_LINK_PATH=${VPS_MIGRATION_LINK_PATH:-/usr/local/bin/vps}
@@ -132,7 +133,7 @@ migration_restore_regular_link() {
 
 migration_install() {
     local archive_name work_dir archive checksum_file extract_dir
-    local expected actual legacy_link_backup=''
+    local expected actual pinned legacy_link_backup=''
 
     migration_require_root || return $?
     migration_platform_check || return $?
@@ -169,9 +170,19 @@ migration_install() {
         printf '校验文件格式无效，已拒绝安装。\n' >&2
         return 40
     }
+    pinned=$(printf '%s' "$MIGRATION_TARGET_SHA256" | tr '[:upper:]' '[:lower:]')
+    [[ "$pinned" =~ ^[a-f0-9]{64}$ ]] || {
+        rm -rf -- "$work_dir"
+        printf '内置发布摘要无效，已拒绝安装。\n' >&2
+        return 40
+    }
+    if [[ "$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')" != "$pinned" ]]; then
+        rm -rf -- "$work_dir"
+        printf '发布校验文件与内置 SHA-256 不一致，已拒绝安装。\n' >&2
+        return 40
+    fi
     actual=$(migration_sha256 "$archive") || { rm -rf -- "$work_dir"; return 40; }
-    if [[ "$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')" != \
-          "$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')" ]]; then
+    if [[ "$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')" != "$pinned" ]]; then
         rm -rf -- "$work_dir"
         printf '安装包 SHA-256 校验失败，已拒绝安装。\n' >&2
         return 40
