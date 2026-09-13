@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.6` firewall persistence fix.
+
 ## 2.0.0-beta.6 - 2026-09-13
 
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.5` security fix.
