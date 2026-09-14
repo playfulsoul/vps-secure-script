@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.6.1` update reliability fix, with the public archive SHA-256 pinned in the assistant.
+- Run automatic CI for pull requests, `main` pushes, and `v*` version-tag pushes without duplicating runs for ordinary feature-branch pushes; retain manual CI runs.
 
 ## 2.0.0-beta.6.1 - 2026-09-13
 
