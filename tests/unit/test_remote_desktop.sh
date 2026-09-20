@@ -31,7 +31,42 @@ case "$package" in
     *) exit 1 ;;
 esac
 EOF
-chmod +x "$temporary_root/bin/apt-get" "$temporary_root/bin/dpkg-query"
+cat > "$temporary_root/bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -u
+operation=${1:-}
+unit=${2:-}
+case "$operation" in
+    list-unit-files)
+        case ${VPS_TEST_PANEL_LAYOUT:-absent} in
+            absent) ;;
+            single) printf '1panel.service enabled\n' ;;
+            split)
+                printf '%s\n' \
+                    '1panel-alpha.service enabled' \
+                    '1panel-beta.service enabled'
+                ;;
+            partial) printf '1panel-alpha.service enabled\n' ;;
+        esac
+        ;;
+    is-active)
+        case "$unit" in
+            1panel|1panel-alpha) printf 'active\n' ;;
+            1panel-beta) printf '%s\n' "${VPS_TEST_PANEL_BETA_STATE:-inactive}" ;;
+            fail2ban) printf 'active\n' ;;
+            *) printf 'inactive\n' ;;
+        esac
+        ;;
+    get-default)
+        printf 'graphical.target\n'
+        ;;
+    *)
+        exit 1
+        ;;
+esac
+EOF
+chmod +x "$temporary_root/bin/apt-get" "$temporary_root/bin/dpkg-query" \
+    "$temporary_root/bin/systemctl"
 
 cat > "$temporary_root/source/xrdp.ini" <<'EOF'
 [Globals]
@@ -99,6 +134,22 @@ if rd_package_installed installed-package; then
 else
     fail "fully installed dpkg records must be recognized"
 fi
+
+VPS_TEST_PANEL_LAYOUT='absent'
+export VPS_TEST_PANEL_LAYOUT
+actual=$(rd_panel_service_states)
+assert_eq absent "$actual" "remote desktop records an absent 1Panel installation"
+VPS_TEST_PANEL_LAYOUT='single'
+actual=$(rd_panel_service_states)
+assert_eq '1panel:active' "$actual" "remote desktop records a single 1Panel service"
+VPS_TEST_PANEL_LAYOUT='split'
+actual=$(rd_panel_service_states)
+assert_eq '1panel-alpha:active,1panel-beta:inactive' "$actual" \
+    "remote desktop records split 1Panel services and their exact states"
+VPS_TEST_PANEL_LAYOUT='partial'
+actual=$(rd_panel_service_states)
+assert_eq '1panel-alpha:active' "$actual" \
+    "remote desktop records the deployed subset of 1Panel services"
 
 VPS_REMOTE_DESKTOP_MEMORY_MB=1024
 VPS_REMOTE_DESKTOP_CPU_COUNT=1
@@ -228,6 +279,53 @@ rd_record_new_packages "$transaction"
 actual=$(<"$transaction/packages.new")
 assert_eq $'desktop-dependency\nxrdp' "$actual" \
     "transaction inventory records every newly introduced package"
+
+legacy_transaction="$temporary_root/legacy-transaction"
+mkdir -p "$legacy_transaction"
+cat > "$legacy_transaction/metadata" <<'EOF'
+default_target=graphical.target
+ssh_ports=2222
+ufw_hash=unchanged
+fail2ban_active=active
+panel_active=active
+EOF
+vps_require_ssh_ports() {
+    printf '2222\n'
+}
+rd_ufw_hash() {
+    printf 'unchanged\n'
+}
+VPS_TEST_PANEL_LAYOUT='single'
+if rd_verify_baseline "$legacy_transaction"; then
+    pass "legacy panel_active metadata remains valid for rollback verification"
+else
+    fail "legacy panel_active metadata must remain valid for rollback verification"
+fi
+
+split_transaction="$temporary_root/split-transaction"
+mkdir -p "$split_transaction"
+cat > "$split_transaction/metadata" <<'EOF'
+default_target=graphical.target
+ssh_ports=2222
+ufw_hash=unchanged
+fail2ban_active=active
+panel_active=not-found
+panel_services=1panel-alpha:active,1panel-beta:inactive
+EOF
+VPS_TEST_PANEL_LAYOUT='split'
+VPS_TEST_PANEL_BETA_STATE='inactive'
+export VPS_TEST_PANEL_BETA_STATE
+if rd_verify_baseline "$split_transaction"; then
+    pass "split 1Panel service states remain valid when unchanged"
+else
+    fail "unchanged split 1Panel service states must pass baseline verification"
+fi
+VPS_TEST_PANEL_BETA_STATE='active'
+if rd_verify_baseline "$split_transaction" >/dev/null 2>&1; then
+    fail "changed split 1Panel service states must fail baseline verification"
+else
+    pass "changed split 1Panel service states fail baseline verification"
+fi
 
 rm -rf -- "$temporary_root"
 finish_tests

@@ -788,6 +788,22 @@ rd_service_state() {
     printf '%s\n' "$state"
 }
 
+rd_panel_service_states() {
+    local unit service state snapshot=''
+    while IFS= read -r unit; do
+        [[ "$unit" =~ ^1panel[a-zA-Z0-9_.@-]*\.service$ ]] || continue
+        service=${unit%.service}
+        state=$(rd_service_state is-active "$service")
+        snapshot+="${snapshot:+,}$service:$state"
+    done < <(
+        systemctl list-unit-files --type=service --no-legend --no-pager \
+            '1panel*.service' 2>/dev/null |
+            awk '{ print $1 }' |
+            LC_ALL=C sort -u
+    )
+    printf '%s\n' "${snapshot:-absent}"
+}
+
 rd_transaction_value() {
     local transaction=$1 key=$2 line
     [[ -r "$transaction/metadata" ]] || return 1
@@ -875,6 +891,7 @@ ssh_ports=$ssh_ports
 ufw_hash=$(rd_ufw_hash)
 fail2ban_active=$(rd_service_state is-active fail2ban)
 panel_active=$(rd_service_state is-active 1panel)
+panel_services=$(rd_panel_service_states)
 EOF
     chmod 600 "$transaction/metadata"
     rd_present_packages > "$transaction/packages.present.before" || return 40
@@ -983,8 +1000,13 @@ rd_verify_baseline() {
         printf 'Fail2Ban 服务状态发生了意外变化。\n' >&2
         return 50
     }
-    before=$(rd_transaction_value "$transaction" panel_active)
-    current=$(rd_service_state is-active 1panel)
+    before=$(rd_transaction_value "$transaction" panel_services 2>/dev/null || true)
+    if [[ -n "$before" ]]; then
+        current=$(rd_panel_service_states)
+    else
+        before=$(rd_transaction_value "$transaction" panel_active)
+        current=$(rd_service_state is-active 1panel)
+    fi
     [[ "$before" == "$current" ]] || {
         printf '1Panel 服务状态发生了意外变化。\n' >&2
         return 50

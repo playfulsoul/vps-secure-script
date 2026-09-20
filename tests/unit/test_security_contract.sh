@@ -139,6 +139,14 @@ else
     fail "remote desktop rollback must avoid broad package autoremove"
 fi
 
+# shellcheck disable=SC2016
+if grep -q 'panel_services=$(rd_panel_service_states)' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q "'1panel\*\.service'" "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop preserves the deployed 1Panel service layout"
+else
+    fail "remote desktop must track the real 1Panel service units"
+fi
+
 mask_line=$(grep -n 'rd_mask_units_for_install ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 install_line=$(grep -n 'vps_apt_install --no-install-recommends' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 unmask_line=$(grep -n 'rd_unmask_units_for_start ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
