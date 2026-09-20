@@ -142,8 +142,9 @@ fi
 quiesce_line=$(grep -n 'rd_quiesce_xrdp_units ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 purge_line=$(grep -n 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 if [[ -n "$quiesce_line" && -n "$purge_line" ]] && (( quiesce_line < purge_line )) && \
-   grep -q 'systemctl kill --kill-who=all --signal=TERM' "$REMOTE_DESKTOP_MODULE" && \
-   grep -q 'systemctl kill --kill-who=all --signal=KILL' "$REMOTE_DESKTOP_MODULE"; then
+   grep -q 'systemctl kill --kill-whom=all --signal=TERM' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q 'systemctl kill --kill-whom=all --signal=KILL' "$REMOTE_DESKTOP_MODULE" && \
+   ! grep -q -- '--kill-who=all' "$REMOTE_DESKTOP_MODULE"; then
     pass "remote desktop drains unit cgroups before package purge"
 else
     fail "remote desktop must empty managed unit cgroups before package purge"

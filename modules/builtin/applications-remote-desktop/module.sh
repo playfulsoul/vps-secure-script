@@ -1160,7 +1160,7 @@ rd_drain_unit_cgroup() {
             ;;
     esac
 
-    systemctl kill --kill-who=all --signal=TERM "$unit" >/dev/null 2>&1 || {
+    systemctl kill --kill-whom=all --signal=TERM "$unit" >/dev/null 2>&1 || {
         printf '无法向 %s 的 systemd cgroup 发送 TERM，拒绝清理软件包。\n' \
             "$unit" >&2
         return 50
@@ -1177,7 +1177,7 @@ rd_drain_unit_cgroup() {
             ;;
     esac
 
-    systemctl kill --kill-who=all --signal=KILL "$unit" >/dev/null 2>&1 || {
+    systemctl kill --kill-whom=all --signal=KILL "$unit" >/dev/null 2>&1 || {
         printf '无法向 %s 的 systemd cgroup 发送 KILL，拒绝清理软件包。\n' \
             "$unit" >&2
         return 50

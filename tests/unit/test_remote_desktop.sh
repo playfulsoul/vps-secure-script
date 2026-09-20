@@ -382,7 +382,7 @@ export VPS_REMOTE_DESKTOP_STOP_DELAY=0
 export VPS_TEST_QUIESCE_LOG="$quiesce_log"
 
 systemctl() {
-    local operation=${1:-} unit='' property='' signal='' argument file
+    local operation=${1:-} unit='' property='' signal='' kill_scope='' argument file
     shift || true
     case "$operation" in
         show)
@@ -423,10 +423,13 @@ systemctl() {
             for argument in "$@"; do
                 case "$argument" in
                     --signal=*) signal=${argument#--signal=} ;;
+                    --kill-whom=all) kill_scope=all ;;
+                    --kill-who=*) return 64 ;;
                     --*) ;;
                     *) unit=$argument ;;
                 esac
             done
+            [[ "$kill_scope" == all ]] || return 64
             printf '%s:%s\n' "$signal" "$unit" >> "$VPS_TEST_QUIESCE_LOG"
             file="$VPS_REMOTE_DESKTOP_CGROUP_ROOT/system.slice/$unit/cgroup.procs"
             case ${VPS_TEST_QUIESCE_SCENARIO:-} in
