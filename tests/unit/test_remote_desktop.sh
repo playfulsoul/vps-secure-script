@@ -21,7 +21,17 @@ cat > "$temporary_root/bin/apt-get" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-chmod +x "$temporary_root/bin/apt-get"
+cat > "$temporary_root/bin/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+package=${!#}
+case "$package" in
+    absent-package) printf 'unknown ok not-installed' ;;
+    partial-package) printf 'install ok unpacked' ;;
+    installed-package) printf 'install ok installed' ;;
+    *) exit 1 ;;
+esac
+EOF
+chmod +x "$temporary_root/bin/apt-get" "$temporary_root/bin/dpkg-query"
 
 cat > "$temporary_root/source/xrdp.ini" <<'EOF'
 [Globals]
@@ -73,6 +83,22 @@ export PATH="$temporary_root/bin:$PATH"
 
 # shellcheck source=../../modules/builtin/applications-remote-desktop/module.sh
 source "$PROJECT_ROOT/modules/builtin/applications-remote-desktop/module.sh"
+
+if rd_package_present absent-package; then
+    fail "dpkg unknown/not-installed records must be treated as absent"
+else
+    pass "dpkg unknown/not-installed records are treated as absent"
+fi
+if rd_package_present partial-package; then
+    pass "partial dpkg records remain visible to the safety check"
+else
+    fail "partial dpkg records must remain visible to the safety check"
+fi
+if rd_package_installed installed-package; then
+    pass "fully installed dpkg records are recognized"
+else
+    fail "fully installed dpkg records must be recognized"
+fi
 
 VPS_REMOTE_DESKTOP_MEMORY_MB=1024
 VPS_REMOTE_DESKTOP_CPU_COUNT=1

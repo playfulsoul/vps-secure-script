@@ -317,11 +317,15 @@ rd_package_installed() {
 }
 
 rd_package_present() {
-    dpkg-query -W -f='${binary:Package}' "$1" >/dev/null 2>&1
+    local status
+    status=$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null) || return 1
+    [[ -n "$status" && "$status" != 'unknown ok not-installed' ]]
 }
 
 rd_present_packages() {
-    dpkg-query -W -f='${binary:Package}\n' 2>/dev/null | awk 'NF' | sort -u
+    dpkg-query -W -f='${binary:Package}\t${Status}\n' 2>/dev/null |
+        awk -F '\t' 'NF == 2 && $2 != "unknown ok not-installed" { print $1 }' |
+        sort -u
 }
 
 rd_check_selected_package_states() {
