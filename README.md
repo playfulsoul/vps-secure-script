@@ -2,7 +2,7 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前开发版本为 `2.0.0-beta.6.1`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前开发版本为 `2.0.0-beta.7`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 > Beta 版本已经在 Debian 12、Debian 13、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -20,7 +20,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.0-beta.6.1
+  🎯 VPS 管理与安全平台  2.0.0-beta.7
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -35,7 +35,7 @@ SSH 防暴力破解：运行正常
 3. 系统管理
    软件更新 · Swap · BBR · 用户与 sudo
 4. 应用安装
-   Docker · Docker Compose · 1Panel
+   Docker · Docker Compose · 1Panel · 远程图形桌面
 5. 基础网络检查与监控
    立即检测 · 延迟 · 丢包 · 网卡流量记录
 6. VPS 测试工具
@@ -62,6 +62,29 @@ SSH 防暴力破解：运行正常
 - 不自动关闭密码登录或禁止 root 登录，高风险登录强化必须分阶段验证。
 - 修改后自动验证；关键模块提供撤销上次修改的入口。
 
+## 一键安装远程图形桌面
+
+在 **4. 应用安装 → 远程图形桌面** 中，向导会先读取 CPU、内存和磁盘空间，再推荐一个档位：
+
+- **LXQt 轻量版**：适合约 1 GB 内存的小型 VPS，默认不额外安装浏览器；
+- **XFCE 推荐版**：适合约 2 GB 内存，兼顾完整桌面和资源占用；
+- **MATE 完整版**：适合 4 GB 及以上内存，更接近传统完整 Linux 桌面。
+
+向导会帮助选择或创建普通桌面用户，并单独询问 sudo 权限、Firefox 和登录密码。它不会开放公网 RDP：xrdp 固定监听 `127.0.0.1:3389`，用户通过既有 SSH 入口建立本地隧道，再用 Windows 远程桌面、macOS Windows App 或 Linux Remmina 连接。root 图形登录被禁止，磁盘、打印和音频重定向默认关闭，剪贴板只允许文本。
+
+安装软件包期间 xrdp 会保持屏蔽；只有项目自有配置完成且确认没有公网监听后才启动服务。模块不安装显示管理器、不修改 SSH、UFW、Fail2Ban 或默认启动目标，并为配置、服务状态和本次新增的软件包保存精确回滚记录。回滚会先验证并清空受管的 xrdp 服务与图形会话 scope；对已经进入 `closing` 的半关闭会话，只在 scope 内全部进程仍属于预期普通用户时才按精确 scope 清理，任何 root、其他 UID 或当前控制进程都会使回滚在卸载软件包前停止。普通用户、主目录和浏览器资料不会在回滚或卸载时被删除。
+
+高级命令示例：
+
+```bash
+vps desktop check
+vps desktop plan --profile xfce --user desktop --create-user --browser firefox --set-password
+sudo vps desktop apply --yes --profile xfce --user desktop --create-user --browser firefox --set-password
+vps desktop status
+vps desktop connection
+sudo vps desktop rollback --yes
+```
+
 ## 安装 beta 版本
 
 全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
@@ -81,16 +104,16 @@ apt-get install -y ca-certificates curl
 ```bash
 mkdir -p ~/vps-secure-install &&
 cd ~/vps-secure-install &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6.1/vps-secure-platform-2.0.0-beta.6.1.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.6.1/vps-secure-platform-2.0.0-beta.6.1.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.0-beta.6.1.tar.gz.sha256 &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.6.1.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.7/vps-secure-platform-2.0.0-beta.7.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.7/vps-secure-platform-2.0.0-beta.7.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.0-beta.7.tar.gz.sha256 &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.7.tar.gz &&
 ./install.sh &&
 vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.0-beta.6.1.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.0-beta.7.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 
@@ -190,7 +213,7 @@ Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更
 |---|---|
 | 安全防护 | SSH 端口状态、GitHub 公钥导入、UFW、Fail2Ban |
 | 系统管理 | 软件包更新、Swap、BBR、用户和 sudo |
-| 应用安装 | Docker Engine、1Panel |
+| 应用安装 | Docker Engine、1Panel、LXQt/XFCE/MATE 远程图形桌面 |
 | 基础网络检查 | 无需预配置的延迟、丢包、网卡流量与采样间平均速率 |
 | VPS 测试工具 | 融合怪、YABS、Bench.sh、回程路由、流媒体解锁和 IP 质量 |
 | 平台管理 | 状态总览、自动检查更新、校验安装和版本恢复 |

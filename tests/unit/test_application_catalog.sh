@@ -15,6 +15,25 @@ assert_contains "$actual" '使用平台目录中的 SHA-256' \
 assert_contains "$actual" '官方安装器仍会继续下载' \
     "1Panel plan explains the downstream download boundary"
 
+remote_root=$(mktemp -d)
+mkdir -p "$remote_root/bin"
+printf '%s\n' 'ID=debian' 'VERSION_ID="12"' > "$remote_root/os-release"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$remote_root/bin/apt-get"
+chmod +x "$remote_root/bin/apt-get"
+actual=$(PATH="$remote_root/bin:$PATH" \
+    VPS_OS_RELEASE_FILE="$remote_root/os-release" \
+    VPS_REMOTE_DESKTOP_MEMORY_MB=2048 \
+    VPS_REMOTE_DESKTOP_CPU_COUNT=2 \
+    VPS_REMOTE_DESKTOP_FREE_DISK_MB=20000 \
+    "$CLI" module run applications.remote-desktop plan \
+        --profile xfce --user desktop --create-user --browser none --set-password)
+assert_contains "$actual" 'XFCE 推荐版' "remote desktop plan identifies the selected profile"
+assert_contains "$actual" '仅监听 127.0.0.1:3389' \
+    "remote desktop plan refuses a public RDP listener"
+assert_contains "$actual" '不开放防火墙端口' \
+    "remote desktop plan preserves the firewall boundary"
+rm -rf -- "$remote_root"
+
 temporary_root=$(mktemp -d)
 mkdir -p "$temporary_root/bin"
 cat > "$temporary_root/quick_start.sh" <<'EOF'

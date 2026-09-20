@@ -13,7 +13,7 @@
 | Platform | Level | Notes |
 | --- | --- | --- |
 | Debian 13 | Compatible | fresh minimal installation prerequisites; default and custom SSH ports; initially inactive UFW; journald Fail2Ban; repeated apply, rollback, recovery, and reboot persistence manually validated |
-| Debian 12 | Compatible | default, dual, and custom-only SSH ports; active and initially inactive UFW; journald Fail2Ban; reboot persistence; verification and rollback manually validated; remaining scenarios documented separately |
+| Debian 12 | Compatible | default, dual, and custom-only SSH ports; active and initially inactive UFW; journald Fail2Ban; reboot persistence; verification and rollback manually validated; loopback-only xrdp with a real SSH-tunnel/XFCE session and active-session rollback manually validated; remaining scenarios documented separately |
 | Debian 11 | Target | security fixes only after capability detection; manual validation pending |
 | Debian 10 | Unsupported target for 2.x | immutable legacy source remains for reference; migration assistant must stop before unsupported installation |
 | Ubuntu 24.04 LTS | Compatible | default socket activation, default/dual/custom-only SSH ports, initially inactive UFW, Fail2Ban installation, idempotent apply, rollback, custom-port reboot persistence, and real installation manually validated |

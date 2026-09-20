@@ -7,6 +7,7 @@ PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
 SSH_CORE="$PROJECT_ROOT/core/ssh.sh"
 FIREWALL_MODULE="$PROJECT_ROOT/modules/builtin/security-firewall/module.sh"
 FAIL2BAN_MODULE="$PROJECT_ROOT/modules/builtin/security-fail2ban/module.sh"
+REMOTE_DESKTOP_MODULE="$PROJECT_ROOT/modules/builtin/applications-remote-desktop/module.sh"
 
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
@@ -114,6 +115,75 @@ if grep -q 'systemctl enable --now fail2ban' "$FAIL2BAN_MODULE"; then
     fail "Fail2Ban apply must not start and immediately restart the service"
 else
     pass "Fail2Ban apply avoids redundant service startup"
+fi
+
+if grep -Eq 'ufw allow[[:space:]]+3389|0\.0\.0\.0:3389|port=3389([[:space:]]|$)' \
+    "$REMOTE_DESKTOP_MODULE"; then
+    fail "remote desktop must not expose RDP publicly"
+else
+    pass "remote desktop does not expose RDP publicly"
+fi
+
+if grep -q 'AllowRootLogin false' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q 'AlwaysGroupCheck true' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q "TerminalServerUsers \"\$RD_GROUP\"" "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop enforces non-root group-gated login"
+else
+    fail "remote desktop must enforce non-root group-gated login"
+fi
+
+if grep -q 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" && \
+   ! grep -Eq 'apt-get.*autoremove' "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop rollback avoids broad package autoremove"
+else
+    fail "remote desktop rollback must avoid broad package autoremove"
+fi
+
+quiesce_line=$(grep -n 'rd_quiesce_xrdp_units ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+session_line=$(grep -n "rd_quiesce_xrdp_sessions \"\$user\" ||" "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+purge_line=$(grep -n 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+if [[ -n "$quiesce_line" && -n "$session_line" && -n "$purge_line" ]] && \
+   (( quiesce_line < session_line && session_line < purge_line )) && \
+   grep -q 'systemctl kill --kill-whom=all --signal=TERM' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q 'systemctl kill --kill-whom=all --signal=KILL' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q "loginctl terminate-session \"\$session\"" "$REMOTE_DESKTOP_MODULE" && \
+   ! grep -Eq 'loginctl terminate-user|pkill|killall' "$REMOTE_DESKTOP_MODULE" && \
+   ! grep -q -- '--kill-who=all' "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop drains unit cgroups and exact logind sessions before package purge"
+else
+    fail "remote desktop must empty managed unit cgroups and exact sessions before package purge"
+fi
+
+# shellcheck disable=SC2016
+if grep -Fq 'rd_signal_xrdp_session_scope()' "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq 'systemctl kill --kill-whom=all --signal="$signal" "$scope"' \
+       "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq '[[ "$uid" == "$expected_uid" ]] || return 1' \
+       "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq '[[ "$state" != closing && "$managed_sesman" != yes ]]' \
+       "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop constrains closing-session cleanup to the exact user-owned scope"
+else
+    fail "remote desktop must fail closed around half-closed session scope cleanup"
+fi
+
+# shellcheck disable=SC2016
+if grep -q 'panel_services=$(rd_panel_service_states)' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q "'1panel\*\.service'" "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop preserves the deployed 1Panel service layout"
+else
+    fail "remote desktop must track the real 1Panel service units"
+fi
+
+mask_line=$(grep -n 'rd_mask_units_for_install ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+install_line=$(grep -n 'vps_apt_install --no-install-recommends' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+unmask_line=$(grep -n 'rd_unmask_units_for_start ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+start_line=$(grep -n 'systemctl start xrdp ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+if [[ -n "$mask_line" && -n "$install_line" && -n "$unmask_line" && -n "$start_line" ]] && \
+   (( mask_line < install_line && install_line < unmask_line && unmask_line < start_line )); then
+    pass "remote desktop keeps xrdp masked until loopback configuration is ready"
+else
+    fail "remote desktop must prevent package installation from briefly exposing RDP"
 fi
 
 finish_tests
