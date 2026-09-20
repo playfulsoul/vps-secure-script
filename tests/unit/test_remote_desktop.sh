@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+
+set -u
+
+TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
+VPS_PLATFORM_ROOT=$PROJECT_ROOT
+VPS_MODULE_ID=applications.remote-desktop
+export VPS_PLATFORM_ROOT VPS_MODULE_ID
+
+# shellcheck source=../test_helper.sh
+source "$PROJECT_ROOT/tests/test_helper.sh"
+
+temporary_root=$(mktemp -d)
+mkdir -p "$temporary_root/bin" "$temporary_root/source"
+cat > "$temporary_root/os-release" <<'EOF'
+ID=debian
+VERSION_ID="12"
+EOF
+cat > "$temporary_root/bin/apt-get" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$temporary_root/bin/apt-get"
+
+cat > "$temporary_root/source/xrdp.ini" <<'EOF'
+[Globals]
+port=3389
+security_layer=negotiate
+
+[Channels]
+rdpdr=true
+rdpsnd=true
+cliprdr=true
+rail=true
+xrdpvr=true
+
+[Xorg]
+name=Xorg
+lib=libxup.so
+ip=127.0.0.1
+port=-1
+EOF
+cat > "$temporary_root/source/sesman.ini" <<'EOF'
+[Globals]
+ListenAddress=127.0.0.1
+ListenPort=3350
+EnableUserWindowManager=true
+DefaultWindowManager=startwm.sh
+
+[Security]
+AllowRootLogin=true
+MaxLoginRetry=4
+TerminalServerUsers=tsusers
+AlwaysGroupCheck=false
+
+[Sessions]
+MaxSessions=50
+KillDisconnected=false
+DisconnectedTimeLimit=0
+IdleTimeLimit=0
+EOF
+
+export VPS_OS_RELEASE_FILE="$temporary_root/os-release"
+export VPS_REMOTE_DESKTOP_CONFIG_DIR="$temporary_root/etc/remote-desktop"
+export VPS_REMOTE_DESKTOP_LIB_DIR="$temporary_root/lib/remote-desktop"
+export VPS_REMOTE_DESKTOP_XRDP_DROPIN="$temporary_root/systemd/xrdp/90-vps-secure.conf"
+export VPS_REMOTE_DESKTOP_SESMAN_DROPIN="$temporary_root/systemd/sesman/90-vps-secure.conf"
+export VPS_REMOTE_DESKTOP_XRDP_SOURCE="$temporary_root/source/xrdp.ini"
+export VPS_REMOTE_DESKTOP_SESMAN_SOURCE="$temporary_root/source/sesman.ini"
+export VPS_REMOTE_DESKTOP_SKIP_COMMAND_CHECK=yes
+export PATH="$temporary_root/bin:$PATH"
+
+# shellcheck source=../../modules/builtin/applications-remote-desktop/module.sh
+source "$PROJECT_ROOT/modules/builtin/applications-remote-desktop/module.sh"
+
+VPS_REMOTE_DESKTOP_MEMORY_MB=1024
+VPS_REMOTE_DESKTOP_CPU_COUNT=1
+VPS_REMOTE_DESKTOP_FREE_DISK_MB=7000
+export VPS_REMOTE_DESKTOP_MEMORY_MB VPS_REMOTE_DESKTOP_CPU_COUNT VPS_REMOTE_DESKTOP_FREE_DISK_MB
+actual=$(rd_recommend_profile)
+assert_eq lxqt "$actual" "low-resource systems recommend LXQt"
+
+VPS_REMOTE_DESKTOP_MEMORY_MB=2048
+VPS_REMOTE_DESKTOP_CPU_COUNT=2
+VPS_REMOTE_DESKTOP_FREE_DISK_MB=20000
+actual=$(rd_recommend_profile)
+assert_eq xfce "$actual" "2 GB systems recommend XFCE"
+
+VPS_REMOTE_DESKTOP_MEMORY_MB=4096
+VPS_REMOTE_DESKTOP_FREE_DISK_MB=20000
+actual=$(rd_recommend_profile)
+assert_eq mate "$actual" "4 GB systems can recommend MATE"
+
+rd_parse_options --profile lxqt --user desktop --create-user --browser auto --set-password
+rd_normalize_options
+assert_eq none "$RD_BROWSER" "LXQt auto profile does not force a browser"
+
+rd_parse_options --profile xfce --user desktop --create-user --browser auto --set-password
+rd_normalize_options
+assert_eq firefox "$RD_BROWSER" "XFCE auto profile recommends Firefox"
+
+actual=$(rd_unique_packages)
+assert_contains "$actual" xrdp "remote desktop package set contains xrdp"
+assert_contains "$actual" xorgxrdp "remote desktop package set contains xorgxrdp"
+assert_contains "$actual" xfce4 "XFCE package set contains xfce4"
+assert_contains "$actual" firefox-esr "Debian browser selection uses Firefox ESR"
+if [[ "$actual" == *gnome* || "$actual" == *lightdm* ]]; then
+    fail "remote desktop package set must not install GNOME or a display manager"
+else
+    pass "remote desktop package set omits GNOME and display managers"
+fi
+
+rd_prepare_owned_config
+assert_file_exists "$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.ini" \
+    "remote desktop renders a platform-owned xrdp config"
+assert_file_exists "$VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.ini" \
+    "remote desktop renders a platform-owned sesman config"
+actual=$(<"$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.ini")
+assert_contains "$actual" 'port=tcp://127.0.0.1:3389' \
+    "xrdp is pinned to IPv4 loopback"
+assert_contains "$actual" 'rdpdr=false' "drive and printer redirection are disabled"
+assert_contains "$actual" 'rdpsnd=false' "audio redirection is disabled"
+assert_contains "$actual" 'cliprdr=true' "the text clipboard channel remains available"
+actual=$(<"$VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.ini")
+assert_contains "$actual" 'AllowRootLogin=false' "root graphical login is disabled"
+assert_contains "$actual" 'TerminalServerUsers=vpsrdp' \
+    "only the dedicated remote desktop group can log in"
+assert_contains "$actual" 'AlwaysGroupCheck=true' "the login group is always enforced"
+assert_contains "$actual" 'EnableUserWindowManager=false' \
+    "user session overrides cannot bypass the selected desktop"
+assert_contains "$actual" 'RestrictInboundClipboard=file,image' \
+    "inbound clipboard is text-only"
+assert_contains "$actual" 'RestrictOutboundClipboard=file,image' \
+    "outbound clipboard is text-only"
+actual=$(<"$VPS_REMOTE_DESKTOP_LIB_DIR/startwm.sh")
+assert_contains "$actual" 'startxfce4' "the managed session starts the selected desktop"
+
+if rd_user_valid root; then
+    fail "root cannot be selected as the desktop user"
+else
+    pass "root cannot be selected as the desktop user"
+fi
+if rd_user_valid desktop-user; then
+    pass "ordinary desktop usernames are accepted"
+else
+    fail "ordinary desktop usernames are accepted"
+fi
+
+VPS_REMOTE_DESKTOP_LISTENER_STATE=public
+export VPS_REMOTE_DESKTOP_LISTENER_STATE
+actual=$(rd_rdp_listener_state)
+assert_eq public "$actual" "listener verification distinguishes public RDP"
+VPS_REMOTE_DESKTOP_LISTENER_STATE=loopback
+actual=$(rd_rdp_listener_state)
+assert_eq loopback "$actual" "listener verification recognizes loopback-only RDP"
+
+transaction="$temporary_root/transaction"
+mkdir -p "$transaction"
+printf '%s\n' base-package existing-library > "$transaction/packages.present.before"
+rd_present_packages() {
+    printf '%s\n' base-package desktop-dependency existing-library xrdp
+}
+rd_record_new_packages "$transaction"
+actual=$(<"$transaction/packages.new")
+assert_eq $'desktop-dependency\nxrdp' "$actual" \
+    "transaction inventory records every newly introduced package"
+
+rm -rf -- "$temporary_root"
+finish_tests

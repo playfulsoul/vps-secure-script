@@ -21,6 +21,8 @@ assert_contains "$actual" $'security.firewall\tHost firewall management\t2.0.0-b
     "module registry discovers the firewall module"
 assert_contains "$actual" $'security.fail2ban\tFail2Ban SSH protection\t2.0.0-beta.1\tsecurity\tbuiltin' \
     "module registry discovers the Fail2Ban module"
+assert_contains "$actual" $'applications.remote-desktop\tSecure remote graphical desktop\t0.1.0\tapplications\tbuiltin' \
+    "module registry discovers the remote desktop module"
 
 manifest=$(vps_module_find security.ssh)
 assert_contains "$manifest" '/modules/builtin/security-ssh/module.conf' \

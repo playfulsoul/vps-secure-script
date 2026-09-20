@@ -611,19 +611,106 @@ vps_ui_1panel_menu() {
     done
 }
 
+vps_ui_remote_desktop_install() {
+    local choice profile=auto username='' create_flag='' browser=auto
+    local sudo_flag='' password_flag=--set-password answer
+
+    printf '先检查系统资源并给出推荐：\n\n'
+    vps_module_run applications.remote-desktop check || return $?
+    printf '\n桌面档位：\n'
+    printf '  1. 使用系统推荐（默认）\n'
+    printf '  2. LXQt 轻量版\n'
+    printf '  3. XFCE 推荐版\n'
+    printf '  4. MATE 完整版\n'
+    read -r -p '请选择 [1]: ' choice
+    case ${choice:-1} in
+        1) profile=auto ;;
+        2) profile=lxqt ;;
+        3) profile=xfce ;;
+        4) profile=mate ;;
+        *) printf '输入无效。\n' >&2; return 64 ;;
+    esac
+
+    printf '\n现有普通用户：\n'
+    getent passwd | awk -F: '($3 >= 1000 && $1 != "nobody") { print "  - " $1 }'
+    read -r -p '请输入桌面用户名 [desktop]: ' username
+    username=${username:-desktop}
+    if id "$username" >/dev/null 2>&1; then
+        printf '将使用现有用户 %s，不会重建或删除其主目录。\n' "$username"
+    else
+        vps_ui_confirm_default_yes "用户 $username 不存在，是否创建？" || {
+            printf '已取消，没有修改服务器。\n'
+            return 90
+        }
+        create_flag=--create-user
+    fi
+
+    if vps_ui_confirm '是否为该用户新增 sudo 权限？'; then
+        sudo_flag=--grant-sudo
+    fi
+    if vps_ui_confirm_default_yes '是否安装 Firefox 浏览器？'; then
+        browser=firefox
+    else
+        browser=none
+    fi
+    if [[ -z "$create_flag" ]]; then
+        if ! vps_ui_confirm_default_yes '是否现在设置或更新桌面登录密码？'; then
+            password_flag=''
+        fi
+    fi
+
+    printf '\n远程方式固定为 SSH 安全通道；不会开放公网 3389。\n'
+    local arguments=(--profile "$profile" --user "$username" --browser "$browser")
+    [[ -z "$create_flag" ]] || arguments+=("$create_flag")
+    [[ -z "$sudo_flag" ]] || arguments+=("$sudo_flag")
+    [[ -z "$password_flag" ]] || arguments+=("$password_flag")
+    vps_ui_run_action applications.remote-desktop apply "${arguments[@]}"
+}
+
+vps_ui_remote_desktop_menu() {
+    local choice
+    while true; do
+        vps_ui_header
+        printf '远程图形桌面\n\n'
+        printf '完整 Linux 桌面 · SSH 安全通道 · 不开放公网 RDP\n\n'
+        printf '  1. 引导安装（自动推荐档位）\n'
+        printf '  2. 检查配置并查看推荐\n'
+        printf '  3. 查看安装与服务状态\n'
+        printf '  4. 查看远程连接方法\n'
+        printf '  5. 检查故障并给出修复建议\n'
+        printf '  6. 撤销上一次安装\n'
+        printf '  7. 卸载模块（保留用户和个人资料）\n'
+        printf '  0. 返回应用安装\n'
+        read -r -p '请选择: ' choice
+        case "$choice" in
+            1) vps_ui_show_result '安装远程图形桌面' vps_ui_remote_desktop_install ;;
+            2) vps_ui_show_result '远程桌面配置建议' vps_module_run applications.remote-desktop check ;;
+            3) vps_ui_show_result '远程桌面状态' vps_module_run applications.remote-desktop status ;;
+            4) vps_ui_show_result '远程连接方法' vps_module_run applications.remote-desktop status --connection ;;
+            5) vps_ui_show_result '远程桌面检查' vps_module_run applications.remote-desktop doctor ;;
+            6) vps_ui_show_result '撤销远程桌面安装' vps_ui_run_action applications.remote-desktop rollback ;;
+            7) vps_ui_show_result '卸载远程桌面' vps_ui_run_action applications.remote-desktop uninstall ;;
+            0) return 0 ;;
+            *) printf '输入无效。\n' ;;
+        esac
+    done
+}
+
 vps_ui_applications_menu() {
     local choice
     while true; do
         vps_ui_header
         vps_ui_section '📦' '应用安装'
-        printf '\nDocker · Docker Compose · 1Panel\n\n'
+        printf '\nDocker · Docker Compose · 1Panel · 远程图形桌面\n\n'
         printf '  1. Docker 容器引擎与 Compose\n'
         printf '  2. 1Panel 管理面板\n'
+        printf '  3. 远程图形桌面（SSH 安全通道）\n'
         printf '  0. 返回首页\n'
         read -r -p '请选择: ' choice
         case "$choice" in
             1) vps_ui_docker_menu ;;
             2) vps_ui_1panel_menu ;;
+            3) vps_ui_remote_desktop_menu ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac
@@ -738,7 +825,7 @@ vps_ui_main_menu() {
         vps_ui_menu_item 3 '🧰' '系统管理' \
             '软件更新 · Swap · BBR · 用户与 sudo'
         vps_ui_menu_item 4 '📦' '应用安装' \
-            'Docker · Docker Compose · 1Panel'
+            'Docker · Docker Compose · 1Panel · 远程图形桌面'
         vps_ui_section '📡' '监控与测试'
         vps_ui_menu_item 5 '📶' '基础网络检查与监控' \
             '立即检测 · 延迟 · 丢包 · 网卡流量记录'

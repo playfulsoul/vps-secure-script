@@ -7,6 +7,7 @@ PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
 SSH_CORE="$PROJECT_ROOT/core/ssh.sh"
 FIREWALL_MODULE="$PROJECT_ROOT/modules/builtin/security-firewall/module.sh"
 FAIL2BAN_MODULE="$PROJECT_ROOT/modules/builtin/security-fail2ban/module.sh"
+REMOTE_DESKTOP_MODULE="$PROJECT_ROOT/modules/builtin/applications-remote-desktop/module.sh"
 
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
@@ -114,6 +115,39 @@ if grep -q 'systemctl enable --now fail2ban' "$FAIL2BAN_MODULE"; then
     fail "Fail2Ban apply must not start and immediately restart the service"
 else
     pass "Fail2Ban apply avoids redundant service startup"
+fi
+
+if grep -Eq 'ufw allow[[:space:]]+3389|0\.0\.0\.0:3389|port=3389([[:space:]]|$)' \
+    "$REMOTE_DESKTOP_MODULE"; then
+    fail "remote desktop must not expose RDP publicly"
+else
+    pass "remote desktop does not expose RDP publicly"
+fi
+
+if grep -q 'AllowRootLogin false' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q 'AlwaysGroupCheck true' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q "TerminalServerUsers \"\$RD_GROUP\"" "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop enforces non-root group-gated login"
+else
+    fail "remote desktop must enforce non-root group-gated login"
+fi
+
+if grep -q 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" && \
+   ! grep -Eq 'apt-get.*autoremove' "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop rollback avoids broad package autoremove"
+else
+    fail "remote desktop rollback must avoid broad package autoremove"
+fi
+
+mask_line=$(grep -n 'rd_mask_units_for_install ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+install_line=$(grep -n 'vps_apt_install --no-install-recommends' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+unmask_line=$(grep -n 'rd_unmask_units_for_start ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+start_line=$(grep -n 'systemctl start xrdp ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+if [[ -n "$mask_line" && -n "$install_line" && -n "$unmask_line" && -n "$start_line" ]] && \
+   (( mask_line < install_line && install_line < unmask_line && unmask_line < start_line )); then
+    pass "remote desktop keeps xrdp masked until loopback configuration is ready"
+else
+    fail "remote desktop must prevent package installation from briefly exposing RDP"
 fi
 
 finish_tests
