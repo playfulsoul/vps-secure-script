@@ -23,6 +23,8 @@ RD_SESMAN_SOURCE=${VPS_REMOTE_DESKTOP_SESMAN_SOURCE:-/etc/xrdp/sesman.ini}
 RD_GROUP=${VPS_REMOTE_DESKTOP_GROUP:-vpsrdp}
 RD_MARKER="$RD_CONFIG_DIR/managed-by-vps-secure"
 RD_STATE_FILE="$RD_CONFIG_DIR/state"
+RD_XRDP_ENV="$RD_CONFIG_DIR/xrdp.env"
+RD_SESMAN_ENV="$RD_CONFIG_DIR/sesman.env"
 RD_MEMINFO_FILE=${VPS_REMOTE_DESKTOP_MEMINFO_FILE:-/proc/meminfo}
 RD_LOCAL_PORT=${VPS_REMOTE_DESKTOP_LOCAL_PORT:-13389}
 
@@ -692,8 +694,10 @@ rd_prepare_owned_config() {
     rd_ini_set "$RD_CONFIG_DIR/sesman.ini" Sessions IdleTimeLimit 14400 || return 40
 
     rd_write_session_script "$RD_LIB_DIR/startwm.sh" || return 40
+    printf 'XRDP_OPTIONS="--config %s"\n' "$RD_CONFIG_DIR/xrdp.ini" > "$RD_XRDP_ENV" || return 40
+    printf 'SESMAN_OPTIONS="--config %s"\n' "$RD_CONFIG_DIR/sesman.ini" > "$RD_SESMAN_ENV" || return 40
     printf '%s\n' 'applications.remote-desktop' > "$RD_MARKER" || return 40
-    chmod 644 "$RD_MARKER"
+    chmod 644 "$RD_XRDP_ENV" "$RD_SESMAN_ENV" "$RD_MARKER"
 }
 
 rd_write_systemd_dropins() {
@@ -702,12 +706,12 @@ rd_write_systemd_dropins() {
     cat > "$RD_XRDP_DROPIN" <<EOF
 # Managed by vps-secure applications.remote-desktop
 [Service]
-Environment="XRDP_OPTIONS=--config $RD_CONFIG_DIR/xrdp.ini"
+EnvironmentFile=$RD_XRDP_ENV
 EOF
     cat > "$RD_SESMAN_DROPIN" <<EOF
 # Managed by vps-secure applications.remote-desktop
 [Service]
-Environment="SESMAN_OPTIONS=--config $RD_CONFIG_DIR/sesman.ini"
+EnvironmentFile=$RD_SESMAN_ENV
 EOF
     chmod 644 "$RD_XRDP_DROPIN" "$RD_SESMAN_DROPIN"
 }
@@ -719,6 +723,29 @@ rd_confirm_no_rdp_listener() {
         printf '安装准备期间检测到意外 RDP 监听: %s；拒绝继续。\n' "$listener" >&2
         return 40
     }
+}
+
+rd_wait_for_loopback_listener() {
+    local attempt listener
+    local attempts=${VPS_REMOTE_DESKTOP_LISTENER_ATTEMPTS:-20}
+    local delay=${VPS_REMOTE_DESKTOP_LISTENER_DELAY:-0.25}
+    if [[ ! "$attempts" =~ ^[0-9]+$ ]] || (( attempts < 1 || attempts > 120 )); then
+        printf 'RDP 监听等待次数配置无效。\n' >&2
+        return 50
+    fi
+    for (( attempt = 1; attempt <= attempts; attempt++ )); do
+        listener=$(rd_rdp_listener_state)
+        case "$listener" in
+            loopback) return 0 ;;
+            public|mixed)
+                printf 'RDP 启动期间检测到非回环监听: %s。\n' "$listener" >&2
+                return 50
+                ;;
+        esac
+        (( attempt == attempts )) || sleep "$delay"
+    done
+    printf 'RDP 服务启动后未在限定时间内建立回环监听。\n' >&2
+    return 50
 }
 
 rd_mask_units_for_install() {
@@ -924,8 +951,10 @@ rd_validate_owned_config() {
     grep -Fxq "DefaultWindowManager=$RD_LIB_DIR/startwm.sh" \
         "$RD_CONFIG_DIR/sesman.ini" || return 50
     [[ -x "$RD_LIB_DIR/startwm.sh" ]] || return 50
-    grep -Fq "XRDP_OPTIONS=--config $RD_CONFIG_DIR/xrdp.ini" "$RD_XRDP_DROPIN" || return 50
-    grep -Fq "SESMAN_OPTIONS=--config $RD_CONFIG_DIR/sesman.ini" "$RD_SESMAN_DROPIN" || return 50
+    grep -Fxq "XRDP_OPTIONS=\"--config $RD_CONFIG_DIR/xrdp.ini\"" "$RD_XRDP_ENV" || return 50
+    grep -Fxq "SESMAN_OPTIONS=\"--config $RD_CONFIG_DIR/sesman.ini\"" "$RD_SESMAN_ENV" || return 50
+    grep -Fxq "EnvironmentFile=$RD_XRDP_ENV" "$RD_XRDP_DROPIN" || return 50
+    grep -Fxq "EnvironmentFile=$RD_SESMAN_ENV" "$RD_SESMAN_DROPIN" || return 50
 }
 
 rd_verify_baseline() {
@@ -1163,6 +1192,10 @@ rd_apply() {
     systemctl enable xrdp || { rd_apply_failure "$transaction" 40; return $?; }
     systemctl start xrdp-sesman || { rd_apply_failure "$transaction" 40; return $?; }
     systemctl start xrdp || { rd_apply_failure "$transaction" 40; return $?; }
+    if ! rd_wait_for_loopback_listener; then
+        rd_apply_failure "$transaction" 50
+        return $?
+    fi
     if ! rd_verify; then
         rd_apply_failure "$transaction" 50
         return $?

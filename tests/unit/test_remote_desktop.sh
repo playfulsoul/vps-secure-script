@@ -138,10 +138,15 @@ else
 fi
 
 rd_prepare_owned_config
+rd_write_systemd_dropins
 assert_file_exists "$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.ini" \
     "remote desktop renders a platform-owned xrdp config"
 assert_file_exists "$VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.ini" \
     "remote desktop renders a platform-owned sesman config"
+assert_file_exists "$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.env" \
+    "remote desktop renders a late-loading xrdp option file"
+assert_file_exists "$VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.env" \
+    "remote desktop renders a late-loading sesman option file"
 actual=$(<"$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.ini")
 assert_contains "$actual" 'port=tcp://127.0.0.1:3389' \
     "xrdp is pinned to IPv4 loopback"
@@ -161,6 +166,18 @@ assert_contains "$actual" 'RestrictOutboundClipboard=file,image' \
     "outbound clipboard is text-only"
 actual=$(<"$VPS_REMOTE_DESKTOP_LIB_DIR/startwm.sh")
 assert_contains "$actual" 'startxfce4' "the managed session starts the selected desktop"
+actual=$(<"$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.env")
+assert_contains "$actual" "XRDP_OPTIONS=\"--config $VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.ini\"" \
+    "xrdp options point to the platform-owned configuration"
+actual=$(<"$VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.env")
+assert_contains "$actual" "SESMAN_OPTIONS=\"--config $VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.ini\"" \
+    "sesman options point to the platform-owned configuration"
+actual=$(<"$VPS_REMOTE_DESKTOP_XRDP_DROPIN")
+assert_contains "$actual" "EnvironmentFile=$VPS_REMOTE_DESKTOP_CONFIG_DIR/xrdp.env" \
+    "xrdp loads platform options after vendor environment files"
+actual=$(<"$VPS_REMOTE_DESKTOP_SESMAN_DROPIN")
+assert_contains "$actual" "EnvironmentFile=$VPS_REMOTE_DESKTOP_CONFIG_DIR/sesman.env" \
+    "sesman loads platform options after vendor environment files"
 
 if rd_user_valid root; then
     fail "root cannot be selected as the desktop user"
@@ -180,6 +197,26 @@ assert_eq public "$actual" "listener verification distinguishes public RDP"
 VPS_REMOTE_DESKTOP_LISTENER_STATE=loopback
 actual=$(rd_rdp_listener_state)
 assert_eq loopback "$actual" "listener verification recognizes loopback-only RDP"
+VPS_REMOTE_DESKTOP_LISTENER_ATTEMPTS=1
+VPS_REMOTE_DESKTOP_LISTENER_DELAY=0
+export VPS_REMOTE_DESKTOP_LISTENER_ATTEMPTS VPS_REMOTE_DESKTOP_LISTENER_DELAY
+if rd_wait_for_loopback_listener; then
+    pass "listener readiness accepts a loopback-only listener"
+else
+    fail "listener readiness must accept a loopback-only listener"
+fi
+VPS_REMOTE_DESKTOP_LISTENER_STATE=public
+if rd_wait_for_loopback_listener >/dev/null 2>&1; then
+    fail "listener readiness must reject a public listener"
+else
+    pass "listener readiness rejects a public listener immediately"
+fi
+VPS_REMOTE_DESKTOP_LISTENER_STATE=none
+if rd_wait_for_loopback_listener >/dev/null 2>&1; then
+    fail "listener readiness must fail closed when no listener appears"
+else
+    pass "listener readiness fails closed when no listener appears"
+fi
 
 transaction="$temporary_root/transaction"
 mkdir -p "$transaction"
