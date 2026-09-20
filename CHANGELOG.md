@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.7` remote desktop release, with the public archive SHA-256 pinned in the assistant.
+
 ## 2.0.0-beta.7 - 2026-09-21
 
 - Add a beginner-guided remote graphical desktop module with resource-aware LXQt, XFCE, and MATE profiles, optional Firefox and sudo access, ordinary-user provisioning, loopback-only xrdp over an SSH tunnel, text-only clipboard, exact package inventory, verification, and transactional rollback.
