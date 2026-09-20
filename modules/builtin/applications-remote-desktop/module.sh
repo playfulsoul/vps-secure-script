@@ -1232,7 +1232,7 @@ rd_loginctl_value() {
 
 rd_validate_xrdp_session_identity() {
     local session=$1 expected_user=$2 expected_uid=$3 expected_scope=$4
-    local actual_user actual_uid type service scope state
+    local expected_state=${5:-} actual_user actual_uid type service scope state
     actual_user=$(rd_loginctl_value "$session" Name) || return 1
     actual_uid=$(rd_loginctl_value "$session" User) || return 1
     type=$(rd_loginctl_value "$session" Type) || return 1
@@ -1243,11 +1243,12 @@ rd_validate_xrdp_session_identity() {
        "$type" == x11 && "$service" == xrdp-sesman && \
        "$scope" == "$expected_scope" && \
        "$scope" =~ ^session-[a-zA-Z0-9_-]+\.scope$ && \
-       "$state" =~ ^(active|online|closing)$ ]]
+       "$state" =~ ^(active|online|closing)$ ]] || return 1
+    [[ -z "$expected_state" || "$state" == "$expected_state" ]]
 }
 
 rd_xrdp_session_records() {
-    local user=$1 expected_uid sessions line session session_uid service scope
+    local user=$1 expected_uid sessions line session session_uid service scope state
     expected_uid=$(id -u "$user" 2>/dev/null) || {
         printf '无法读取远程桌面用户 UID，拒绝清理软件包。\n' >&2
         return 50
@@ -1279,20 +1280,27 @@ rd_xrdp_session_records() {
             printf '无法确认 xrdp 会话 scope，拒绝清理软件包。\n' >&2
             return 50
         }
+        state=$(rd_loginctl_value "$session" State) || {
+            printf '无法确认 xrdp 会话状态，拒绝清理软件包。\n' >&2
+            return 50
+        }
         if ! rd_validate_xrdp_session_identity \
-            "$session" "$user" "$expected_uid" "$scope"; then
+            "$session" "$user" "$expected_uid" "$scope" "$state"; then
             printf 'xrdp 会话身份不完整，拒绝清理软件包。\n' >&2
             return 50
         fi
-        printf '%s\t%s\n' "$session" "$scope"
+        printf '%s\t%s\t%s\n' "$session" "$scope" "$state"
     done <<< "$sessions"
 }
 
 rd_validate_xrdp_session_scope() {
-    local session=$1 user=$2 expected_uid=$3 scope=$4 target=$5
+    local session=$1 user=$2 expected_uid=$3 scope=$4 target=$5 state=$6
     local pids pid uid comm managed_sesman=no
     [[ "$scope" =~ ^session-[a-zA-Z0-9_-]+\.scope$ && "$target" != absent ]] ||
         return 1
+    [[ "$state" =~ ^(active|online|closing)$ ]] || return 1
+    rd_validate_xrdp_session_identity \
+        "$session" "$user" "$expected_uid" "$scope" "$state" || return 1
     pids=$(rd_cgroup_pids "$target") || return 1
     [[ -n "$pids" ]] || return 1
     while IFS= read -r pid; do
@@ -1303,26 +1311,53 @@ rd_validate_xrdp_session_scope() {
         }
         uid=$(rd_process_uid "$pid") || return 1
         comm=$(rd_process_comm "$pid") || return 1
-        if [[ "$uid" == 0 ]]; then
-            case "$comm" in
-                xrdp-sesman)
-                    rd_process_has_argument "$pid" "$RD_CONFIG_DIR/sesman.ini" ||
-                        return 1
-                    managed_sesman=yes
-                    ;;
-                xrdp-sesexec|Xorg|Xorg.wrap) ;;
-                *) return 1 ;;
-            esac
-        elif [[ "$uid" != "$expected_uid" ]]; then
-            return 1
-        fi
+        case "$state" in
+            active|online)
+                if [[ "$uid" == 0 ]]; then
+                    case "$comm" in
+                        xrdp-sesman)
+                            rd_process_has_argument \
+                                "$pid" "$RD_CONFIG_DIR/sesman.ini" || return 1
+                            managed_sesman=yes
+                            ;;
+                        xrdp-sesexec|Xorg|Xorg.wrap) ;;
+                        *) return 1 ;;
+                    esac
+                elif [[ "$uid" != "$expected_uid" ]]; then
+                    return 1
+                fi
+                ;;
+            closing)
+                [[ "$uid" == "$expected_uid" ]] || return 1
+                ;;
+        esac
     done <<< "$pids"
-    [[ "$managed_sesman" == yes ]] || {
-        printf '目标会话不包含受管 xrdp-sesman，拒绝终止。\n' >&2
+    if [[ "$state" != closing && "$managed_sesman" != yes ]]; then
+        printf '活动会话不包含受管 xrdp-sesman，拒绝终止。\n' >&2
         return 1
-    }
+    fi
     rd_validate_xrdp_session_identity \
-        "$session" "$user" "$expected_uid" "$scope"
+        "$session" "$user" "$expected_uid" "$scope" "$state"
+}
+
+rd_signal_xrdp_session_scope() {
+    local session=$1 user=$2 expected_uid=$3 scope=$4 target=$5 signal=$6
+    local state
+    state=$(rd_loginctl_value "$session" State) || {
+        printf '无法在发送 %s 前重新确认 xrdp 会话状态。\n' "$signal" >&2
+        return 50
+    }
+    if ! rd_validate_xrdp_session_scope \
+        "$session" "$user" "$expected_uid" "$scope" "$target" "$state"; then
+        printf 'xrdp 会话在发送 %s 前身份或进程归属发生变化。\n' \
+            "$signal" >&2
+        return 50
+    fi
+    systemctl kill --kill-whom=all --signal="$signal" "$scope" \
+        >/dev/null 2>&1 || {
+        printf '无法向受管 xrdp 会话 scope 发送 %s。\n' "$signal" >&2
+        return 50
+    }
 }
 
 rd_confirm_no_xrdp_processes() {
@@ -1349,7 +1384,7 @@ rd_confirm_no_xrdp_processes() {
 rd_quiesce_xrdp_sessions() {
     local user=$1 attempts=${VPS_REMOTE_DESKTOP_STOP_ATTEMPTS:-20}
     local delay=${VPS_REMOTE_DESKTOP_STOP_DELAY:-0.25}
-    local expected_uid records session scope target wait_result remaining
+    local expected_uid records session scope state target wait_result remaining
     if [[ ! "$attempts" =~ ^[0-9]+$ ]] || (( attempts < 1 || attempts > 120 )); then
         printf 'xrdp 会话停止等待次数配置无效。\n' >&2
         return 50
@@ -1360,7 +1395,7 @@ rd_quiesce_xrdp_sessions() {
     }
     expected_uid=$(id -u "$user" 2>/dev/null) || return 50
     records=$(rd_xrdp_session_records "$user") || return 50
-    while IFS=$'\t' read -r session scope; do
+    while IFS=$'\t' read -r session scope state; do
         [[ -n "$session" ]] || continue
         target=$(rd_unit_cgroup_target "$scope") || return 50
         [[ "$target" != absent ]] || {
@@ -1368,7 +1403,7 @@ rd_quiesce_xrdp_sessions() {
             return 50
         }
         if ! rd_validate_xrdp_session_scope \
-            "$session" "$user" "$expected_uid" "$scope" "$target"; then
+            "$session" "$user" "$expected_uid" "$scope" "$target" "$state"; then
             printf '无法确认 xrdp 会话进程归属，拒绝清理软件包。\n' >&2
             return 50
         fi
@@ -1378,10 +1413,34 @@ rd_quiesce_xrdp_sessions() {
         }
         rd_wait_cgroup_empty "$target" "$attempts" "$delay"
         wait_result=$?
-        [[ "$wait_result" == 0 ]] || {
+        case "$wait_result" in
+            0) continue ;;
+            10) ;;
+            *)
+                printf '无法确认 xrdp 会话在 terminate-session 后的状态。\n' >&2
+                return 50
+                ;;
+        esac
+        rd_signal_xrdp_session_scope \
+            "$session" "$user" "$expected_uid" "$scope" "$target" TERM ||
+            return 50
+        rd_wait_cgroup_empty "$target" "$attempts" "$delay"
+        wait_result=$?
+        case "$wait_result" in
+            0) continue ;;
+            10) ;;
+            *)
+                printf '无法确认 xrdp 会话在 TERM 后的状态。\n' >&2
+                return 50
+                ;;
+        esac
+        rd_signal_xrdp_session_scope \
+            "$session" "$user" "$expected_uid" "$scope" "$target" KILL ||
+            return 50
+        if ! rd_wait_cgroup_empty "$target" "$attempts" "$delay"; then
             printf '受管 xrdp 图形会话仍有进程，已保留软件包与事务证据。\n' >&2
             return 50
-        }
+        fi
     done <<< "$records"
     remaining=$(rd_xrdp_session_records "$user") || return 50
     [[ -z "$remaining" ]] || {

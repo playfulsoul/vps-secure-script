@@ -155,6 +155,19 @@ else
 fi
 
 # shellcheck disable=SC2016
+if grep -Fq 'rd_signal_xrdp_session_scope()' "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq 'systemctl kill --kill-whom=all --signal="$signal" "$scope"' \
+       "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq '[[ "$uid" == "$expected_uid" ]] || return 1' \
+       "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq '[[ "$state" != closing && "$managed_sesman" != yes ]]' \
+       "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop constrains closing-session cleanup to the exact user-owned scope"
+else
+    fail "remote desktop must fail closed around half-closed session scope cleanup"
+fi
+
+# shellcheck disable=SC2016
 if grep -q 'panel_services=$(rd_panel_service_states)' "$REMOTE_DESKTOP_MODULE" && \
    grep -q "'1panel\*\.service'" "$REMOTE_DESKTOP_MODULE"; then
     pass "remote desktop preserves the deployed 1Panel service layout"

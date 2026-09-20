@@ -62,6 +62,26 @@ reset_managed_session() {
     : > "$session_log"
 }
 
+reset_closing_session() {
+    rm -rf -- "$proc_root"
+    mkdir -p "$proc_root" "$cgroup_root/session-42.scope"
+    printf '%s\n' 110 111 > "$cgroup_root/session-42.scope/cgroup.procs"
+    make_process 110 1000 xrdp-chansrv /usr/sbin/xrdp-chansrv
+    make_process 111 1000 ssh-agent /usr/bin/ssh-agent -s
+    rm -f -- "$session_done"
+    : > "$session_log"
+}
+
+clear_managed_session() {
+    local pid
+    while IFS= read -r pid; do
+        [[ "$pid" =~ ^[0-9]+$ ]] || continue
+        rm -rf -- "${proc_root:?}/$pid"
+    done < "$cgroup_root/session-42.scope/cgroup.procs"
+    : > "$cgroup_root/session-42.scope/cgroup.procs"
+    : > "$session_done"
+}
+
 loginctl() {
     local operation=${1:-} session='' property='' argument
     shift || true
@@ -89,7 +109,12 @@ loginctl() {
                 42:Type) printf 'x11\n' ;;
                 42:Service) printf 'xrdp-sesman\n' ;;
                 42:Scope) printf 'session-42.scope\n' ;;
-                42:State) printf 'active\n' ;;
+                42:State)
+                    case ${VPS_TEST_SESSION_SCENARIO:-normal} in
+                        closing_*) printf 'closing\n' ;;
+                        *) printf 'active\n' ;;
+                    esac
+                    ;;
                 *) return 1 ;;
             esac
             ;;
@@ -97,38 +122,65 @@ loginctl() {
             session=${1:-}
             printf 'TERMINATE:%s\n' "$session" >> "$session_log"
             [[ "$session" == 42 ]] || return 64
-            if [[ ${VPS_TEST_SESSION_SCENARIO:-normal} != cleanup_failure ]]; then
-                : > "$cgroup_root/session-42.scope/cgroup.procs"
-                rm -rf -- "$proc_root/100" "$proc_root/101" "$proc_root/102"
-                : > "$session_done"
-            fi
+            case ${VPS_TEST_SESSION_SCENARIO:-normal} in
+                normal) clear_managed_session ;;
+                closing_*) ;;
+                *) return 64 ;;
+            esac
             ;;
         *) return 64 ;;
     esac
 }
 
 systemctl() {
-    local operation=${1:-} unit='' property='' argument file
+    local operation=${1:-} unit='' property='' signal='' kill_scope='' argument file
     shift || true
-    [[ "$operation" == show ]] || return 64
-    unit=${1:-}
-    shift || true
-    for argument in "$@"; do
-        case "$argument" in
-            --property=*) property=${argument#--property=} ;;
-        esac
-    done
-    [[ "$unit" == session-42.scope ]] || return 1
-    file="$cgroup_root/session-42.scope/cgroup.procs"
-    case "$property" in
-        LoadState) printf 'loaded\n' ;;
-        ControlGroup) printf '/session-42.scope\n' ;;
-        MainPID)
-            if [[ -s "$file" ]]; then sed -n '1p' "$file"; else printf '0\n'; fi
+    case "$operation" in
+        show)
+            unit=${1:-}
+            shift || true
+            for argument in "$@"; do
+                case "$argument" in
+                    --property=*) property=${argument#--property=} ;;
+                esac
+            done
+            [[ "$unit" == session-42.scope ]] || return 1
+            file="$cgroup_root/session-42.scope/cgroup.procs"
+            case "$property" in
+                LoadState) printf 'loaded\n' ;;
+                ControlGroup) printf '/session-42.scope\n' ;;
+                MainPID)
+                    if [[ -s "$file" ]]; then sed -n '1p' "$file"; else printf '0\n'; fi
+                    ;;
+                ControlPID) printf '0\n' ;;
+                TasksCurrent) awk 'NF { count++ } END { print count + 0 }' "$file" ;;
+                *) return 1 ;;
+            esac
             ;;
-        ControlPID) printf '0\n' ;;
-        TasksCurrent) awk 'NF { count++ } END { print count + 0 }' "$file" ;;
-        *) return 1 ;;
+        kill)
+            for argument in "$@"; do
+                case "$argument" in
+                    --signal=*) signal=${argument#--signal=} ;;
+                    --kill-whom=all) kill_scope=all ;;
+                    --*) return 64 ;;
+                    *) unit=$argument ;;
+                esac
+            done
+            [[ "$unit" == session-42.scope && "$kill_scope" == all ]] || return 64
+            printf 'SCOPE_SIGNAL:%s:%s\n' "$signal" "$unit" >> "$session_log"
+            case ${VPS_TEST_SESSION_SCENARIO:-normal} in
+                closing_term)
+                    [[ "$signal" == TERM ]] && clear_managed_session
+                    ;;
+                closing_kill)
+                    [[ "$signal" == KILL ]] && clear_managed_session
+                    ;;
+                closing_stuck) ;;
+                *) return 64 ;;
+            esac
+            return 0
+            ;;
+        *) return 64 ;;
     esac
 }
 
@@ -199,8 +251,89 @@ else
     pass "ownership failure does not terminate any session"
 fi
 
-reset_managed_session
-VPS_TEST_SESSION_SCENARIO=cleanup_failure
+reset_closing_session
+VPS_TEST_SESSION_SCENARIO=closing_term
+if rd_quiesce_xrdp_sessions desktop-user; then
+    pass "rollback drains a closing xrdp session with user-only processes"
+else
+    fail "rollback must safely drain a verified closing xrdp session"
+fi
+actual=$(<"$session_log")
+assert_contains "$actual" 'TERMINATE:42' \
+    "closing-session cleanup first addresses the exact logind session"
+assert_contains "$actual" 'SCOPE_SIGNAL:TERM:session-42.scope' \
+    "closing-session cleanup sends TERM only to the exact session scope"
+if [[ "$actual" == *'SCOPE_SIGNAL:KILL:'* ]]; then
+    fail "closing-session cleanup must not send KILL after TERM succeeds"
+else
+    pass "closing-session cleanup avoids unnecessary KILL"
+fi
+
+reset_closing_session
+sed -i.bak 's/Uid:\t1000/Uid:\t2000/' "$proc_root/111/status"
+rm -f -- "$proc_root/111/status.bak"
+VPS_TEST_SESSION_SCENARIO=closing_term
+if rd_quiesce_xrdp_sessions desktop-user >/dev/null 2>&1; then
+    fail "closing-session cleanup must reject an unexpected UID"
+else
+    actual=$?
+    assert_eq 50 "$actual" \
+        "closing-session unexpected UID fails closed"
+fi
+if [[ -s "$session_log" ]]; then
+    fail "closing-session ownership validation must precede all signals"
+else
+    pass "closing-session unexpected UID receives no signal"
+fi
+
+reset_closing_session
+sed -i.bak 's/Uid:\t1000/Uid:\t0/' "$proc_root/111/status"
+rm -f -- "$proc_root/111/status.bak"
+VPS_TEST_SESSION_SCENARIO=closing_term
+if rd_quiesce_xrdp_sessions desktop-user >/dev/null 2>&1; then
+    fail "closing-session cleanup must reject every root process"
+else
+    actual=$?
+    assert_eq 50 "$actual" \
+        "closing-session root process fails closed"
+fi
+if [[ -s "$session_log" ]]; then
+    fail "closing-session root validation must precede all signals"
+else
+    pass "closing-session root process receives no signal"
+fi
+
+reset_closing_session
+printf '%s\n' "$$" >> "$cgroup_root/session-42.scope/cgroup.procs"
+VPS_TEST_SESSION_SCENARIO=closing_term
+if rd_quiesce_xrdp_sessions desktop-user >/dev/null 2>&1; then
+    fail "closing-session cleanup must reject the current control process"
+else
+    actual=$?
+    assert_eq 50 "$actual" \
+        "closing-session control process fails closed"
+fi
+if [[ -s "$session_log" ]]; then
+    fail "closing-session control validation must precede all signals"
+else
+    pass "closing-session current control process receives no signal"
+fi
+
+reset_closing_session
+VPS_TEST_SESSION_SCENARIO=closing_kill
+if rd_quiesce_xrdp_sessions desktop-user; then
+    pass "closing-session cleanup escalates to exact-scope KILL after TERM"
+else
+    fail "closing-session cleanup must use bounded exact-scope KILL escalation"
+fi
+actual=$(<"$session_log")
+assert_contains "$actual" 'SCOPE_SIGNAL:TERM:session-42.scope' \
+    "closing-session escalation tries exact-scope TERM first"
+assert_contains "$actual" 'SCOPE_SIGNAL:KILL:session-42.scope' \
+    "closing-session escalation keeps KILL on the exact scope"
+
+reset_closing_session
+VPS_TEST_SESSION_SCENARIO=closing_stuck
 if rd_quiesce_xrdp_sessions desktop-user >/dev/null 2>&1; then
     fail "rollback must reject a session scope that remains populated"
 else
@@ -209,8 +342,10 @@ else
         "failed exact-session cleanup returns a bounded failure"
 fi
 actual=$(<"$session_log")
-assert_eq 'TERMINATE:42' "$actual" \
-    "failed cleanup never broadens beyond the exact session"
+assert_contains "$actual" 'SCOPE_SIGNAL:TERM:session-42.scope' \
+    "failed cleanup keeps TERM on the exact session scope"
+assert_contains "$actual" 'SCOPE_SIGNAL:KILL:session-42.scope' \
+    "failed cleanup keeps KILL on the exact session scope"
 
 rollback_state="$temporary_root/rollback-state"
 rollback_transaction="$rollback_state/modules/applications-remote-desktop/transactions/session-failure"
@@ -258,9 +393,9 @@ else
     pass "enumeration failure leaves the transaction retryable"
 fi
 
-reset_managed_session
+reset_closing_session
 : > "$apt_log"
-VPS_TEST_SESSION_SCENARIO=cleanup_failure
+VPS_TEST_SESSION_SCENARIO=closing_stuck
 if rd_restore_transaction "$rollback_transaction" >/dev/null 2>&1; then
     fail "rollback must stop when exact-session termination does not clear the scope"
 else

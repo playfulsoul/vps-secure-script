@@ -22,7 +22,7 @@
 - 不安装显示管理器，不切换 systemd 默认启动目标。
 - 安装软件包期间先屏蔽 xrdp 服务；只有仅回环配置完成并通过检查后才解除屏蔽并启动，避免安装脚本短暂产生公网 RDP 监听。
 - 配置写入 `/etc/vps-secure/remote-desktop`，通过项目自己的 systemd drop-in 使用；不覆盖发行版 `/etc/xrdp/*.ini`。
-- 回滚会在卸载软件包前停止并清空 xrdp 的 systemd unit cgroup，并仅枚举受管用户中由 `xrdp-sesman` 建立的 X11 logind 会话。模块会核对用户、UID、service、scope、进程归属以及当前 SSH 控制会话隔离，再按精确 session ID 终止；任何枚举、归属或清空结果不确定时都会保留软件包和事务证据。
+- 回滚会在卸载软件包前停止并清空 xrdp 的 systemd unit cgroup，并仅枚举受管用户中由 `xrdp-sesman` 建立的 X11 logind 会话。活动会话必须包含使用项目配置的 root `xrdp-sesman`；已经进入 `closing` 的半关闭会话则只允许预期普通用户的进程。模块会核对用户、UID、service、scope、状态、进程归属以及当前 SSH 控制会话隔离，再按精确 session ID 终止；如仍有进程，仅对该 session scope 依次发送 TERM 和有界 KILL。任何 root、其他 UID、当前控制进程、身份变化或清空失败都会使回滚在卸载软件包前停止，并保留软件包和事务证据。
 - 事务会记录本次新增的软件包；卸载和回滚只清理这些新增包，不删除普通用户、主目录或浏览器个人资料，也不执行大范围 `apt autoremove`。
 
 ## 命令示例
