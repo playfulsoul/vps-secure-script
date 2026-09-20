@@ -789,18 +789,31 @@ rd_service_state() {
 }
 
 rd_panel_service_states() {
-    local unit service state snapshot=''
-    while IFS= read -r unit; do
+    local units line unit unit_names='' service state snapshot=''
+    if ! units=$(
+        systemctl list-unit-files --type=service --no-legend --no-pager \
+            '1panel*.service' 2>/dev/null
+    ); then
+        printf '无法枚举 1Panel 服务，拒绝继续基线检查。\n' >&2
+        return 1
+    fi
+    while IFS= read -r line; do
+        read -r unit _ <<< "$line"
         [[ "$unit" =~ ^1panel[a-zA-Z0-9_.@-]*\.service$ ]] || continue
+        unit_names+="${unit_names:+$'\n'}$unit"
+    done <<< "$units"
+    if [[ -n "$unit_names" ]]; then
+        unit_names=$(LC_ALL=C sort -u <<< "$unit_names") || {
+            printf '无法整理 1Panel 服务清单，拒绝继续基线检查。\n' >&2
+            return 1
+        }
+    fi
+    while IFS= read -r unit; do
+        [[ -n "$unit" ]] || continue
         service=${unit%.service}
         state=$(rd_service_state is-active "$service")
         snapshot+="${snapshot:+,}$service:$state"
-    done < <(
-        systemctl list-unit-files --type=service --no-legend --no-pager \
-            '1panel*.service' 2>/dev/null |
-            awk '{ print $1 }' |
-            LC_ALL=C sort -u
-    )
+    done <<< "$unit_names"
     printf '%s\n' "${snapshot:-absent}"
 }
 
@@ -848,7 +861,8 @@ rd_restore_path() {
 
 rd_create_transaction() {
     local transaction group_existed=no user_existed=no user_group=no user_sudo=no
-    local ssh_ports default_target
+    local ssh_ports default_target panel_services
+    panel_services=$(rd_panel_service_states) || return 40
     transaction=$(vps_new_transaction_dir "$MODULE_ID") || return 40
     : > "$transaction/paths"
     : > "$transaction/packages.present.before"
@@ -891,7 +905,7 @@ ssh_ports=$ssh_ports
 ufw_hash=$(rd_ufw_hash)
 fail2ban_active=$(rd_service_state is-active fail2ban)
 panel_active=$(rd_service_state is-active 1panel)
-panel_services=$(rd_panel_service_states)
+panel_services=$panel_services
 EOF
     chmod 600 "$transaction/metadata"
     rd_present_packages > "$transaction/packages.present.before" || return 40
@@ -1000,9 +1014,11 @@ rd_verify_baseline() {
         printf 'Fail2Ban 服务状态发生了意外变化。\n' >&2
         return 50
     }
-    before=$(rd_transaction_value "$transaction" panel_services 2>/dev/null || true)
-    if [[ -n "$before" ]]; then
-        current=$(rd_panel_service_states)
+    if before=$(rd_transaction_value "$transaction" panel_services 2>/dev/null); then
+        if ! current=$(rd_panel_service_states); then
+            printf '无法重新枚举 1Panel 服务，基线验证失败。\n' >&2
+            return 50
+        fi
     else
         before=$(rd_transaction_value "$transaction" panel_active)
         current=$(rd_service_state is-active 1panel)

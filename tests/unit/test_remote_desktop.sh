@@ -40,11 +40,13 @@ case "$operation" in
     list-unit-files)
         case ${VPS_TEST_PANEL_LAYOUT:-absent} in
             absent) ;;
+            failure) exit 1 ;;
             single) printf '1panel.service enabled\n' ;;
             split)
                 printf '%s\n' \
+                    '1panel-beta.service enabled' \
                     '1panel-alpha.service enabled' \
-                    '1panel-beta.service enabled'
+                    '1panel-alpha.service enabled'
                 ;;
             partial) printf '1panel-alpha.service enabled\n' ;;
         esac
@@ -150,6 +152,12 @@ VPS_TEST_PANEL_LAYOUT='partial'
 actual=$(rd_panel_service_states)
 assert_eq '1panel-alpha:active' "$actual" \
     "remote desktop records the deployed subset of 1Panel services"
+VPS_TEST_PANEL_LAYOUT='failure'
+if rd_panel_service_states >/dev/null 2>&1; then
+    fail "remote desktop must not treat a failed 1Panel enumeration as absent"
+else
+    pass "remote desktop fails closed when 1Panel enumeration fails"
+fi
 
 VPS_REMOTE_DESKTOP_MEMORY_MB=1024
 VPS_REMOTE_DESKTOP_CPU_COUNT=1
@@ -325,6 +333,43 @@ if rd_verify_baseline "$split_transaction" >/dev/null 2>&1; then
     fail "changed split 1Panel service states must fail baseline verification"
 else
     pass "changed split 1Panel service states fail baseline verification"
+fi
+
+enumeration_transaction="$temporary_root/enumeration-transaction"
+mkdir -p "$enumeration_transaction"
+cat > "$enumeration_transaction/metadata" <<'EOF'
+default_target=graphical.target
+ssh_ports=2222
+ufw_hash=unchanged
+fail2ban_active=active
+panel_active=not-found
+panel_services=absent
+EOF
+VPS_TEST_PANEL_LAYOUT='failure'
+if rd_verify_baseline "$enumeration_transaction" >/dev/null 2>&1; then
+    fail "baseline verification must reject a failed 1Panel enumeration"
+else
+    actual=$?
+    assert_eq 50 "$actual" \
+        "failed 1Panel enumeration returns a verification failure"
+fi
+
+failed_transaction="$temporary_root/failed-create-transaction"
+vps_new_transaction_dir() {
+    mkdir -p "$failed_transaction"
+    printf '%s\n' "$failed_transaction"
+}
+if rd_create_transaction >/dev/null 2>&1; then
+    fail "transaction creation must reject a failed 1Panel enumeration"
+else
+    actual=$?
+    assert_eq 40 "$actual" \
+        "failed 1Panel enumeration aborts transaction creation"
+fi
+if [[ -e "$failed_transaction/metadata" ]]; then
+    fail "failed 1Panel enumeration must not create transaction metadata"
+else
+    pass "failed 1Panel enumeration leaves no successful transaction metadata"
 fi
 
 rm -rf -- "$temporary_root"
