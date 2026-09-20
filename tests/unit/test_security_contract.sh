@@ -139,6 +139,16 @@ else
     fail "remote desktop rollback must avoid broad package autoremove"
 fi
 
+quiesce_line=$(grep -n 'rd_quiesce_xrdp_units ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+purge_line=$(grep -n 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+if [[ -n "$quiesce_line" && -n "$purge_line" ]] && (( quiesce_line < purge_line )) && \
+   grep -q 'systemctl kill --kill-who=all --signal=TERM' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q 'systemctl kill --kill-who=all --signal=KILL' "$REMOTE_DESKTOP_MODULE"; then
+    pass "remote desktop drains unit cgroups before package purge"
+else
+    fail "remote desktop must empty managed unit cgroups before package purge"
+fi
+
 # shellcheck disable=SC2016
 if grep -q 'panel_services=$(rd_panel_service_states)' "$REMOTE_DESKTOP_MODULE" && \
    grep -q "'1panel\*\.service'" "$REMOTE_DESKTOP_MODULE"; then

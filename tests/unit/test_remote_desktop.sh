@@ -372,5 +372,164 @@ else
     pass "failed 1Panel enumeration leaves no successful transaction metadata"
 fi
 
+quiesce_root="$temporary_root/cgroup"
+quiesce_log="$temporary_root/quiesce.log"
+mkdir -p "$quiesce_root/system.slice/xrdp.service" \
+    "$quiesce_root/system.slice/xrdp-sesman.service"
+export VPS_REMOTE_DESKTOP_CGROUP_ROOT="$quiesce_root"
+export VPS_REMOTE_DESKTOP_STOP_ATTEMPTS=1
+export VPS_REMOTE_DESKTOP_STOP_DELAY=0
+export VPS_TEST_QUIESCE_LOG="$quiesce_log"
+
+systemctl() {
+    local operation=${1:-} unit='' property='' signal='' argument file
+    shift || true
+    case "$operation" in
+        show)
+            unit=${1:-}
+            shift || true
+            for argument in "$@"; do
+                case "$argument" in
+                    --property=*) property=${argument#--property=} ;;
+                esac
+            done
+            file="$VPS_REMOTE_DESKTOP_CGROUP_ROOT/system.slice/$unit/cgroup.procs"
+            case "$property" in
+                LoadState) printf 'loaded\n' ;;
+                ControlGroup) printf '/system.slice/%s\n' "$unit" ;;
+                MainPID)
+                    if [[ -s "$file" ]]; then
+                        sed -n '1p' "$file"
+                    else
+                        printf '0\n'
+                    fi
+                    ;;
+                ControlPID) printf '0\n' ;;
+                TasksCurrent) wc -l < "$file" | tr -d ' ' ;;
+                *) return 1 ;;
+            esac
+            ;;
+        stop)
+            printf 'STOP:%s\n' "$*" >> "$VPS_TEST_QUIESCE_LOG"
+            if [[ ${VPS_TEST_QUIESCE_SCENARIO:-} == stop_success ]]; then
+                : > "$VPS_REMOTE_DESKTOP_CGROUP_ROOT/system.slice/xrdp.service/cgroup.procs"
+                : > "$VPS_REMOTE_DESKTOP_CGROUP_ROOT/system.slice/xrdp-sesman.service/cgroup.procs"
+            fi
+            ;;
+        mask)
+            printf 'MASK:%s\n' "$*" >> "$VPS_TEST_QUIESCE_LOG"
+            ;;
+        kill)
+            for argument in "$@"; do
+                case "$argument" in
+                    --signal=*) signal=${argument#--signal=} ;;
+                    --*) ;;
+                    *) unit=$argument ;;
+                esac
+            done
+            printf '%s:%s\n' "$signal" "$unit" >> "$VPS_TEST_QUIESCE_LOG"
+            file="$VPS_REMOTE_DESKTOP_CGROUP_ROOT/system.slice/$unit/cgroup.procs"
+            case ${VPS_TEST_QUIESCE_SCENARIO:-} in
+                term_success)
+                    [[ "$signal" == TERM ]] && : > "$file"
+                    ;;
+                kill_required)
+                    [[ "$signal" == KILL ]] && : > "$file"
+                    ;;
+                stuck) ;;
+            esac
+            return 0
+            ;;
+        *) "$temporary_root/bin/systemctl" "$operation" "$@" ;;
+    esac
+}
+
+printf '101\n' > "$quiesce_root/system.slice/xrdp.service/cgroup.procs"
+printf '102\n' > "$quiesce_root/system.slice/xrdp-sesman.service/cgroup.procs"
+: > "$quiesce_log"
+VPS_TEST_QUIESCE_SCENARIO=term_success
+export VPS_TEST_QUIESCE_SCENARIO
+if rd_quiesce_xrdp_units; then
+    pass "rollback drains lingering unit cgroups with TERM"
+else
+    fail "rollback must drain lingering unit cgroups with TERM"
+fi
+actual=$(<"$quiesce_log")
+assert_contains "$actual" 'TERM:xrdp.service' \
+    "rollback targets the xrdp unit cgroup instead of a process name"
+assert_contains "$actual" 'TERM:xrdp-sesman.service' \
+    "rollback targets the sesman unit cgroup instead of a process name"
+if [[ "$actual" == *'KILL:'* ]]; then
+    fail "rollback must not send KILL after TERM clears the unit cgroups"
+else
+    pass "rollback avoids KILL when TERM clears the unit cgroups"
+fi
+
+printf '201\n' > "$quiesce_root/system.slice/xrdp.service/cgroup.procs"
+printf '202\n' > "$quiesce_root/system.slice/xrdp-sesman.service/cgroup.procs"
+: > "$quiesce_log"
+VPS_TEST_QUIESCE_SCENARIO=kill_required
+if rd_quiesce_xrdp_units; then
+    pass "rollback escalates to KILL when TERM leaves unit cgroup processes"
+else
+    fail "rollback must use bounded KILL escalation for a lingering unit cgroup"
+fi
+actual=$(<"$quiesce_log")
+assert_contains "$actual" 'KILL:xrdp.service' \
+    "rollback KILL escalation remains scoped to the xrdp unit"
+assert_contains "$actual" 'KILL:xrdp-sesman.service' \
+    "rollback KILL escalation remains scoped to the sesman unit"
+
+printf '301\n' > "$quiesce_root/system.slice/xrdp.service/cgroup.procs"
+printf '302\n' > "$quiesce_root/system.slice/xrdp-sesman.service/cgroup.procs"
+: > "$quiesce_log"
+VPS_TEST_QUIESCE_SCENARIO=stuck
+if rd_quiesce_xrdp_units >/dev/null 2>&1; then
+    fail "rollback must fail closed when a unit cgroup cannot be emptied"
+else
+    actual=$?
+    assert_eq 50 "$actual" \
+        "an uncleared unit cgroup returns a bounded stop failure"
+fi
+
+rollback_state="$temporary_root/rollback-state"
+rollback_transaction="$rollback_state/modules/applications-remote-desktop/transactions/stuck"
+mkdir -p "$rollback_transaction"
+cat > "$rollback_transaction/metadata" <<'EOF'
+user=desktop-user
+group=vpsrdp
+group_existed=no
+user_group=no
+user_sudo=no
+grant_sudo=no
+EOF
+printf 'xrdp\n' > "$rollback_transaction/packages.new"
+: > "$temporary_root/apt.log"
+VPS_STATE_DIR="$rollback_state"
+VPS_REMOTE_DESKTOP_TEST_MODE=yes
+export VPS_STATE_DIR VPS_REMOTE_DESKTOP_TEST_MODE
+apt-get() {
+    printf '%s\n' "$*" >> "$temporary_root/apt.log"
+}
+if rd_restore_transaction "$rollback_transaction" >/dev/null 2>&1; then
+    fail "rollback must not continue when managed unit processes survive"
+else
+    actual=$?
+    assert_eq 60 "$actual" \
+        "an uncleared managed unit stops the transaction before package purge"
+fi
+if [[ -s "$temporary_root/apt.log" ]]; then
+    fail "rollback must preserve packages when unit cgroup exit cannot be confirmed"
+else
+    pass "rollback preserves packages when unit cgroup exit cannot be confirmed"
+fi
+assert_file_exists "$rollback_transaction/packages.new" \
+    "failed rollback preserves the exact package inventory evidence"
+if [[ -e "$rollback_transaction/rolled_back" ]]; then
+    fail "failed rollback must not mark the transaction as rolled back"
+else
+    pass "failed rollback leaves the transaction available for diagnosis and retry"
+fi
+
 rm -rf -- "$temporary_root"
 finish_tests

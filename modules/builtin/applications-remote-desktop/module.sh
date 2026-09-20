@@ -1051,6 +1051,169 @@ rd_verify() {
     printf '远程图形桌面验证通过：服务正常、RDP 仅回环监听、root 被禁止、用户组有效。\n'
 }
 
+rd_unit_cgroup_target() {
+    local unit=$1 load_state control_group main_pid control_pid tasks_current
+    local root candidate
+    local roots=()
+
+    load_state=$(systemctl show "$unit" --property=LoadState --value 2>/dev/null) || {
+        printf '无法读取 %s 的 systemd 状态，拒绝清理软件包。\n' "$unit" >&2
+        return 1
+    }
+    if [[ "$load_state" == not-found ]]; then
+        printf 'absent\n'
+        return 0
+    fi
+
+    control_group=$(systemctl show "$unit" --property=ControlGroup --value 2>/dev/null) || {
+        printf '无法读取 %s 的 systemd cgroup，拒绝清理软件包。\n' "$unit" >&2
+        return 1
+    }
+    main_pid=$(systemctl show "$unit" --property=MainPID --value 2>/dev/null || true)
+    control_pid=$(systemctl show "$unit" --property=ControlPID --value 2>/dev/null || true)
+    tasks_current=$(systemctl show "$unit" --property=TasksCurrent --value 2>/dev/null || true)
+    main_pid=${main_pid:-0}
+    control_pid=${control_pid:-0}
+
+    if [[ -z "$control_group" ]]; then
+        case "$tasks_current" in
+            ''|0|'[not set]'|18446744073709551615)
+                if [[ "$main_pid" == 0 && "$control_pid" == 0 ]]; then
+                    printf 'absent\n'
+                    return 0
+                fi
+                ;;
+        esac
+        printf '无法确认 %s 的 systemd cgroup 进程已清空，拒绝清理软件包。\n' \
+            "$unit" >&2
+        return 1
+    fi
+    [[ "$control_group" =~ ^/[a-zA-Z0-9_.@:/-]+$ && \
+       "$control_group" != / && "$control_group" != *'/../'* && \
+       "$control_group" != */.. && "$control_group" != ../* ]] || {
+        printf '%s 的 systemd cgroup 路径无效，拒绝清理软件包。\n' "$unit" >&2
+        return 1
+    }
+
+    if [[ -n ${VPS_REMOTE_DESKTOP_CGROUP_ROOT:-} ]]; then
+        roots+=("${VPS_REMOTE_DESKTOP_CGROUP_ROOT%/}")
+    else
+        roots+=(/sys/fs/cgroup /sys/fs/cgroup/systemd /sys/fs/cgroup/name=systemd)
+    fi
+    for root in "${roots[@]}"; do
+        candidate="${root%/}$control_group"
+        if [[ -d "$candidate" ]]; then
+            [[ -r "$candidate/cgroup.procs" ]] || {
+                printf '无法读取 %s 的 systemd cgroup 进程清单，拒绝清理软件包。\n' \
+                    "$unit" >&2
+                return 1
+            }
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    case "$tasks_current" in
+        ''|0|'[not set]'|18446744073709551615)
+            if [[ "$main_pid" == 0 && "$control_pid" == 0 ]]; then
+                printf 'absent\n'
+                return 0
+            fi
+            ;;
+    esac
+    printf '无法定位 %s 的 systemd cgroup，拒绝清理软件包。\n' "$unit" >&2
+    return 1
+}
+
+rd_cgroup_pids() {
+    local target=$1 pid
+    [[ "$target" != absent ]] || return 0
+    [[ -d "$target" ]] || return 0
+    [[ -r "$target/cgroup.procs" ]] || return 1
+    while IFS= read -r pid || [[ -n "$pid" ]]; do
+        [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+        printf '%s\n' "$pid"
+    done < "$target/cgroup.procs"
+}
+
+rd_wait_cgroup_empty() {
+    local target=$1 attempts=$2 delay=$3 attempt pids
+    for (( attempt = 1; attempt <= attempts; attempt++ )); do
+        pids=$(rd_cgroup_pids "$target") || return 50
+        [[ -z "$pids" ]] && return 0
+        (( attempt == attempts )) || sleep "$delay"
+    done
+    return 10
+}
+
+rd_drain_unit_cgroup() {
+    local unit=$1 target=$2 attempts=$3 delay=$4 wait_result
+    rd_wait_cgroup_empty "$target" "$attempts" "$delay"
+    wait_result=$?
+    case "$wait_result" in
+        0) return 0 ;;
+        10) ;;
+        *)
+            printf '无法确认 %s 的 systemd cgroup 状态，拒绝清理软件包。\n' \
+                "$unit" >&2
+            return 50
+            ;;
+    esac
+
+    systemctl kill --kill-who=all --signal=TERM "$unit" >/dev/null 2>&1 || {
+        printf '无法向 %s 的 systemd cgroup 发送 TERM，拒绝清理软件包。\n' \
+            "$unit" >&2
+        return 50
+    }
+    rd_wait_cgroup_empty "$target" "$attempts" "$delay"
+    wait_result=$?
+    case "$wait_result" in
+        0) return 0 ;;
+        10) ;;
+        *)
+            printf '无法确认 %s 在 TERM 后的 cgroup 状态，拒绝清理软件包。\n' \
+                "$unit" >&2
+            return 50
+            ;;
+    esac
+
+    systemctl kill --kill-who=all --signal=KILL "$unit" >/dev/null 2>&1 || {
+        printf '无法向 %s 的 systemd cgroup 发送 KILL，拒绝清理软件包。\n' \
+            "$unit" >&2
+        return 50
+    }
+    if ! rd_wait_cgroup_empty "$target" "$attempts" "$delay"; then
+        printf '%s 的 systemd cgroup 仍有进程，已保留软件包与事务证据。\n' \
+            "$unit" >&2
+        return 50
+    fi
+}
+
+rd_quiesce_xrdp_units() {
+    local attempts=${VPS_REMOTE_DESKTOP_STOP_ATTEMPTS:-20}
+    local delay=${VPS_REMOTE_DESKTOP_STOP_DELAY:-0.25}
+    local xrdp_target sesman_target
+
+    if [[ ! "$attempts" =~ ^[0-9]+$ ]] || (( attempts < 1 || attempts > 120 )); then
+        printf 'xrdp 停止等待次数配置无效。\n' >&2
+        return 50
+    fi
+    [[ "$delay" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+        printf 'xrdp 停止等待间隔配置无效。\n' >&2
+        return 50
+    }
+
+    xrdp_target=$(rd_unit_cgroup_target xrdp.service) || return 50
+    sesman_target=$(rd_unit_cgroup_target xrdp-sesman.service) || return 50
+    systemctl stop --no-block xrdp.service xrdp-sesman.service >/dev/null 2>&1 || true
+    systemctl mask xrdp.service xrdp-sesman.service >/dev/null 2>&1 || {
+        printf '无法在回滚前屏蔽 xrdp 服务，已保留软件包与事务证据。\n' >&2
+        return 50
+    }
+    rd_drain_unit_cgroup xrdp.service "$xrdp_target" "$attempts" "$delay" || return 50
+    rd_drain_unit_cgroup xrdp-sesman.service "$sesman_target" "$attempts" "$delay" || return 50
+}
+
 rd_restore_service_state() {
     local transaction=$1 service=$2 enabled active
     enabled=$(rd_transaction_value "$transaction" "${service//-/_}_enabled" 2>/dev/null || true)
@@ -1095,9 +1258,10 @@ rd_restore_transaction() {
         printf '事务中的远程桌面用户组无效，拒绝继续回滚。\n' >&2
         return 60
     }
-    systemctl stop xrdp >/dev/null 2>&1 || true
-    systemctl stop xrdp-sesman >/dev/null 2>&1 || true
-    systemctl mask xrdp.service xrdp-sesman.service >/dev/null 2>&1 || result=1
+    rd_quiesce_xrdp_units || {
+        printf '无法确认 xrdp 受管进程已全部退出；回滚在软件包清理前停止。\n' >&2
+        return 60
+    }
 
     rd_restore_path "$transaction" xrdp-dropin "$RD_XRDP_DROPIN" || result=1
     rd_restore_path "$transaction" sesman-dropin "$RD_SESMAN_DROPIN" || result=1
