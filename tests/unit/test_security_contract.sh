@@ -140,14 +140,18 @@ else
 fi
 
 quiesce_line=$(grep -n 'rd_quiesce_xrdp_units ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+session_line=$(grep -n "rd_quiesce_xrdp_sessions \"\$user\" ||" "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 purge_line=$(grep -n 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
-if [[ -n "$quiesce_line" && -n "$purge_line" ]] && (( quiesce_line < purge_line )) && \
+if [[ -n "$quiesce_line" && -n "$session_line" && -n "$purge_line" ]] && \
+   (( quiesce_line < session_line && session_line < purge_line )) && \
    grep -q 'systemctl kill --kill-whom=all --signal=TERM' "$REMOTE_DESKTOP_MODULE" && \
    grep -q 'systemctl kill --kill-whom=all --signal=KILL' "$REMOTE_DESKTOP_MODULE" && \
+   grep -q "loginctl terminate-session \"\$session\"" "$REMOTE_DESKTOP_MODULE" && \
+   ! grep -Eq 'loginctl terminate-user|pkill|killall' "$REMOTE_DESKTOP_MODULE" && \
    ! grep -q -- '--kill-who=all' "$REMOTE_DESKTOP_MODULE"; then
-    pass "remote desktop drains unit cgroups before package purge"
+    pass "remote desktop drains unit cgroups and exact logind sessions before package purge"
 else
-    fail "remote desktop must empty managed unit cgroups before package purge"
+    fail "remote desktop must empty managed unit cgroups and exact sessions before package purge"
 fi
 
 # shellcheck disable=SC2016
