@@ -81,3 +81,18 @@ All five defects have regression coverage in the development branch. The fifth f
 - invalid-candidate and interrupted-operation fault injection.
 
 Until these gaps are addressed, Debian 12 is classified as compatible and manually validated for the workflows above, not fully supported under the complete compatibility policy.
+
+## 2.0.0-beta.7 remote desktop validation
+
+A separate Debian 12 integration run validated the remote graphical desktop module without recording host or client addresses:
+
+- Installed the XFCE profile with xrdp and xorgxrdp, using an existing ordinary user and optional Firefox/sudo selections.
+- Confirmed that RDP listened only on `127.0.0.1:3389`, that no UFW 3389 rule was added, and that root graphical login was unavailable.
+- Established a real local SSH tunnel and logged in through an RDP client; XFCE rendered successfully and the server recorded one exact `x11`/`xrdp-sesman` logind session.
+- Repeated apply returned the expected healthy no-op result without creating a new transaction or changing managed configuration.
+- Started rollback while the graphical session was still active. The exact session moved from `active` to `closing` and then disappeared before package removal completed.
+- Confirmed after rollback that every transaction-owned package, xrdp/Xorg/XFCE process, TCP 3389 listener, managed configuration file, and temporary group membership was removed.
+- Confirmed that the ordinary user, home directory, password state, browser profile, SSH, UFW, Fail2Ban, existing application services, default target, and pre-existing package inventory matched the captured baseline.
+- Confirmed that rollback used explicit package purge without broad `apt autoremove`.
+
+This validation covers the Debian 12 XFCE path. LXQt and MATE use the same loopback listener, session ownership, transaction, and rollback controls, but their complete graphical rendering paths were not separately exercised in this run.

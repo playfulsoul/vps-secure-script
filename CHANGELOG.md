@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## 2.0.0-beta.7 - 2026-09-21
+
 - Add a beginner-guided remote graphical desktop module with resource-aware LXQt, XFCE, and MATE profiles, optional Firefox and sudo access, ordinary-user provisioning, loopback-only xrdp over an SSH tunnel, text-only clipboard, exact package inventory, verification, and transactional rollback.
 - Keep xrdp masked while distribution packages are installed, reject display managers and pre-existing unmanaged desktop stacks, and start the service only after the platform-owned loopback configuration is ready.
+- Verify and drain exact xrdp service cgroups and logind desktop-session scopes before package removal; fail closed before purge when session identity or cleanup cannot be proven, including half-closed sessions.
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.6.1` update reliability fix, with the public archive SHA-256 pinned in the assistant.
 - Run automatic CI for pull requests, `main` pushes, and `v*` version-tag pushes without duplicating runs for ordinary feature-branch pushes; retain manual CI runs.
 
