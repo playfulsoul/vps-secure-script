@@ -12,6 +12,10 @@
 
 模块只安装一个桌面环境。GNOME/KDE 不属于首版支持范围。
 
+三个档位都会安装 Noto CJK 字体，确保浏览器和桌面应用能够显示简体中文、繁体中文、日文和韩文。模块不会改变系统语言，也不安装或配置中文输入法。
+
+beta.7 已有受管安装可通过 `sudo vps desktop repair --yes` 原地补齐字体。补齐前会验证核心远程桌面仍然健康；操作不会重装桌面或重启 xrdp。模块会把自己新增的字体包加入原回滚事务，但不会接管用户事先安装的字体。
+
 ## 固定安全边界
 
 - 使用发行版提供的 `xrdp` 与 `xorgxrdp`，不执行第三方一键脚本。
@@ -35,6 +39,7 @@ sudo vps module run applications.remote-desktop preflight \
   --profile xfce --user desktop --create-user --browser firefox --set-password
 sudo vps module run applications.remote-desktop apply --yes \
   --profile xfce --user desktop --create-user --browser firefox --set-password
+sudo vps desktop repair --yes
 sudo vps module run applications.remote-desktop status --connection
 sudo vps module run applications.remote-desktop verify
 sudo vps module run applications.remote-desktop rollback --yes

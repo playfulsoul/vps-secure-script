@@ -189,12 +189,25 @@ actual=$(rd_unique_packages)
 assert_contains "$actual" xrdp "remote desktop package set contains xrdp"
 assert_contains "$actual" xorgxrdp "remote desktop package set contains xorgxrdp"
 assert_contains "$actual" xfce4 "XFCE package set contains xfce4"
+assert_contains "$actual" fonts-noto-cjk \
+    "XFCE package set contains Chinese display fonts"
 assert_contains "$actual" firefox-esr "Debian browser selection uses Firefox ESR"
 if [[ "$actual" == *gnome* || "$actual" == *lightdm* ]]; then
     fail "remote desktop package set must not install GNOME or a display manager"
 else
     pass "remote desktop package set omits GNOME and display managers"
 fi
+
+for profile in lxqt xfce mate; do
+    rd_parse_options --profile "$profile" --user desktop --browser none
+    actual=$(rd_unique_packages)
+    assert_contains "$actual" fonts-noto-cjk \
+        "$profile package set contains Chinese display fonts"
+    actual=$(printf '%s\n' "$actual" | grep -Fxc fonts-noto-cjk)
+    assert_eq 1 "$actual" "$profile package set contains the font package once"
+done
+
+rd_parse_options --profile xfce --user desktop --browser firefox
 
 rd_prepare_owned_config
 rd_write_systemd_dropins

@@ -28,6 +28,8 @@ actual=$(PATH="$remote_root/bin:$PATH" \
     "$CLI" module run applications.remote-desktop plan \
         --profile xfce --user desktop --create-user --browser none --set-password)
 assert_contains "$actual" 'XFCE 推荐版' "remote desktop plan identifies the selected profile"
+assert_contains "$actual" 'fonts-noto-cjk' \
+    "remote desktop plan includes Chinese display fonts"
 assert_contains "$actual" '仅监听 127.0.0.1:3389' \
     "remote desktop plan refuses a public RDP listener"
 assert_contains "$actual" '不开放防火墙端口' \

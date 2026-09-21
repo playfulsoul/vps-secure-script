@@ -176,7 +176,9 @@ else
 fi
 
 mask_line=$(grep -n 'rd_mask_units_for_install ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
-install_line=$(grep -n 'vps_apt_install --no-install-recommends' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+# shellcheck disable=SC2016
+install_line=$(grep -n 'vps_apt_install --no-install-recommends "${packages\[@\]}"' \
+    "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 unmask_line=$(grep -n 'rd_unmask_units_for_start ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 start_line=$(grep -n 'systemctl start xrdp ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 if [[ -n "$mask_line" && -n "$install_line" && -n "$unmask_line" && -n "$start_line" ]] && \
