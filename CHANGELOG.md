@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.0.0-beta.8 - 2026-09-21
+
 - Give every content-distinct installable bundle a SHA-256 build identity that is visible in release assets, installer output, CLI version output, and update status.
 - Reject bundles whose recorded build identity no longer matches their content, distinguish same-version builds, and keep a legacy-named release asset for older installed clients.
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.7.1` Chinese font fix, with the public archive SHA-256 pinned in the assistant.
