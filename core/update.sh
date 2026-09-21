@@ -376,10 +376,14 @@ vps_update_apply() {
         }
     fi
 
-    if ! "$extract_dir/install.sh"; then
+    local install_result
+    if VPS_INSTALL_ROOT="$VPS_PLATFORM_ROOT" "$extract_dir/install.sh"; then
+        install_result=0
+    else
+        install_result=$?
         rm -rf -- "$temporary_dir"
-        printf '更新安装失败；安装器已尽力保留上一版本备份。\n' >&2
-        return 40
+        printf '更新安装未完成；请按安装器显示的事务记录检查恢复结果。\n' >&2
+        return "$install_result"
     fi
     rm -rf -- "$temporary_dir"
     printf '更新完成。请重新输入 vps 使用新版本。\n'
@@ -392,25 +396,25 @@ vps_update_backup_list() {
     find "$install_parent" -maxdepth 1 -type d -name "$install_name.backup.*" -print 2>/dev/null | sort -r
 }
 
-vps_update_rollback() {
-    local previous displaced timestamp
-    (( EUID == 0 )) || {
-        printf '恢复平台版本需要 root 权限。\n' >&2
-        return 30
-    }
+vps_update_prepare_restore() {
+    local previous
     previous=$(vps_update_backup_list | head -n 1)
     [[ -n "$previous" ]] || {
         printf '没有找到可恢复的上一版本备份。\n' >&2
         return 60
     }
-    [[ -d "$VPS_PLATFORM_ROOT" && -r "$previous/VERSION" ]] || return 60
-    timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-    displaced="$VPS_PLATFORM_ROOT.rollback-replaced.$timestamp"
-    if ! mv "$VPS_PLATFORM_ROOT" "$displaced"; then return 60; fi
-    if ! mv "$previous" "$VPS_PLATFORM_ROOT"; then
-        mv "$displaced" "$VPS_PLATFORM_ROOT" 2>/dev/null || true
-        return 60
-    fi
-    printf '已恢复版本 %s。刚才的版本保存在 %s。\n' "$(<"$VPS_PLATFORM_ROOT/VERSION")" "$displaced"
+    vps_tx_copy_backup "$previous" "$2"
+}
+
+vps_update_rollback() {
+    (( EUID == 0 )) || {
+        printf '恢复平台版本需要 root 权限。\n' >&2
+        return 30
+    }
+    # shellcheck source=install_transaction.sh
+    source "$VPS_PLATFORM_ROOT/core/install_transaction.sh" || return 60
+    vps_install_transaction "$VPS_PLATFORM_ROOT" "${VPS_BIN_DIR:-/usr/local/bin}/vps" \
+        vps_update_prepare_restore unused || return $?
+    printf '已恢复并验证上一版本，原备份保持不变。\n'
     printf '请重新输入 vps。\n'
 }
