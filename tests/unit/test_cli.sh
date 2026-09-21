@@ -27,7 +27,9 @@ actual=$(printf '0\n' | "$CLI")
 assert_contains "$actual" 'VPS 管理与安全平台' "CLI opens the beginner-friendly Chinese menu"
 assert_contains "$actual" 'VPS 安全与配置优化设置' "beginner menu exposes the guided security and optimization workflow"
 assert_contains "$actual" '推荐操作' "beginner menu groups tasks into visual sections"
-assert_contains "$actual" '更新与恢复' "beginner menu exposes platform updates"
+assert_contains "$actual" '诊断报告与程序维护' "beginner menu exposes report and maintenance entry"
+assert_contains "$actual" '脱敏诊断报告 · 检查更新 · 自动升级 · 恢复旧版' \
+    "main menu discovers reports without hiding existing update actions"
 assert_contains "$actual" '软件更新 · Swap · BBR · 用户与 sudo' \
     "main menu summarizes system-management capabilities"
 assert_contains "$actual" '融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量' \

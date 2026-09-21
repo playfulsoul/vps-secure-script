@@ -279,7 +279,7 @@ vps_update_notice() {
     [[ -t 0 && -t 1 ]] || return 0
     latest=$(vps_update_fetch_version no 2>/dev/null) || return 0
     if vps_version_is_newer "$latest" "$VERSION"; then
-        printf '\n[更新] 发现新版本 %s，当前为 %s。可在主菜单选择“更新与恢复”。\n' \
+        printf '\n[更新] 发现新版本 %s，当前为 %s。可在主菜单选择“8. 诊断报告与程序维护”。\n' \
             "$latest" "$VERSION"
         VPS_UPDATE_AVAILABLE=$latest
         export VPS_UPDATE_AVAILABLE
