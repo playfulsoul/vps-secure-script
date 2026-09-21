@@ -10,9 +10,9 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$PROJECT_ROOT/vps_secure.sh" --version)
 assert_contains "$actual" 'legacy migration v1.0.3' "legacy raw entry is a migration assistant"
-assert_contains "$actual" '2.0.0-beta.8' "legacy migration points directly to the current published package"
+assert_contains "$actual" '2.0.0-beta.9' "legacy migration points directly to the current published package"
 assert_contains "$(<"$PROJECT_ROOT/vps_secure.sh")" \
-    'f95bd2cb7078aa77c94a762a48242d822e528c83d2c3bbf829fd039a6c08fca3' \
+    '7b4315015a6ad0d91506a63e10313bea36e3f2867840721e518bdccd07ac578c' \
     "legacy migration pins the verified public archive SHA-256"
 
 actual=$(printf '0\n' | "$PROJECT_ROOT/vps_secure.sh")
@@ -22,9 +22,9 @@ assert_contains "$actual" '不会' "migration notice explains preserved server c
 temporary_root=$(mktemp -d)
 fixture_root="$temporary_root/fixture"
 fake_bin="$temporary_root/bin"
-archive_name='vps-secure-platform-2.0.0-beta.8.tar.gz'
+archive_name='vps-secure-platform-2.0.0-beta.9.tar.gz'
 mkdir -p "$fixture_root" "$fake_bin"
-printf '%s\n' '2.0.0-beta.8' > "$fixture_root/VERSION"
+printf '%s\n' '2.0.0-beta.9' > "$fixture_root/VERSION"
 cat > "$fixture_root/install.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' installed > "$VPS_MIGRATION_TEST_MARKER"
