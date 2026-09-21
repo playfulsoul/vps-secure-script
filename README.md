@@ -240,12 +240,21 @@ Beta 版本默认跟随 `beta` 通道，正式版本默认只接收 `stable` 更
 ```bash
 vps module list
 vps doctor
+sudo vps report
 vps firewall plan
 vps firewall preflight
 sudo vps firewall apply --yes
 sudo vps firewall repair-persistence --yes
 vps fail2ban status
 ```
+
+`vps report` 在平台状态目录的 `reports` 子目录生成权限为 `600` 的中文纯文本报告。
+生成前检查状态目录及报告目录的所有者和写入权限，不安全时停止，不修改既有目录权限。
+报告只包含受控的平台、系统、模块登记和事务存在性摘要，不执行安装、更新、修复、
+重启、上传或自动提交。默认不包含完整 IP、主机名、用户名、域名、真实端口、密钥、
+节点链接、认证参数、封禁地址、原始日志、环境变量、命令历史或配置全文。
+终端显示保存位置；分享前请自行打开检查。可用 `--output safe-name.txt` 指定新文件名，
+不能传入路径或覆盖已有文件。
 
 `firewall preflight` 是只读检查。只有它报告 UFW 未负责开机恢复、存在并行持久化服务，或持久配置与运行规则不一致时，才考虑执行 `repair-persistence`。修复会先保存运行规则副本，只调整相关服务的开机启用状态并重新加载 UFW；不会停止当前防火墙服务或恢复、清空整张规则表。
 

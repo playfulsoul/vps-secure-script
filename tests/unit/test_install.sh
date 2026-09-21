@@ -27,5 +27,13 @@ installed_build=$(<"$temporary_root/lib/vps-secure/BUILD_ID")
 assert_contains "$actual" "$installed_build" \
     "installed status matches the identity recorded during installation"
 
+temporary_root=$(cd "$temporary_root" && pwd -P)
+VPS_STATE_DIR="$temporary_root/report-state" "$temporary_root/bin/vps" report --output installed.txt >/dev/null
+assert_file_exists "$temporary_root/report-state/reports/installed.txt" \
+    "installed CLI generates a diagnostic report"
+report=$(<"$temporary_root/report-state/reports/installed.txt")
+assert_contains "$report" "完整构建身份: $installed_build" \
+    "installed report uses the preserved content build identity"
+
 rm -rf "$temporary_root"
 finish_tests

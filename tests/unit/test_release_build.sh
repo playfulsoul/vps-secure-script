@@ -88,6 +88,15 @@ installed_version=$("$install_root/bin/vps" --version)
 assert_contains "$installed_version" "$build_id" \
     "archive, checksum, and installed command retain one traceable identity"
 
+report_parent=$(cd "$temporary_dist" && pwd -P)
+VPS_STATE_DIR="$report_parent/report-state" \
+    "$install_root/bin/vps" report --output release.txt >/dev/null
+assert_file_exists "$report_parent/report-state/reports/release.txt" \
+    "release-installed CLI includes the report command"
+release_report=$(<"$report_parent/report-state/reports/release.txt")
+assert_contains "$release_report" "完整构建身份: $build_id" \
+    "release report identifies the exact archived build"
+
 printf '\n# identity regression fixture\n' >> "$extract_dir/modules/builtin/system-doctor/module.sh"
 if VPS_INSTALL_ROOT="$temporary_dist/tampered/lib/vps-secure" \
     VPS_BIN_DIR="$temporary_dist/tampered/bin" \
