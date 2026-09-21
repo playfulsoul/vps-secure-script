@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.7.1` Chinese font fix, with the public archive SHA-256 pinned in the assistant.
+
 ## 2.0.0-beta.7.1 - 2026-09-21
 
 - Install Noto CJK fonts in the LXQt, XFCE, and MATE remote-desktop profiles so Chinese web and application text renders correctly without changing the system language or adding an input method.
