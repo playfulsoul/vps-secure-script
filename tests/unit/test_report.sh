@@ -131,10 +131,10 @@ for secret in \
     fi
 done
 
-if LC_ALL=C od -An -tx1 "$report_file" | awk '
+if LC_ALL=C od -An -tu1 "$report_file" | awk '
     {
         for (i = 1; i <= NF; i++) {
-            value = ("0x" $i) + 0
+            value = $i + 0
             if ((value >= 0 && value <= 8) || value == 11 || value == 12 ||
                 (value >= 14 && value <= 31) || value == 127) exit 1
         }
