@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2329
+# Fault-injection callbacks are passed by name and invoked indirectly.
+# shellcheck disable=SC2317,SC2329
 set -u
 TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
