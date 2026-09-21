@@ -28,6 +28,7 @@ RD_SESMAN_ENV="$RD_CONFIG_DIR/sesman.env"
 RD_MEMINFO_FILE=${VPS_REMOTE_DESKTOP_MEMINFO_FILE:-/proc/meminfo}
 RD_PROC_ROOT=${VPS_REMOTE_DESKTOP_PROC_ROOT:-/proc}
 RD_LOCAL_PORT=${VPS_REMOTE_DESKTOP_LOCAL_PORT:-13389}
+RD_CJK_FONT_PACKAGE=fonts-noto-cjk
 
 RD_PROFILE=auto
 RD_USER=''
@@ -211,7 +212,7 @@ rd_profile_packages() {
             ;;
         mate)
             printf '%s\n' mate-desktop-environment-core mate-terminal pluma engrampa \
-                mate-system-monitor fonts-noto-cjk
+                mate-system-monitor
             ;;
         *) return 64 ;;
     esac
@@ -241,7 +242,8 @@ rd_normalize_options() {
 
 rd_selected_packages() {
     local package
-    printf '%s\n' xrdp xorgxrdp dbus-x11 x11-xserver-utils xauth policykit-1
+    printf '%s\n' xrdp xorgxrdp dbus-x11 x11-xserver-utils xauth policykit-1 \
+        "$RD_CJK_FONT_PACKAGE"
     rd_profile_packages "$RD_PROFILE" || return $?
     rd_browser_package "$RD_BROWSER" || return $?
     [[ "$RD_GRANT_SUDO" == yes ]] && printf 'sudo\n'
@@ -330,6 +332,86 @@ rd_present_packages() {
     dpkg-query -W -f='${binary:Package}\t${Status}\n' 2>/dev/null |
         awk -F '\t' 'NF == 2 && $2 != "unknown ok not-installed" { print $1 }' |
         sort -u
+}
+
+rd_cjk_font_ready() {
+    rd_package_installed "$RD_CJK_FONT_PACKAGE" || return 1
+    command -v fc-list >/dev/null 2>&1 || return 1
+    fc-list ':lang=zh-cn' family 2>/dev/null | grep -Eiq 'Noto (Sans|Serif) CJK'
+}
+
+rd_managed_transaction() {
+    local state_transaction last_transaction
+    state_transaction=$(rd_state_value transaction 2>/dev/null) || {
+        printf '远程桌面状态缺少事务记录，拒绝修改软件包。\n' >&2
+        return 60
+    }
+    last_transaction=$(vps_last_transaction "$MODULE_ID" 2>/dev/null) || {
+        printf '找不到远程桌面的有效回滚事务，拒绝修改软件包。\n' >&2
+        return 60
+    }
+    [[ "$state_transaction" == "$last_transaction" && \
+       -f "$last_transaction/packages.new" && \
+       ! -e "$last_transaction/package-inventory-failed" && \
+       ! -e "$last_transaction/rolled_back" ]] || {
+        printf '远程桌面事务状态不一致，拒绝修改软件包。\n' >&2
+        return 60
+    }
+    printf '%s\n' "$last_transaction"
+}
+
+rd_record_owned_package() {
+    local transaction=$1 package=$2 temporary
+    [[ "$transaction" == "$(vps_module_state_dir "$MODULE_ID")"/transactions/* && \
+       -f "$transaction/packages.new" && \
+       ! -e "$transaction/package-inventory-failed" && \
+       "$package" =~ ^[a-zA-Z0-9.+:-]+$ ]] || return 1
+    grep -Fxq "$package" "$transaction/packages.new" 2>/dev/null && return 0
+    temporary="$transaction/packages.new.tmp.$$"
+    if ! { cat "$transaction/packages.new"; printf '%s\n' "$package"; } | \
+        sort -u > "$temporary"; then
+        rm -f -- "$temporary"
+        return 1
+    fi
+    chmod 600 "$temporary" || { rm -f -- "$temporary"; return 1; }
+    mv -f -- "$temporary" "$transaction/packages.new"
+}
+
+rd_refresh_owned_packages_state() {
+    local transaction=$1 owned_packages temporary
+    owned_packages=$(paste -sd, "$transaction/packages.new" 2>/dev/null) || return 1
+    temporary="$RD_STATE_FILE.tmp.$$"
+    awk -v value="$owned_packages" '
+        BEGIN { updated = 0 }
+        /^owned_packages=/ {
+            if (!updated) print "owned_packages=" value
+            updated = 1
+            next
+        }
+        { print }
+        END { if (!updated) print "owned_packages=" value }
+    ' "$RD_STATE_FILE" > "$temporary" || { rm -f -- "$temporary"; return 1; }
+    chmod 600 "$temporary" || { rm -f -- "$temporary"; return 1; }
+    mv -f -- "$temporary" "$RD_STATE_FILE"
+}
+
+rd_record_repair_font_if_needed() {
+    local transaction=$1 present_before=$2
+    [[ "$present_before" != yes ]] || return 0
+    rd_package_present "$RD_CJK_FONT_PACKAGE" || return 0
+    if ! rd_record_owned_package "$transaction" "$RD_CJK_FONT_PACKAGE"; then
+        : > "$transaction/package-inventory-failed"
+        return 40
+    fi
+    rd_refresh_owned_packages_state "$transaction" || return 40
+}
+
+rd_repair_interrupted() {
+    local transaction=$1 present_before=$2
+    trap - INT TERM
+    rd_record_repair_font_if_needed "$transaction" "$present_before" || true
+    printf '\n中文字体补齐被中断；可重新运行同一操作继续检查。\n' >&2
+    exit 130
 }
 
 rd_check_selected_package_states() {
@@ -558,6 +640,7 @@ rd_plan() {
         "$([[ "$RD_GRANT_SUDO" == yes ]] && printf '授予' || printf '不新增权限')" \
         "$([[ "$RD_SET_PASSWORD" == yes ]] && printf '是' || printf '否')"
     printf '  - 浏览器: %s。\n' "$RD_BROWSER"
+    printf '  - 中文显示: 安装 Noto CJK 字体；不改变系统语言或安装输入法。\n'
     printf '  - 顶层软件包: %s。\n' "$packages"
     printf '  - xrdp 仅监听 127.0.0.1:3389，通过 SSH 隧道连接。\n'
     printf '  - 禁止 root 图形登录，只允许 %s 组。\n' "$RD_GROUP"
@@ -1031,7 +1114,7 @@ rd_verify_baseline() {
     }
 }
 
-rd_verify() {
+rd_verify_core() {
     local user group listener
     rd_is_managed || {
         printf '远程图形桌面尚未由本模块配置。\n' >&2
@@ -1050,7 +1133,15 @@ rd_verify() {
     id "$user" >/dev/null 2>&1 || return 50
     id -nG "$user" | tr ' ' '\n' | grep -Fxq "$group" || return 50
     rd_validate_owned_config "$group" || return 50
-    printf '远程图形桌面验证通过：服务正常、RDP 仅回环监听、root 被禁止、用户组有效。\n'
+}
+
+rd_verify() {
+    rd_verify_core || return $?
+    rd_cjk_font_ready || {
+        printf '远程桌面安全配置正常，但中文字体尚未就绪；请运行“补齐必要组件”。\n' >&2
+        return 50
+    }
+    printf '远程图形桌面验证通过：服务正常、RDP 仅回环监听、root 被禁止、用户组和中文字体有效。\n'
 }
 
 rd_unit_cgroup_target() {
@@ -1601,6 +1692,68 @@ rd_apply_interrupted() {
     exit 130
 }
 
+rd_repair() {
+    local transaction present_before=no install_result=0
+    vps_require_root || return $?
+    rd_validate_managed_paths || return $?
+    rd_reset_options
+    rd_is_managed || {
+        printf '远程图形桌面尚未由本模块安装；请先运行引导安装。\n' >&2
+        return 10
+    }
+    rd_check_existing_state || return $?
+    rd_verify_core || {
+        printf '远程桌面核心配置未通过验证，拒绝安装附加组件。\n' >&2
+        return 50
+    }
+    if rd_cjk_font_ready; then
+        printf '中文字体已经就绪，无需修改桌面或服务。\n'
+        return 10
+    fi
+
+    transaction=$(rd_managed_transaction) || return $?
+    rd_apt_unlocked || return $?
+    if rd_package_present "$RD_CJK_FONT_PACKAGE"; then
+        present_before=yes
+        rd_package_installed "$RD_CJK_FONT_PACKAGE" || {
+            printf '中文字体包处于残留或未完成状态；请先修复 APT/dpkg。\n' >&2
+            return 30
+        }
+        if command -v fc-cache >/dev/null 2>&1; then
+            fc-cache -f >/dev/null 2>&1 || return 40
+        fi
+        rd_cjk_font_ready || {
+            printf '中文字体包已安装，但字体缓存仍无法提供中文字体。\n' >&2
+            return 50
+        }
+        printf '中文字体已经就绪；现有软件包保持由原安装者管理。\n'
+        return 0
+    fi
+
+    vps_apt_update || return $?
+    trap 'rd_repair_interrupted "$transaction" "$present_before"' INT TERM
+    vps_apt_install --no-install-recommends "$RD_CJK_FONT_PACKAGE" || install_result=$?
+    rd_record_repair_font_if_needed "$transaction" "$present_before" || {
+        trap - INT TERM
+        printf '中文字体的软件包归属记录失败；已保留事务证据。\n' >&2
+        return 40
+    }
+    trap - INT TERM
+    (( install_result == 0 )) || {
+        printf '中文字体安装未完整完成；可修复 APT 后重新运行此操作。\n' >&2
+        return 40
+    }
+    if ! rd_cjk_font_ready && command -v fc-cache >/dev/null 2>&1; then
+        fc-cache -f >/dev/null 2>&1 || return 40
+    fi
+    rd_cjk_font_ready || {
+        printf '中文字体安装完成，但字体匹配验证未通过。\n' >&2
+        return 50
+    }
+    rd_verify_core || return $?
+    printf '中文字体已补齐；没有重装桌面、重启 xrdp 或修改系统语言。\n'
+}
+
 rd_apply() {
     local transaction packages=() package
     vps_require_root || return $?
@@ -1608,7 +1761,12 @@ rd_apply() {
     rd_parse_options "$@" || return $?
     if rd_is_managed; then
         rd_check_existing_state || return $?
-        if rd_verify; then
+        if rd_verify_core; then
+            if ! rd_cjk_font_ready; then
+                printf '远程桌面核心配置健康，但缺少中文字体。\n'
+                printf '请运行“补齐必要组件”，无需卸载或重装桌面。\n'
+                return 10
+            fi
             printf '远程图形桌面已经处于受管且健康的状态。\n'
             return 10
         fi
@@ -1699,7 +1857,7 @@ rd_connection_help() {
 }
 
 rd_status() {
-    local profile user browser listener active enabled
+    local profile user browser listener active enabled font_state
     if ! rd_is_managed; then
         printf '远程图形桌面未由本模块安装。\n'
         return 10
@@ -1710,10 +1868,16 @@ rd_status() {
     listener=$(rd_rdp_listener_state)
     active=$(rd_service_state is-active xrdp)
     enabled=$(rd_service_state is-enabled xrdp)
+    if rd_cjk_font_ready; then
+        font_state='已就绪'
+    else
+        font_state='缺少或未生效'
+    fi
     printf '远程图形桌面状态：\n'
     printf '  档位: %s\n' "$(rd_profile_label "$profile")"
     printf '  用户: %s\n' "$user"
     printf '  浏览器: %s\n' "$browser"
+    printf '  中文显示字体: %s\n' "$font_state"
     printf '  xrdp: %s / 开机状态 %s\n' "$active" "$enabled"
     printf '  RDP 监听: %s（必须为 loopback）\n' "$listener"
     case "$listener" in
@@ -1738,7 +1902,12 @@ rd_doctor() {
         fi
         return 0
     fi
-    if rd_verify; then
+    if rd_verify_core; then
+        if ! rd_cjk_font_ready; then
+            printf '检查结论：远程桌面安全配置健康，但缺少中文字体。\n'
+            printf '请选择“补齐必要组件”；无需卸载桌面或重启 xrdp。\n'
+            return 10
+        fi
         printf '检查结论：受管配置健康，无需修复。\n'
         return 0
     fi
@@ -1774,6 +1943,7 @@ rd_main() {
         plan) rd_plan "$@" ;;
         preflight) rd_preflight "$@" ;;
         apply) rd_apply "$@" ;;
+        configure) rd_repair ;;
         verify) rd_verify ;;
         status) rd_status "$@" ;;
         rollback) rd_rollback ;;

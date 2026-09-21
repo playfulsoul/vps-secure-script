@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.0.0-beta.7.1 - 2026-09-21
+
+- Install Noto CJK fonts in the LXQt, XFCE, and MATE remote-desktop profiles so Chinese web and application text renders correctly without changing the system language or adding an input method.
+- Add an explicitly confirmed in-place component repair for managed beta.7 desktops. It adds the missing font without reinstalling the desktop or restarting xrdp, records module-owned additions for rollback, and preserves fonts that were already installed independently.
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.7` remote desktop release, with the public archive SHA-256 pinned in the assistant.
 
 ## 2.0.0-beta.7 - 2026-09-21

@@ -96,3 +96,15 @@ A separate Debian 12 integration run validated the remote graphical desktop modu
 - Confirmed that rollback used explicit package purge without broad `apt autoremove`.
 
 This validation covers the Debian 12 XFCE path. LXQt and MATE use the same loopback listener, session ownership, transaction, and rollback controls, but their complete graphical rendering paths were not separately exercised in this run.
+
+## 2.0.0-beta.7.1 Chinese font validation
+
+A follow-up run on the managed Debian 12 XFCE installation reproduced missing Chinese glyphs in Firefox and validated the bounded font correction:
+
+- Confirmed that the beta.7 XFCE package set did not contain `fonts-noto-cjk` and that the Chinese font match fell back to a Latin-oriented family.
+- Installed only the distribution-provided `fonts-noto-cjk` package without reinstalling the desktop, restarting xrdp, or changing the system language.
+- Confirmed that the Chinese font match resolved to Noto Sans CJK SC.
+- Reused the existing SSH tunnel and RDP session, opened Firefox, and confirmed that Chinese search-result labels rendered normally instead of as missing-glyph boxes.
+- Confirmed that xrdp remained active on `127.0.0.1:3389` and that UFW still contained no public 3389 rule.
+
+This run validates the package choice and visible XFCE/Firefox result. LXQt and MATE receive the same common font dependency, but their graphical rendering paths were not separately exercised.
