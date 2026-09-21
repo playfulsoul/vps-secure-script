@@ -9,7 +9,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
-actual=$($CLI --version)
+actual=$("$CLI" --version)
 assert_contains "$actual" 'vps-secure 2.0.0-beta.8 (build sha256-' \
     "CLI reports both the semantic version and content build identity"
 if [[ "$actual" =~ \(build\ sha256-[a-f0-9]{64}\)$ ]]; then
@@ -18,7 +18,7 @@ else
     fail "CLI must expose a complete SHA-256 build identity"
 fi
 
-actual=$($CLI module list)
+actual=$("$CLI" module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
 assert_contains "$actual" 'security.ssh' "CLI lists the SSH module"
 assert_contains "$actual" 'monitoring.network' "CLI lists the network monitoring module"
@@ -64,23 +64,23 @@ assert_contains "$actual" '查看当前网络加速状态' "BBR menu uses task-s
 assert_contains "$actual" '━━━━━━━━ BBR 当前状态' "read-only actions have a visible result section"
 assert_contains "$actual" '[完成] 操作已完成' "module result is acknowledged before menu redraw"
 
-actual=$($CLI module info security.ssh)
+actual=$("$CLI" module info security.ssh)
 assert_contains "$actual" 'high-risk' "CLI exposes module privilege level"
 
-actual=$($CLI help)
+actual=$("$CLI" help)
 assert_contains "$actual" 'repair-persistence' "CLI documents the explicit firewall persistence repair"
-actual=$($CLI firewall repair-persistence 2>&1 || true)
+actual=$("$CLI" firewall repair-persistence 2>&1 || true)
 assert_contains "$actual" '确认计划后请添加 --yes' \
     "firewall persistence repair requires explicit confirmation"
-actual=$($CLI desktop repair 2>&1 || true)
+actual=$("$CLI" desktop repair 2>&1 || true)
 assert_contains "$actual" '确认计划后请添加 --yes' \
     "remote desktop component repair requires explicit confirmation"
 
-actual=$($CLI update status)
+actual=$("$CLI" update status)
 assert_contains "$actual" '更新通道: beta' "prerelease builds use the beta update channel"
 assert_contains "$actual" '构建身份: sha256-' "update status exposes the installed build identity"
 
-actual=$($CLI ssh key import-github octocat --user root 2>&1 || true)
+actual=$("$CLI" ssh key import-github octocat --user root 2>&1 || true)
 assert_contains "$actual" '公钥导入计划' "SSH key command previews changes before confirmation"
 assert_contains "$actual" '不会自动关闭密码登录' "SSH key import keeps password login unchanged"
 
@@ -89,7 +89,7 @@ temporary_auth_log=$(mktemp)
 printf '%s\n' 'ID=debian' 'VERSION_ID="12"' > "$temporary_os_release"
 actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
-    $CLI firewall plan)
+    "$CLI" firewall plan)
 assert_contains "$actual" '保持并放行 SSH 端口:' "firewall plan identifies the SSH allow-list"
 assert_contains "$actual" '32876' "firewall plan preserves the current custom SSH port"
 assert_contains "$actual" '不会自动新增网站端口 80/443' "firewall plan follows least-privilege defaults"
@@ -99,7 +99,7 @@ actual=$(VPS_OS_RELEASE_FILE="$temporary_os_release" \
     VPS_AUTH_LOG_FILE="$temporary_auth_log" \
     VPS_SYSTEMD_RUNTIME_DIR="$temporary_auth_log.missing-systemd" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
-    $CLI fail2ban plan)
+    "$CLI" fail2ban plan)
 assert_contains "$actual" 'SSH 端口:' "Fail2Ban plan identifies the protected SSH ports"
 assert_contains "$actual" '32876' "Fail2Ban plan uses the current custom SSH port"
 assert_contains "$actual" '日志后端: logfile' "Fail2Ban plan selects an available Debian log backend"
@@ -154,7 +154,7 @@ actual=$(PATH="$preflight_root/bin:$PATH" \
     VPS_SYSTEMD_RUNTIME_DIR="$preflight_root/systemd" \
     VPS_FAIL2BAN_CONFIG_ROOT="$preflight_root/config" \
     SSH_CONNECTION='198.51.100.7 50123 203.0.113.9 32876' \
-    $CLI fail2ban preflight)
+    "$CLI" fail2ban preflight)
 assert_contains "$actual" '临时合并配置预检通过' "Fail2Ban preflight validates a temporary merged configuration"
 if [[ -e "$preflight_root/config/jail.d/90-vps-secure.local" ]]; then
     fail "Fail2Ban preflight must not write the live configuration tree"
@@ -164,13 +164,13 @@ fi
 rm -rf "$preflight_root"
 rm -f "$temporary_os_release" "$temporary_auth_log"
 
-if $CLI module run security.ssh unsupported-action >/dev/null 2>&1; then
+if "$CLI" module run security.ssh unsupported-action >/dev/null 2>&1; then
     fail "CLI rejects unsupported module actions"
 else
     pass "CLI rejects unsupported module actions"
 fi
 
-if $CLI module run system.swap apply --size 1G >/dev/null 2>&1; then
+if "$CLI" module run system.swap apply --size 1G >/dev/null 2>&1; then
     fail "CLI requires explicit confirmation for state changes"
 else
     pass "CLI requires explicit confirmation for state changes"
