@@ -3,10 +3,19 @@
 set -u
 
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=../core/build_identity.sh
+source "$PROJECT_ROOT/core/build_identity.sh"
 VERSION=$(<"$PROJECT_ROOT/VERSION")
 DIST_DIR=${VPS_DIST_DIR:-$PROJECT_ROOT/dist}
-ARCHIVE="$DIST_DIR/vps-secure-platform-$VERSION.tar.gz"
+IDENTITY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/vps-build-identity.XXXXXX") || exit 40
+trap 'rm -rf -- "$IDENTITY_DIR"' EXIT
+vps_build_manifest "$PROJECT_ROOT" "$IDENTITY_DIR/BUILD_MANIFEST.sha256" || exit $?
+BUILD_ID="sha256-$(vps_build_sha256_file "$IDENTITY_DIR/BUILD_MANIFEST.sha256")" || exit $?
+printf '%s\n' "$BUILD_ID" > "$IDENTITY_DIR/BUILD_ID"
+ARCHIVE="$DIST_DIR/vps-secure-platform-$VERSION-build.$BUILD_ID.tar.gz"
 ARCHIVE_NAME=${ARCHIVE##*/}
+LEGACY_ARCHIVE="$DIST_DIR/vps-secure-platform-$VERSION.tar.gz"
+LEGACY_ARCHIVE_NAME=${LEGACY_ARCHIVE##*/}
 TAR_OPTIONS=(-czf "$ARCHIVE")
 ARCHIVE_MEMBERS=()
 
@@ -17,7 +26,7 @@ if [[ $(uname -s) == Darwin ]]; then
     TAR_OPTIONS=(--no-xattrs --no-mac-metadata --no-fflags "${TAR_OPTIONS[@]}")
 fi
 
-mkdir -p "$DIST_DIR"
+mkdir -p "$DIST_DIR" || exit 40
 
 # Do not archive the project root as `.`. When a release built on macOS is
 # extracted by root directly inside /root, tar may otherwise restore the
@@ -27,7 +36,7 @@ mkdir -p "$DIST_DIR"
 while IFS= read -r -d '' member; do
     member=${member#"$PROJECT_ROOT"/}
     case $member in
-        .git|dist|.DS_Store) continue ;;
+        .git|dist|.DS_Store|BUILD_ID|BUILD_MANIFEST.sha256) continue ;;
     esac
     ARCHIVE_MEMBERS+=("$member")
 done < <(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -print0)
@@ -39,12 +48,24 @@ done < <(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -print0)
 
 tar "${TAR_OPTIONS[@]}" \
     --exclude=.git --exclude=dist --exclude=.DS_Store \
-    -C "$PROJECT_ROOT" "${ARCHIVE_MEMBERS[@]}"
+    -C "$PROJECT_ROOT" "${ARCHIVE_MEMBERS[@]}" \
+    -C "$IDENTITY_DIR" BUILD_ID BUILD_MANIFEST.sha256 || exit 40
 
 if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$DIST_DIR" && sha256sum "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256")
+    (cd "$DIST_DIR" && sha256sum "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256") || exit 40
 else
-    (cd "$DIST_DIR" && shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256")
+    (cd "$DIST_DIR" && shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256") || exit 40
+fi
+
+# Clients released before build identities were introduced still request the
+# semantic-version-only asset name. Keep an identical compatibility asset for
+# the first upgrade hop; newer clients select the identity-bearing name from
+# GitHub release metadata.
+cp -f -- "$ARCHIVE" "$LEGACY_ARCHIVE" || exit 40
+if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$DIST_DIR" && sha256sum "$LEGACY_ARCHIVE_NAME" > "$LEGACY_ARCHIVE_NAME.sha256") || exit 40
+else
+    (cd "$DIST_DIR" && shasum -a 256 "$LEGACY_ARCHIVE_NAME" > "$LEGACY_ARCHIVE_NAME.sha256") || exit 40
 fi
 
 printf '%s\n' "$ARCHIVE"

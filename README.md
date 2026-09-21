@@ -280,6 +280,10 @@ sudo vps module install https://example.org/example-module.tar.gz \
 ./scripts/build-release.sh
 ```
 
+`VERSION` 只表示对外的语义版本。构建脚本会根据候选包内容生成完整 SHA-256 构建身份，
+并同时写入归档名、`BUILD_ID` 和安装后状态。可用 `vps --version` 核对实际安装的语义版本与构建身份。
+构建时还会生成内容完全相同的语义版本兼容归档，保证尚不认识构建身份的旧客户端也能完成首次升级。
+
 真实 VPS 验收记录：
 
 - [Debian 12](docs/DEBIAN_12_VALIDATION.md)

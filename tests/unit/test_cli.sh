@@ -10,7 +10,13 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$($CLI --version)
-assert_eq 'vps-secure 2.0.0-beta.7.1' "$actual" "CLI reports the platform version"
+assert_contains "$actual" 'vps-secure 2.0.0-beta.7.1 (build sha256-' \
+    "CLI reports both the semantic version and content build identity"
+if [[ "$actual" =~ \(build\ sha256-[a-f0-9]{64}\)$ ]]; then
+    pass "CLI exposes a complete SHA-256 build identity"
+else
+    fail "CLI must expose a complete SHA-256 build identity"
+fi
 
 actual=$($CLI module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
@@ -72,6 +78,7 @@ assert_contains "$actual" '确认计划后请添加 --yes' \
 
 actual=$($CLI update status)
 assert_contains "$actual" '更新通道: beta' "prerelease builds use the beta update channel"
+assert_contains "$actual" '构建身份: sha256-' "update status exposes the installed build identity"
 
 actual=$($CLI ssh key import-github octocat --user root 2>&1 || true)
 assert_contains "$actual" '公钥导入计划' "SSH key command previews changes before confirmation"
