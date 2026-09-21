@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add read-only, default-redacted local diagnostic reports, safely saved as mode `600` files and excluding server identities, network endpoints, authentication materials, and raw logs.
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.8` build-identity release, with the public legacy archive SHA-256 pinned in the assistant.
 
 ## 2.0.0-beta.8 - 2026-09-21
