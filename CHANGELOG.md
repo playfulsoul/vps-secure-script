@@ -2,6 +2,7 @@
 
 ## 2.0.0-beta.10 - 2026-09-21
 
+- Point the standalone 1.x migration assistant to the published and post-release-validated beta.10 archive, with its public SHA-256 pinned in the assistant.
 - Use a shared transaction and exclusive lock for platform installation, upgrades and version restoration; validate the candidate before switching the program directory and command entry.
 - Attempt to restore the previous installation and entry on failure, preserve independent backups, and retain transaction evidence when recovery fails or an operation is interrupted.
 - Reject unsafe installation paths and untrusted installed files. Version restoration preserves the source backup and only restores platform files, not module-managed system configuration.
