@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.0.0-beta.9 - 2026-09-21
 
 - Add read-only, default-redacted local diagnostic reports, safely saved as mode `600` files and excluding server identities, network endpoints, authentication materials, and raw logs.
+- Reject unsafe report directories, symbolic links, path traversal, and existing output files; remind users to review each local report before sharing it.
+- Expose report generation through menu 8, “诊断报告与程序维护”, option 5, with a visible result and a pause before returning. Reports are never uploaded automatically.
+- Make report byte checks portable across awk implementations and quote CLI paths in tests so checkouts containing spaces work correctly.
 - Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.8` build-identity release, with the public legacy archive SHA-256 pinned in the assistant.
 
 ## 2.0.0-beta.8 - 2026-09-21
