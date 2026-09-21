@@ -12,6 +12,8 @@ BIN_DIR=$(cd -- "$(dirname -- "$VPS_ENTRY")" && pwd)
 VPS_PLATFORM_ROOT=$(cd -- "$BIN_DIR/.." && pwd)
 export VPS_PLATFORM_ROOT
 
+# shellcheck source=../core/build_identity.sh
+source "$VPS_PLATFORM_ROOT/core/build_identity.sh"
 # shellcheck source=../core/modules.sh
 source "$VPS_PLATFORM_ROOT/core/modules.sh"
 # shellcheck source=../core/runtime.sh
@@ -22,6 +24,7 @@ source "$VPS_PLATFORM_ROOT/core/installer.sh"
 source "$VPS_PLATFORM_ROOT/core/update.sh"
 
 VERSION=$(<"$VPS_PLATFORM_ROOT/VERSION")
+BUILD_ID=$(vps_read_build_id "$VPS_PLATFORM_ROOT") || BUILD_ID=unknown
 
 # shellcheck source=../core/ui.sh
 source "$VPS_PLATFORM_ROOT/core/ui.sh"
@@ -211,7 +214,7 @@ main() {
             show_help
             ;;
         -V|--version|version)
-            printf 'vps-secure %s\n' "$VERSION"
+            printf 'vps-secure %s (build %s)\n' "$VERSION" "$BUILD_ID"
             ;;
         module)
             command_module "$@"
@@ -289,7 +292,8 @@ main() {
             case ${1:-} in
                 check) vps_update_check yes ;;
                 status)
-                    printf '当前版本: %s\n更新通道: %s\n' "$VERSION" "$(vps_update_channel)"
+                    printf '当前版本: %s\n构建身份: %s\n更新通道: %s\n' \
+                        "$VERSION" "$BUILD_ID" "$(vps_update_channel)"
                     ;;
                 apply)
                     [[ ${2:-} == --yes ]] || {

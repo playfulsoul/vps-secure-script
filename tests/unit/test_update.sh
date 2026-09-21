@@ -36,6 +36,21 @@ else
     fail "beta.6 clients must recognize beta.6.1 as newer"
 fi
 
+relation=$(vps_release_identity_relation 2.0.0-beta.2 sha256-b \
+    2.0.0-beta.2 sha256-a)
+assert_eq 'different-build' "$relation" \
+    "update comparison distinguishes different builds of the same semantic version"
+
+relation=$(vps_release_identity_relation 2.0.0-beta.2 sha256-a \
+    2.0.0-beta.2 sha256-a)
+assert_eq 'same' "$relation" \
+    "update comparison recognizes an identical version and build"
+
+relation=$(vps_release_identity_relation 2.0.0-beta.2 sha256-a \
+    2.0.0-beta.2 unknown)
+assert_eq 'unverified-build' "$relation" \
+    "update comparison does not guess equality for a legacy installation"
+
 release_response=$(mktemp)
 printf '%s\n' \
     '{"tag_name":"v2.0.0-beta.2","prerelease":true}' \
@@ -43,6 +58,28 @@ printf '%s\n' \
 actual=$(vps_update_extract_version "$release_response")
 assert_eq '2.0.0-beta.3' "$actual" "GitHub release response selects the newest validated version"
 rm -f "$release_response"
+
+release_response=$(mktemp)
+build_digest=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+printf '%s\n' \
+    "{\"name\":\"vps-secure-platform-2.0.0-beta.3-build.sha256-$build_digest.tar.gz\"}" \
+    > "$release_response"
+actual=$(vps_update_extract_build_id "$release_response" 2.0.0-beta.3)
+assert_eq "sha256-$build_digest" "$actual" \
+    "release metadata exposes the build identity used in the archive name"
+rm -f "$release_response"
+
+update_cache=$(mktemp -d)
+VPS_UPDATE_CACHE_DIR=$update_cache
+VERSION=2.0.0-beta.2
+BUILD_ID=sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+printf '%s\n' \
+    "{\"tag_name\":\"v2.0.0-beta.2\",\"name\":\"vps-secure-platform-2.0.0-beta.2-build.sha256-$build_digest.tar.gz\"}" \
+    > "$update_cache/release.json"
+actual=$(vps_update_check no 2>&1 || true)
+assert_contains "$actual" '语义版本相同，但发布构建不同' \
+    "update check reports a same-version build mismatch instead of claiming equality"
+rm -rf -- "$update_cache"
 
 release_response=$(mktemp)
 printf '%s\n' \

@@ -42,6 +42,25 @@ vps_version_is_newer() {
     [[ "$(printf '%s\n%s\n' "$current_pre" "$candidate_pre" | sort -V | tail -n 1)" == "$candidate_pre" ]]
 }
 
+vps_release_identity_relation() {
+    local candidate_version=${1#v} candidate_build=${2:-}
+    local current_version=${3#v} current_build=${4:-}
+
+    if vps_version_is_newer "$candidate_version" "$current_version"; then
+        printf 'newer\n'
+    elif vps_version_is_newer "$current_version" "$candidate_version"; then
+        printf 'older\n'
+    elif [[ -n "$candidate_build" && -n "$current_build" && \
+            "$candidate_build" != unknown && "$current_build" != unknown && \
+            "$candidate_build" != "$current_build" ]]; then
+        printf 'different-build\n'
+    elif [[ -n "$candidate_build" && "$candidate_build" == "$current_build" ]]; then
+        printf 'same\n'
+    else
+        printf 'unverified-build\n'
+    fi
+}
+
 vps_update_api_url() {
     local channel
     channel=$(vps_update_channel)
@@ -175,6 +194,24 @@ vps_update_download_asset() {
     return "$status"
 }
 
+vps_update_extract_build_id() {
+    local response_file=$1 version=${2#v} candidate
+    candidate=$(grep -oE \
+        "vps-secure-platform-${version//./\\.}-build\\.sha256-[a-f0-9]{64}\\.tar\\.gz" \
+        "$response_file" 2>/dev/null | head -n 1) || true
+    [[ -n "$candidate" ]] || return 1
+    candidate=${candidate#*build.}
+    candidate=${candidate%.tar.gz}
+    printf '%s\n' "$candidate"
+}
+
+vps_update_cached_build_id() {
+    local version=$1 response_file
+    response_file="$(vps_update_cache_dir)/release.json"
+    [[ -r "$response_file" ]] || return 1
+    vps_update_extract_build_id "$response_file" "$version"
+}
+
 vps_update_fetch_version() {
     local force=${1:-no} cache_dir response_file failure_marker now temporary_response mode=automatic
     cache_dir=$(vps_update_cache_dir)
@@ -209,19 +246,32 @@ vps_update_fetch_version() {
 }
 
 vps_update_check() {
-    local force=${1:-yes} latest
+    local force=${1:-yes} latest latest_build relation
     latest=$(vps_update_fetch_version "$force") || {
         printf '暂时无法连接 GitHub 检查更新；不影响现有功能。\n' >&2
         return 10
     }
-    if vps_version_is_newer "$latest" "$VERSION"; then
+    latest_build=$(vps_update_cached_build_id "$latest" 2>/dev/null || true)
+    relation=$(vps_release_identity_relation "$latest" "$latest_build" \
+        "$VERSION" "${BUILD_ID:-}")
+    if [[ "$relation" == newer ]]; then
         printf '发现新版本: %s（当前版本: %s，通道: %s）\n' \
             "$latest" "$VERSION" "$(vps_update_channel)"
         printf '更新说明: https://github.com/%s/releases/tag/v%s\n' \
             "$VPS_UPDATE_REPOSITORY" "$latest"
         return 20
     fi
-    printf '当前已是所选通道的最新版本: %s\n' "$VERSION"
+    if [[ "$relation" == different-build ]]; then
+        printf '语义版本相同，但发布构建不同: %s\n' "$VERSION"
+        printf '当前构建: %s\n发布构建: %s\n' "${BUILD_ID:-unknown}" "$latest_build"
+        return 21
+    fi
+    if [[ "$relation" == unverified-build ]]; then
+        printf '当前语义版本已是最新: %s；发布端未提供构建身份，无法确认内容完全一致。\n' "$VERSION"
+        return 0
+    fi
+    printf '当前已是所选通道的最新版本与构建: %s (%s)\n' \
+        "$VERSION" "${BUILD_ID:-unknown}"
 }
 
 vps_update_notice() {
@@ -237,7 +287,8 @@ vps_update_notice() {
 }
 
 vps_update_apply() {
-    local latest archive_name base_url temporary_dir checksum_file archive expected actual extract_dir old_umask
+    local latest latest_build relation archive_name base_url temporary_dir checksum_file archive
+    local expected actual extract_dir extracted_build old_umask
     (( EUID == 0 )) || {
         printf '安装平台更新需要 root 权限，请使用 sudo vps update apply --yes。\n' >&2
         return 30
@@ -248,12 +299,19 @@ vps_update_apply() {
         printf '暂时无法连接 GitHub 获取更新信息，现有版本未改变。网络恢复后可重新执行更新。\n' >&2
         return 10
     }
-    if ! vps_version_is_newer "$latest" "$VERSION"; then
-        printf '当前已是所选通道的最新版本: %s\n' "$VERSION"
+    latest_build=$(vps_update_cached_build_id "$latest" 2>/dev/null || true)
+    relation=$(vps_release_identity_relation "$latest" "$latest_build" \
+        "$VERSION" "${BUILD_ID:-}")
+    if [[ "$relation" != newer && "$relation" != different-build ]]; then
+        printf '当前没有可确认的新版本或不同发布构建: %s\n' "$VERSION"
         return 0
     fi
 
-    archive_name="vps-secure-platform-$latest.tar.gz"
+    if [[ -n "$latest_build" ]]; then
+        archive_name="vps-secure-platform-$latest-build.$latest_build.tar.gz"
+    else
+        archive_name="vps-secure-platform-$latest.tar.gz"
+    fi
     base_url="https://github.com/$VPS_UPDATE_REPOSITORY/releases/download/v$latest"
     old_umask=$(umask)
     umask 077
@@ -304,6 +362,19 @@ vps_update_apply() {
         printf '更新包版本与发布信息不一致。\n' >&2
         return 40
     }
+    if [[ -n "$latest_build" ]]; then
+        [[ -r "$extract_dir/BUILD_ID" ]] || {
+            rm -rf -- "$temporary_dir"
+            printf '更新包缺少构建身份。\n' >&2
+            return 40
+        }
+        IFS= read -r extracted_build < "$extract_dir/BUILD_ID"
+        [[ "$extracted_build" == "$latest_build" ]] || {
+            rm -rf -- "$temporary_dir"
+            printf '更新包构建身份与发布信息不一致。\n' >&2
+            return 40
+        }
+    fi
 
     if ! "$extract_dir/install.sh"; then
         rm -rf -- "$temporary_dir"
