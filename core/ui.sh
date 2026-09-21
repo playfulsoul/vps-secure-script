@@ -401,7 +401,7 @@ vps_ui_update_menu() {
     local choice
     while true; do
         vps_ui_header
-        vps_ui_section '🔄' '程序更新与恢复'
+        vps_ui_section '🔄' '诊断报告与程序维护'
         printf '\n'
         printf '当前版本：%s\n' "$VERSION"
         printf '更新通道：%s\n\n' "$(vps_update_channel)"
@@ -409,6 +409,7 @@ vps_ui_update_menu() {
         printf '  2. 更新到最新版本\n'
         printf '  3. 查看上一版本备份\n'
         printf '  4. 恢复上一版本\n'
+        printf '  5. 生成脱敏诊断报告\n'
         printf '  0. 返回\n'
         read -r -p '请选择: ' choice
         case "$choice" in
@@ -421,6 +422,7 @@ vps_ui_update_menu() {
                 fi
                 ;;
             3) vps_update_backup_list; vps_ui_pause ;;
+            5) vps_ui_show_result '生成脱敏诊断报告' vps_report_command ;;
             4)
                 if vps_ui_confirm '确认恢复上一版本？'; then
                     vps_update_rollback
@@ -844,8 +846,8 @@ vps_ui_main_menu() {
         vps_ui_section '🛠️' '检查与维护'
         vps_ui_menu_item 7 '🩺' '服务器完整体检' \
             '系统 · SSH · 防火墙 · Fail2Ban'
-        vps_ui_menu_item 8 '🔄' '程序更新与恢复' \
-            '检查更新 · 自动升级 · 恢复旧版'
+        vps_ui_menu_item 8 '🔄' '诊断报告与程序维护' \
+            '脱敏诊断报告 · 检查更新 · 自动升级 · 恢复旧版'
         vps_ui_menu_item 9 '🧱' '高级模式' \
             '全部模块与专业操作'
         printf '\n  %b0.%b 退出\n' "$UI_YELLOW" "$UI_RESET"
