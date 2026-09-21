@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-beta.10 - 2026-09-21
+
+- Use a shared transaction and exclusive lock for platform installation, upgrades and version restoration; validate the candidate before switching the program directory and command entry.
+- Attempt to restore the previous installation and entry on failure, preserve independent backups, and retain transaction evidence when recovery fails or an operation is interrupted.
+- Reject unsafe installation paths and untrusted installed files. Version restoration preserves the source backup and only restores platform files, not module-managed system configuration.
+- Add failure-injection coverage for interrupted operations, lock contention, switch failures and failed compensation. A forced termination or power loss still requires inspection of the retained lock and transaction before retrying.
+
 ## 2.0.0-beta.9 - 2026-09-21
 
 - Add read-only, default-redacted local diagnostic reports, safely saved as mode `600` files and excluding server identities, network endpoints, authentication materials, and raw logs.
