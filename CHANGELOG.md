@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Point the standalone 1.x migration assistant to the published and post-release-validated `2.0.0-beta.8` build-identity release, with the public legacy archive SHA-256 pinned in the assistant.
+
 ## 2.0.0-beta.8 - 2026-09-21
 
 - Give every content-distinct installable bundle a SHA-256 build identity that is visible in release assets, installer output, CLI version output, and update status.
