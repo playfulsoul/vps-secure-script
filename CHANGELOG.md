@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0 - 2026-09-22
+
+- Promote the accepted rc.1 functionality to the first stable 2.x release without changing platform or module behavior.
+- Keep transactional installation, update and restoration safeguards, SSH authorization-preserving rollback, and visible UFW/Fail2Ban compensation failures.
+- Move installed stable versions to the stable update channel while preserving the existing prerelease-to-stable upgrade ordering.
+- Keep the standalone 1.x migration assistant pinned to beta.11 until the public stable archive completes post-release verification.
+
 ## 2.0.0-rc.1 - 2026-09-22
 
 - Promote the accepted beta.11 functionality to a release candidate without changing platform or module behavior; this is not a stable release.
