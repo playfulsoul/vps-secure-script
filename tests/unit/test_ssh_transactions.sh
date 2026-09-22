@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Test doubles are invoked indirectly by the loaded module functions.
+# ShellCheck 0.9 reports their bodies as SC2317; 0.11 uses SC2329.
+# Keep SC2317 suppression scoped to these test-double definitions.
 # shellcheck disable=SC2329
 set -eu
 TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -19,6 +21,7 @@ fixture() {
 }
 ssh_key_passwd_record() { printf 'tester:x:%s:%s::%s:/bin/bash\n' "${TEST_UID:-$(id -u)}" "$(id -g)" "$VPS_SSH_KEY_HOME"; }
 vps_require_root() { return 0; }
+# shellcheck disable=SC2317
 ssh_key_download() { printf 'ssh-ed25519 AAAAnew imported\n' > "$1"; }
 ssh_key_show_fingerprints() { return 0; }
 expect_failure() {
@@ -102,11 +105,13 @@ ssh_key_rollback
 same "$target" "$root/expected" 'already removed key leaves other content unchanged'
 
 fixture partial
+# shellcheck disable=SC2317
 ssh_key_download() { printf 'ssh-ed25519 AAAAnew imported\nssh-ed25519 AAAAtwo second\n' > "$1"; }
 ssh_key_configure --github test --user tester
 printf 'ssh-ed25519 AAAAtwo second\n# preserved\n' > "$target"
 ssh_key_rollback
 assert_eq '# preserved' "$(cat "$target")" 'partially removed imports subtract only the remaining owned line'
+# shellcheck disable=SC2317
 ssh_key_download() { printf 'ssh-ed25519 AAAAnew imported\n' > "$1"; }
 
 fixture symlink
@@ -142,30 +147,37 @@ expect_failure 'legacy transaction without ownership evidence refuses rollback' 
 same "$target" "$root/expected" 'missing rollback evidence preserves keys'
 
 fixture late_change
+# shellcheck disable=SC2317
 ssh_key_download() {
     mv "$VPS_SSH_KEY_HOME" "$root/moved-home"
     mkdir "$VPS_SSH_KEY_HOME"
     printf 'ssh-ed25519 AAAAnew imported\n' > "$1"
 }
 expect_failure 'import rechecks home identity after download' ssh_key_configure --github test --user tester
+# shellcheck disable=SC2317
 ssh_key_download() { printf 'ssh-ed25519 AAAAnew imported\n' > "$1"; }
 
 eval "$(declare -f vps_set_last_transaction | sed '1s/vps_set_last_transaction/real_set_last_transaction/')"
+# shellcheck disable=SC2317
 vps_set_last_transaction() { return 1; }
 fixture pointer_failure
 expect_failure 'pointer failure aborts before authorizations change' ssh_key_configure --github test --user tester
 if [[ ! -e "$target" ]]; then pass 'pointer failure creates no authorized_keys'; else fail 'pointer failure wrote keys'; fi
+# shellcheck disable=SC2317
 vps_set_last_transaction() { real_set_last_transaction "$@"; }
 
 eval "$(declare -f ssh_tx_replace | sed '1s/ssh_tx_replace/real_tx_replace/')"
+# shellcheck disable=SC2317
 ssh_tx_replace() { return 1; }
 fixture write_failure
 expect_failure 'write failure is reported' ssh_key_configure --github test --user tester
 assert_eq failed "$(cat "$(vps_last_transaction "$MODULE_ID")/phase")" 'write failure records failed state'
 if [[ ! -e "$target" ]]; then pass 'failed write leaves target absent'; else fail 'failed write created target'; fi
+# shellcheck disable=SC2317
 ssh_tx_replace() { real_tx_replace "$@"; }
 
 eval "$(declare -f ssh_tx_phase | sed '1s/ssh_tx_phase/real_tx_phase/')"
+# shellcheck disable=SC2317
 ssh_tx_phase() { [[ "$2" != committed ]] || return 1; real_tx_phase "$@"; }
 fixture marker_failure
 expect_failure 'commit marker failure is not reported as success' ssh_key_configure --github test --user tester
@@ -179,22 +191,27 @@ cp "$target" "$root/expected"
 expect_failure 'existing-file commit marker failure is surfaced' ssh_key_configure --github test --user tester
 same "$target" "$root/expected" 'compensation restores original existing bytes'
 
+# shellcheck disable=SC2317
 ssh_tx_replace() { [[ "$1" != */original ]] || return 1; real_tx_replace "$@"; }
 fixture compensation_failure
 expect_failure 'compensation failure is surfaced' ssh_key_configure --github test --user tester
 assert_contains "$(cat "$root/failure.log")" '自动恢复失败' 'recovery failure includes explicit diagnostic'
 assert_file_exists "$target" 'failed compensation retains the evidence-bearing target'
 assert_eq prepared "$(cat "$(vps_last_transaction "$MODULE_ID")/phase")" 'failed compensation remains incomplete'
+# shellcheck disable=SC2317
 ssh_tx_phase() { real_tx_phase "$@"; }
+# shellcheck disable=SC2317
 ssh_tx_replace() { real_tx_replace "$@"; }
 expect_failure 'new import refuses to overwrite incomplete transaction' ssh_key_configure --github test --user tester
 expect_failure 'incomplete transaction cannot silently roll back' ssh_key_rollback
 
 fixture rollback_failure
 ssh_key_configure --github test --user tester
+# shellcheck disable=SC2317
 ssh_tx_phase() { [[ "$2" != rolled_back ]] || return 1; real_tx_phase "$@"; }
 expect_failure 'rollback completion marker failure is surfaced' ssh_key_rollback
 assert_eq rollback_pending "$(cat "$(vps_last_transaction "$MODULE_ID")/phase")" 'interrupted rollback remains identifiable'
+# shellcheck disable=SC2317
 ssh_tx_phase() { real_tx_phase "$@"; }
 printf 'ssh-ed25519 AAAAnew imported\n' > "$target"
 cp "$target" "$root/expected"
@@ -202,6 +219,7 @@ expect_failure 'ambiguous interrupted rollback requires manual review' ssh_key_r
 same "$target" "$root/expected" 'interrupted retry never removes a later reintroduced authorization'
 
 fixture term_after_write
+# shellcheck disable=SC2317
 ssh_tx_replace() {
     real_tx_replace "$@" || return $?
     # This shell is a child of configure()s subshell, not of the test runner.
