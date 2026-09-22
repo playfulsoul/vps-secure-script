@@ -10,7 +10,7 @@ CLI="$PROJECT_ROOT/bin/vps"
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$CLI" --version)
-assert_contains "$actual" 'vps-secure 2.0.0-beta.10 (build sha256-' \
+assert_contains "$actual" 'vps-secure 2.0.0-beta.11 (build sha256-' \
     "CLI reports both the semantic version and content build identity"
 if [[ "$actual" =~ \(build\ sha256-[a-f0-9]{64}\)$ ]]; then
     pass "CLI exposes a complete SHA-256 build identity"

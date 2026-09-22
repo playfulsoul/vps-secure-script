@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-beta.11 - 2026-09-22
+
+- Preserve later SSH authorizations when undoing a public-key import; remove only uniquely identifiable additions and retain existing restrictions, comments and blank lines.
+- Save SSH recovery evidence before writing, reject ambiguous or incomplete rollback records, and make completed rollback idempotent.
+- Serialize UFW and Fail2Ban changes, retain pending recovery evidence, and explicitly report incomplete automatic compensation instead of hiding the recovery failure.
+- Allow explicit recovery retries while preventing new changes from overwriting pending recovery records. Successful compensation still reports the original operation as failed.
+- Clarify current module interfaces and recovery limits: package installation is not undone, external edits are not serialized, and forced termination or power loss requires inspection of retained evidence.
+
 ## 2.0.0-beta.10 - 2026-09-21
 
 - Point the standalone 1.x migration assistant to the published and post-release-validated beta.10 archive, with its public SHA-256 pinned in the assistant.
