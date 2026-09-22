@@ -241,7 +241,7 @@ fail2ban_restore_dir() {
     printf '已恢复应用前的 Fail2Ban 模块配置。\n'
 }
 
-fail2ban_apply() {
+fail2ban_apply_impl() {
     local ports backend ports_csv transaction_dir config_dir
     local original_active=no original_enabled=no
 
@@ -256,7 +256,7 @@ fail2ban_apply() {
         DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban || return 40
     fi
 
-    transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || return 40
+    transaction_dir=$(fail2ban_tx_new) || return 40
     systemctl is-active --quiet fail2ban && original_active=yes
     systemctl is-enabled --quiet fail2ban && original_enabled=yes
     printf '%s\n' "$original_active" > "$transaction_dir/service_active" || return 40
@@ -287,25 +287,22 @@ fail2ban_apply() {
         return 0
     fi
 
+    fail2ban_tx_prepare "$transaction_dir" || return 40
     install -m 644 "$transaction_dir/candidate.conf" "$CONFIG_FILE" || return 40
 
     if ! fail2ban-client -t; then
-        fail2ban_restore_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 40
     fi
 
     if ! systemctl enable fail2ban || ! systemctl restart fail2ban; then
-        fail2ban_restore_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 40
     fi
 
     if ! fail2ban_verify; then
-        fail2ban_restore_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 50
     fi
 
     vps_set_last_transaction "$MODULE_ID" "$transaction_dir" || return 40
-    printf 'Fail2Ban 配置完成。事务记录: %s\n' "$transaction_dir"
 }
 
 fail2ban_status() {
@@ -316,15 +313,8 @@ fail2ban_status() {
     fail2ban-client status sshd
 }
 
-fail2ban_rollback() {
-    local transaction_dir
-    vps_require_root || return $?
-    transaction_dir=$(vps_last_transaction "$MODULE_ID") || {
-        printf '没有可回滚的 Fail2Ban 事务。\n' >&2
-        return 60
-    }
-    fail2ban_restore_dir "$transaction_dir"
-}
+# shellcheck source=transactions.sh
+source "$VPS_PLATFORM_ROOT/modules/builtin/security-fail2ban/transactions.sh"
 
 case ${1:-} in
     check) fail2ban_check ;;

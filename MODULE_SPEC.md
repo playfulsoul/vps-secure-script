@@ -4,7 +4,7 @@
 
 This document defines the minimum contract between the VPS Secure core and a feature module. A module may remain independently executable, but platform integration must use this contract rather than menu-specific coupling.
 
-## 2. Required files
+## 2. Module files
 
 ```text
 module-directory/
@@ -15,6 +15,8 @@ module-directory/
 ```
 
 `module.conf` is data, not executable shell code. The core parses only known keys and must never `source` a downloaded manifest.
+
+The runtime requires a valid manifest and its declared entry file. README and tests are documentation and maintenance conventions, not installer-enforced files.
 
 Example:
 
@@ -32,7 +34,7 @@ dependencies=ping,systemd
 actions=check,plan,configure,start,stop,status,verify
 ```
 
-## 3. Required actions
+## 3. Recognized actions
 
 Modules implement applicable actions through their entry point:
 
@@ -52,11 +54,7 @@ module.sh uninstall
 module.sh doctor
 ```
 
-Minimum requirements by module type:
-
-- Read-only module: `check`, `status`, `doctor`
-- Monitoring module: `check`, `apply`, `verify`, `status`, `configure`, `start`, `stop`, `uninstall`
-- System-changing module: `check`, `plan`, `preflight`, `backup`, `apply`, `verify`, `rollback`, `status`
+These are recognized action names, not actions implemented by every module. The manifest's `actions` field is authoritative; the dispatcher rejects undeclared actions. For example, the network module declares collection/timer actions but no uninstall, and SSH uses configure for public-key import. Inspect `vps module info <id>` before invoking a module action.
 
 `preflight` validates a generated candidate against a temporary copy of the effective configuration. It must not write system configuration, start or restart services, or otherwise change the target system.
 
@@ -69,7 +67,7 @@ Minimum requirements by module type:
 30  preflight check failed
 40  apply failed
 50  verification failed
-60  rollback failed
+60  rollback or automatic compensation incomplete/failed
 64  invalid arguments or module contract violation
 ```
 
@@ -85,7 +83,7 @@ high-risk      may affect remote access, firewall, services, or user data
 external-root  executes separately maintained code with root privileges
 ```
 
-The core performs confirmation and backup policy based on the declared level. A module may not silently elevate beyond its declaration.
+The core enforces confirmation for mutating actions and checks declared privilege. Backups and recovery are implemented by the individual module, not automatically supplied to every module by the dispatcher. A module may not silently elevate beyond its declaration.
 
 ## 6. Configuration ownership
 
@@ -109,7 +107,7 @@ Installation sequence:
 2. require a successful HTTP response;
 3. verify size and SHA-256;
 4. validate manifest keys and module ID;
-5. run contract and syntax checks;
+5. validate the manifest and the declared entry path;
 6. install through a temporary directory and atomically replace the active module;
 7. retain transaction metadata and a copy of the previous module for recovery.
 
@@ -121,4 +119,10 @@ An existing standalone script may be integrated through a wrapper module. The wr
 
 For curated external tools, the wrapper records an immutable entry URL, upstream commit, license, and SHA-256. Verification covers the downloaded entry file only. If that file downloads other scripts or binaries, the plan and user interface must disclose the additional trust boundary before execution.
 
-The beginner interface presents task-specific wording and may intentionally expose only a subset of module actions. `plan`, `verify`, and `check` remain part of the module contract even when a guided workflow invokes them automatically instead of listing them as separate menu items.
+The beginner interface presents task-specific wording and may intentionally expose only a subset of declared module actions. Guided workflows invoke applicable checks directly.
+
+## 9. Firewall and Fail2Ban recovery results
+
+These modules serialize mutating operations with a module lock. Before the first managed configuration change they save a pending transaction with recovery evidence. Application failure returns 40 (or 50 for verification) even if automatic compensation succeeds. Incomplete compensation returns 60, retains the pending transaction, and blocks another apply/configure until recovery is resolved. Explicit rollback can retry a pending recovery; a completed rollback is not applied a second time.
+
+TERM/INT/HUP trigger a module recovery attempt. SIGKILL or power loss cannot run a shell trap: inspect the saved evidence and process state before manually recovering a stale operation lock. Package installation is not undone. Firewall persistence recovery restores recorded service enablement, not the complete previous runtime packet-filter table; it reports this limitation. A current-session SSH rule may be retained, in which case rollback is incomplete and can be retried after switching sessions. The lock serializes platform operations, not external administrators; do not edit managed settings concurrently with apply or recovery.
