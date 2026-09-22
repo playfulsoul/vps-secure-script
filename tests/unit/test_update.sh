@@ -12,6 +12,19 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 # shellcheck source=../../core/update.sh
 source "$PROJECT_ROOT/core/update.sh"
 
+assert_eq 'stable' "$(VERSION=2.0.0 vps_update_channel)" \
+    "stable release uses the stable update channel"
+if vps_version_is_newer 2.0.0 2.0.0-rc.1; then
+    pass "existing update ordering promotes rc.1 to stable 2.0.0"
+else
+    fail "existing update ordering must recognize stable 2.0.0 after rc.1"
+fi
+if vps_version_is_newer 2.0.0-rc.1 2.0.0; then
+    fail "normal update must not downgrade stable 2.0.0 to rc.1"
+else
+    pass "normal update rejects rc.1 as older than stable 2.0.0"
+fi
+
 assert_eq 'beta' "$(VERSION=2.0.0-rc.1 vps_update_channel)" \
     "RC retains the existing beta update channel"
 if vps_version_is_newer 2.0.0-rc.1 2.0.0-beta.11; then
