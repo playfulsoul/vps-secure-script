@@ -2,7 +2,9 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前开发版本为 `2.0.0-beta.11`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前候选发布版本为 `2.0.0-rc.1`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+
+rc.1 与 beta.11 的功能代码相同，是已验收版本的候选发布，不是正式稳定版。现有 `beta` 更新通道包含 RC，2.x 用户检查更新后可确认升级；1.x 迁移助手仍固定安装 beta.11，不直接迁移到 RC。
 
 > 历史 Beta 版本已在 Debian 12、Debian 13、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试；这些记录不表示每个新构建都已完成全部系统的实机复测，具体范围见 [兼容性说明](COMPATIBILITY.md)。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
@@ -20,7 +22,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.0-beta.11
+  🎯 VPS 管理与安全平台  2.0.0-rc.1
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -110,16 +112,16 @@ apt-get install -y ca-certificates curl
 ```bash
 mkdir -p ~/vps-secure-install &&
 cd ~/vps-secure-install &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.11/vps-secure-platform-2.0.0-beta.11.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-beta.11/vps-secure-platform-2.0.0-beta.11.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.0-beta.11.tar.gz.sha256 &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-beta.11.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-rc.1/vps-secure-platform-2.0.0-rc.1.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0-rc.1/vps-secure-platform-2.0.0-rc.1.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.0-rc.1.tar.gz.sha256 &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0-rc.1.tar.gz &&
 ./install.sh &&
 vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.0-beta.11.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.0-rc.1.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 

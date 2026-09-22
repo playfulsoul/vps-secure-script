@@ -17,7 +17,7 @@ assert_file_exists "$temporary_root/lib/vps-secure/bin/vps" "installer copies th
 assert_file_exists "$temporary_root/lib/vps-secure/modules/builtin/security-firewall/module.conf" \
     "installer copies built-in modules"
 actual=$("$temporary_root/bin/vps" --version)
-assert_contains "$actual" 'vps-secure 2.0.0-beta.11 (build sha256-' \
+assert_contains "$actual" 'vps-secure 2.0.0-rc.1 (build sha256-' \
     "installed command reports its preserved build identity"
 assert_file_exists "$temporary_root/lib/vps-secure/BUILD_ID" \
     "installer preserves the build identity"
