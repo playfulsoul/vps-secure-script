@@ -357,7 +357,7 @@ firewall_backup_runtime() {
     fi
 }
 
-firewall_persistence_configure() {
+firewall_persistence_configure_impl() {
     local transaction_dir original_enabled=no conflicts unit changed=no
     vps_require_root || return $?
     firewall_check || return $?
@@ -374,7 +374,7 @@ firewall_persistence_configure() {
         return 0
     fi
 
-    transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || return 40
+    transaction_dir=$(firewall_tx_new) || return 40
     printf 'persistence\n' > "$transaction_dir/transaction_kind" || return 40
     firewall_ufw_service_enabled && original_enabled=yes
     printf '%s\n' "$original_enabled" > "$transaction_dir/original_ufw_enabled" || return 40
@@ -382,9 +382,9 @@ firewall_persistence_configure() {
     printf '%s\n' "$conflicts" | sed '/^$/d' > "$transaction_dir/disabled_conflicts" || return 40
     firewall_backup_runtime "$transaction_dir"
 
+    firewall_tx_prepare "$transaction_dir" || return 40
     if [[ "$original_enabled" == no ]]; then
         systemctl enable "$UFW_UNIT" || {
-            firewall_persistence_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
             return 40
         }
         changed=yes
@@ -392,28 +392,23 @@ firewall_persistence_configure() {
     while IFS= read -r unit; do
         [[ -n "$unit" ]] || continue
         if ! systemctl disable "$unit"; then
-            firewall_persistence_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
             return 40
         fi
         changed=yes
     done < "$transaction_dir/disabled_conflicts"
 
     if ! ufw reload; then
-        firewall_persistence_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 40
     fi
     changed=yes
     if ! firewall_verify; then
-        firewall_persistence_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 50
     fi
     [[ "$changed" == yes ]] || return 0
     vps_set_last_transaction "$MODULE_ID" "$transaction_dir" || return 40
-    printf 'UFW 已成为唯一已启用的防火墙开机所有者，运行规则已重新加载。事务记录: %s\n' \
-        "$transaction_dir"
 }
 
-firewall_apply() {
+firewall_apply_impl() {
     local ports port transaction_dir original_active=no original_ufw_enabled=no changed=no conflicts
 
     vps_require_root || return $?
@@ -437,7 +432,7 @@ firewall_apply() {
         return 30
     fi
 
-    transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || return 40
+    transaction_dir=$(firewall_tx_new) || return 40
     printf 'rules\n' > "$transaction_dir/transaction_kind" || return 40
     if firewall_is_active; then
         original_active=yes
@@ -454,28 +449,28 @@ firewall_apply() {
         if firewall_rule_exists "$port"; then
             continue
         fi
+        [[ "${tx_armed:-no}" == yes ]] || firewall_tx_prepare "$transaction_dir" || return 40
+        printf '%s\n' "$port" >> "$transaction_dir/added_ports" || return 40
         if ! ufw allow "$port/tcp"; then
-            firewall_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
             return 40
         fi
-        printf '%s\n' "$port" >> "$transaction_dir/added_ports"
         changed=yes
     done <<< "$ports"
 
+    if [[ "$changed" == yes || "$original_ufw_enabled" == no ]]; then
+        [[ "${tx_armed:-no}" == yes ]] || firewall_tx_prepare "$transaction_dir" || return 40
+    fi
     if [[ "$original_active" == no ]] && ! ufw --force enable; then
-        firewall_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 40
     fi
     if [[ "$original_ufw_enabled" == no ]]; then
         if ! systemctl enable "$UFW_UNIT"; then
-            firewall_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
             return 40
         fi
         changed=yes
     fi
 
     if ! firewall_verify; then
-        firewall_rollback_dir "$transaction_dir" >/dev/null 2>&1 || true
         return 50
     fi
 
@@ -493,18 +488,12 @@ firewall_apply() {
     fi
 
     vps_set_last_transaction "$MODULE_ID" "$transaction_dir" || return 40
-    printf '防火墙配置完成。事务记录: %s\n' "$transaction_dir"
 }
 
-firewall_rollback() {
-    local transaction_dir
-    vps_require_root || return $?
-    transaction_dir=$(vps_last_transaction "$MODULE_ID") || {
-        printf '没有可回滚的防火墙事务。\n' >&2
-        return 60
-    }
-    firewall_rollback_dir "$transaction_dir"
-}
+# shellcheck source=transactions.sh
+source "$VPS_PLATFORM_ROOT/modules/builtin/security-firewall/transactions.sh"
+
+firewall_persistence_configure() { firewall_tx_run persistence_configure; }
 
 case ${1:-} in
     check) firewall_check ;;

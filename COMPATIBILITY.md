@@ -8,7 +8,9 @@
 - **Experimental**: visible only with a warning; not included in one-click hardening promises.
 - **Unsupported**: execution stops before system modification.
 
-## Initial target matrix
+## Recorded compatibility matrix
+
+The manual records below describe the versions and scenarios recorded in their linked reports. They are not evidence that every later build has been retested on every platform. Local mocked fault-injection tests do not substitute for Linux service, reboot, or network acceptance.
 
 | Platform | Level | Notes |
 | --- | --- | --- |

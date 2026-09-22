@@ -29,7 +29,7 @@ The project is not intended to become a single ever-growing shell file. The core
 - Command mode: `vps <module> <action>`
 - Diagnostics: `vps doctor`
 - Release checks and verified self-update: `vps update <check|apply|rollback>`
-- Module management: `vps module <list|info|install|update|disable|uninstall>`
+- Module management: `vps module <list|info|install|update>`; module-specific actions are declared in each `module.conf`. There is no generic module disable/uninstall command.
 
 ### Core
 
@@ -38,33 +38,31 @@ The core is responsible for:
 - module discovery and routing;
 - platform and capability detection;
 - privilege and risk confirmation;
-- structured logging;
-- configuration, state, and lock management;
-- backup and rollback orchestration;
-- task scheduling and background-service integration;
+- state paths and transaction pointers;
+- installation/update locks and recovery; individual modules own their configuration backups and rollback behavior;
 - module download, version, and integrity verification.
 
 The core must not contain Docker, Fail2Ban, latency-monitoring, or other domain-specific implementation details.
 
 ### Platform adapters
 
-Adapters normalize operating-system differences:
+Current helpers and modules handle:
 
 - Debian and Ubuntu release detection;
-- APT and dpkg locking;
+- APT-based package operations and module-specific package checks;
 - systemd service management;
 - OpenSSH effective configuration and socket activation;
-- UFW, nftables, and Docker firewall interaction;
+- UFW runtime rules and competing firewall persistence services;
 - journal and file-based logging backends.
 
 ### Modules
 
 Initial module categories:
 
-- `security`: SSH, firewall, Fail2Ban, security audit;
+- `security`: SSH public keys, firewall, Fail2Ban;
 - `system`: packages, users, Swap, BBR, status;
-- `applications`: Docker, 1Panel;
-- `monitoring`: latency, packet loss, traffic, TCP/HTTP availability;
+- `applications`: Docker, 1Panel, loopback-only remote desktop;
+- `monitoring`: latency, packet loss, interface traffic;
 - `diagnostics`: route tracing, benchmark and IP-quality tools.
 
 ## 4. Trust model
@@ -121,13 +119,13 @@ Security initialization must preserve every confirmed SSH listening port. Port d
 3. effective `sshd -T` output;
 4. systemd socket configuration where applicable.
 
-If these sources conflict, the platform preserves the current connection port and stops before enabling a firewall until the conflict is resolved. Port 22 is never used as a fallback merely because configuration parsing failed.
+The platform combines confirmed ports from these sources, including the current connection port. It stops before enabling a firewall if no port can be reliably confirmed. Port 22 is never used as a fallback merely because configuration parsing failed.
 
-Changing an SSH port is a separate, explicit workflow. The old port remains allowed until the user verifies a new connection.
+The SSH module imports public keys; it does not change SSH ports or disable password login. Firewall rollback retains a newly added rule when it protects the current SSH session and asks the user to switch to another allowed port before retrying.
 
 ## 7. Monitoring direction
 
-Lightweight continuous collectors may measure latency, packet loss, TCP/HTTP response time, resource use, and interface traffic. Bandwidth speed tests are active, traffic-consuming jobs and remain opt-in with frequency and traffic limits.
+The built-in collector measures latency, packet loss and interface traffic. Third-party bandwidth tests are separate, explicit operations and can consume substantial traffic.
 
 The current Bash-based 2.x line uses systemd timers for lightweight local collection. High-volume tests and centralized monitoring are outside the built-in collector's current contract.
 
