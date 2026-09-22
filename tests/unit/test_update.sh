@@ -12,6 +12,25 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 # shellcheck source=../../core/update.sh
 source "$PROJECT_ROOT/core/update.sh"
 
+assert_eq 'beta' "$(VERSION=2.0.0-rc.1 vps_update_channel)" \
+    "RC retains the existing beta update channel"
+if vps_version_is_newer 2.0.0-rc.1 2.0.0-beta.11; then
+    pass "existing update ordering promotes beta.11 to rc.1"
+else
+    fail "existing update ordering must recognize rc.1 after beta.11"
+fi
+if vps_version_is_newer 2.0.0-beta.11 2.0.0-rc.1; then
+    fail "normal update must not downgrade rc.1 to beta.11"
+else
+    pass "normal update rejects beta.11 as older than rc.1"
+fi
+rc_response=$(mktemp)
+printf '%s\n' '{"tag_name":"v2.0.0-beta.11","prerelease":true}' \
+    '{"tag_name":"v2.0.0-rc.1","prerelease":true}' > "$rc_response"
+assert_eq '2.0.0-rc.1' "$(vps_update_extract_version "$rc_response")" \
+    "existing prerelease metadata selection discovers rc.1"
+rm -f -- "$rc_response"
+
 if vps_version_is_newer 2.0.0-beta.3 2.0.0-beta.2; then
     pass "update comparison accepts a newer beta"
 else

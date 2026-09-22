@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-rc.1 - 2026-09-22
+
+- Promote the accepted beta.11 functionality to a release candidate without changing platform or module behavior; this is not a stable release.
+- Retain SSH authorization-preserving rollback, visible UFW/Fail2Ban compensation failures, and transactional installation/update/restoration safeguards.
+- Verify the existing beta update channel's RC selection and version ordering without changing update policy.
+- Keep the standalone 1.x migration assistant pinned to the publicly verified beta.11 archive.
+
 ## 2.0.0-beta.11 - 2026-09-22
 
 - Preserve later SSH authorizations when undoing a public-key import; remove only uniquely identifiable additions and retain existing restrictions, comments and blank lines.
