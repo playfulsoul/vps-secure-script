@@ -131,49 +131,8 @@ ssh_key_show_fingerprints() {
     rm -f "$temporary_key"
 }
 
-ssh_key_configure() {
-    local temporary_dir imported_file ssh_dir authorized_keys merged transaction_dir existed=no
-    vps_require_root || return $?
-    ssh_key_parse_args "$@" || return $?
-    ssh_key_user_fields || return 20
-    ssh_dir="$SSH_KEY_HOME/.ssh"
-    authorized_keys="$ssh_dir/authorized_keys"
-    [[ ! -L "$ssh_dir" && ! -L "$authorized_keys" ]] || {
-        printf '拒绝写入符号链接形式的 SSH 授权路径。\n' >&2
-        return 40
-    }
-
-    temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-ssh-key.XXXXXX") || return 40
-    imported_file="$temporary_dir/imported.keys"
-    merged="$temporary_dir/authorized_keys"
-    if ! ssh_key_download "$imported_file"; then rm -rf -- "$temporary_dir"; return 30; fi
-    printf '即将导入以下密钥指纹：\n'
-    if ! ssh_key_show_fingerprints "$imported_file"; then rm -rf -- "$temporary_dir"; return 30; fi
-    if ! ssh_key_secure_home; then rm -rf -- "$temporary_dir"; return 40; fi
-
-    transaction_dir=$(vps_new_transaction_dir "$MODULE_ID") || { rm -rf -- "$temporary_dir"; return 40; }
-    printf '%s\n' "$SSH_KEY_TARGET_USER" > "$transaction_dir/target_user"
-    printf '%s\n' "$authorized_keys" > "$transaction_dir/authorized_keys_path"
-    if [[ -f "$authorized_keys" ]]; then
-        existed=yes
-        cp -p "$authorized_keys" "$transaction_dir/original_authorized_keys" || return 40
-        vps_merge_authorized_keys "$authorized_keys" "$imported_file" "$merged" || return 40
-    else
-        : > "$temporary_dir/empty"
-        vps_merge_authorized_keys "$temporary_dir/empty" "$imported_file" "$merged" || return 40
-    fi
-    printf '%s\n' "$existed" > "$transaction_dir/authorized_keys_existed"
-    install -d -m 700 -o "$SSH_KEY_UID" -g "$SSH_KEY_GID" "$ssh_dir" || return 40
-    install -m 600 -o "$SSH_KEY_UID" -g "$SSH_KEY_GID" "$merged" "$authorized_keys" || return 40
-    cp "$imported_file" "$transaction_dir/imported.keys" || return 40
-    vps_set_last_transaction "$MODULE_ID" "$transaction_dir" || return 40
-    rm -rf -- "$temporary_dir"
-    printf '公钥已导入用户 %s。请保持当前窗口，并立即新开窗口测试密钥登录。\n' "$SSH_KEY_TARGET_USER"
-    printf '确认密钥登录成功前，不要关闭密码登录。\n'
-}
-
 ssh_key_verify() {
-    local transaction_dir authorized_keys imported_file key target_user
+    local transaction_dir authorized_keys imported_file key target_user expected
     transaction_dir=$(vps_last_transaction "$MODULE_ID") || {
         printf '没有可验证的 SSH 公钥导入记录。\n' >&2
         return 60
@@ -181,12 +140,20 @@ ssh_key_verify() {
     IFS= read -r target_user < "$transaction_dir/target_user"
     SSH_KEY_TARGET_USER=$target_user
     ssh_key_user_fields || return 50
-    IFS= read -r authorized_keys < "$transaction_dir/authorized_keys_path"
+    ssh_tx_path "$transaction_dir" || return 50
+    if [[ -f "$transaction_dir/phase" ]]; then
+        [[ "$(cat "$transaction_dir/phase")" == committed ]] || return 50
+        IFS= read -r expected < "$transaction_dir/identity" || return 50
+        [[ "$(ssh_tx_identity)" == "$expected" ]] || return 50
+    fi
+    ssh_tx_path "$SSH_KEY_HOME/.ssh/authorized_keys" || return 50
+    authorized_keys="$SSH_KEY_HOME/.ssh/authorized_keys"
     imported_file="$transaction_dir/imported.keys"
     [[ -f "$authorized_keys" && -f "$imported_file" ]] || return 50
     ssh_key_paths_verify || return $?
     while IFS= read -r key || [[ -n "$key" ]]; do
-        grep -Fxq -- "$key" "$authorized_keys" || {
+        [[ -n "$key" ]] || continue
+        ssh_tx_key_present "$key" "$authorized_keys" || {
             printf '授权文件中缺少已导入的公钥。\n' >&2
             return 50
         }
@@ -194,26 +161,8 @@ ssh_key_verify() {
     printf '已导入的公钥仍存在于授权文件中。\n'
 }
 
-ssh_key_rollback() {
-    local transaction_dir authorized_keys existed target_user record uid gid
-    vps_require_root || return $?
-    transaction_dir=$(vps_last_transaction "$MODULE_ID") || {
-        printf '没有可回滚的 SSH 公钥导入记录。\n' >&2
-        return 60
-    }
-    IFS= read -r authorized_keys < "$transaction_dir/authorized_keys_path"
-    IFS= read -r existed < "$transaction_dir/authorized_keys_existed"
-    IFS= read -r target_user < "$transaction_dir/target_user"
-    record=$(ssh_key_passwd_record "$target_user") || return 60
-    uid=$(printf '%s\n' "$record" | awk -F: '{ print $3 }')
-    gid=$(printf '%s\n' "$record" | awk -F: '{ print $4 }')
-    if [[ "$existed" == yes ]]; then
-        install -m 600 -o "$uid" -g "$gid" "$transaction_dir/original_authorized_keys" "$authorized_keys" || return 60
-    else
-        rm -f "$authorized_keys" || return 60
-    fi
-    printf '已恢复导入公钥之前的 authorized_keys。\n'
-}
+# shellcheck source=transactions.sh
+source "$VPS_PLATFORM_ROOT/modules/builtin/security-ssh/transactions.sh"
 
 case ${1:-} in
     check)
