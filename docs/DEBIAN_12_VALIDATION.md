@@ -108,3 +108,19 @@ A follow-up run on the managed Debian 12 XFCE installation reproduced missing Ch
 - Confirmed that xrdp remained active on `127.0.0.1:3389` and that UFW still contained no public 3389 rule.
 
 This run validates the package choice and visible XFCE/Firefox result. LXQt and MATE receive the same common font dependency, but their graphical rendering paths were not separately exercised.
+
+## 2.1.0-beta.1 staged login-hardening validation
+
+A dedicated Debian 12 run on 2026-09-22 validated the candidate from a verified release-style archive. Network addresses, the temporary account password, public-key material and one-time tokens are intentionally omitted.
+
+- Captured the effective OpenSSH baseline before any change: port 22, root and password login enabled, public-key login enabled, keyboard-interactive login disabled, and `ssh.service` active.
+- Prepared a temporary ordinary account, added it to the `sudo` group and imported two public keys from the configured GitHub account. This stage left every effective OpenSSH setting unchanged.
+- Opened a real SSH session as the ordinary user with a local Ed25519 private key and used the account password to run the verification through sudo.
+- Disabled password authentication and independently confirmed both effective daemon values and a rejected password-only SSH attempt. A fresh ordinary-user key session remained usable.
+- Completed the required second key-session and sudo verification before changing root policy.
+- Applied the recommended root-key-only policy. Debian 12 normalized `prohibit-password` to the equivalent effective value `without-password`; the module accepts both spellings, and a new root key session succeeded.
+- Applied the optional complete root-login prohibition, confirmed that a new root key session was rejected, and recovered through the already verified ordinary sudo user.
+- Rolled back root prohibition, root key-only policy and password prohibition one layer at a time. The module-owned drop-in was removed and the final effective OpenSSH values matched the recorded baseline byte-for-byte.
+- Deleted the temporary user and isolated test state. The installed stable platform remained 2.0.0, `ssh.service` remained active, and the final doctor result contained only the pre-existing Docker published-port warning.
+
+The run found and corrected two candidate defects before acceptance: the CLI initially did not read the sudo-preserved `VPS_LOGIN_SESSION` value printed by its own instructions, and the root-key-only verification initially treated OpenSSH's `without-password` normalization as different from `prohibit-password`. Both cases now have automated regression coverage.

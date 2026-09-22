@@ -5,12 +5,13 @@ set -u
 TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd -- "$TEST_DIR/../.." && pwd)
 CLI="$PROJECT_ROOT/bin/vps"
+VERSION=$(<"$PROJECT_ROOT/VERSION")
 
 # shellcheck source=../test_helper.sh
 source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$CLI" --version)
-assert_contains "$actual" 'vps-secure 2.0.0 (build sha256-' \
+assert_contains "$actual" "vps-secure $VERSION (build sha256-" \
     "CLI reports both the semantic version and content build identity"
 if [[ "$actual" =~ \(build\ sha256-[a-f0-9]{64}\)$ ]]; then
     pass "CLI exposes a complete SHA-256 build identity"
@@ -21,6 +22,7 @@ fi
 actual=$("$CLI" module list)
 assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
 assert_contains "$actual" 'security.ssh' "CLI lists the SSH module"
+assert_contains "$actual" 'security.login-hardening' "CLI lists the verified login hardening module"
 assert_contains "$actual" 'monitoring.network' "CLI lists the network monitoring module"
 
 actual=$(printf '0\n' | "$CLI")
@@ -32,6 +34,8 @@ assert_contains "$actual" '脱敏诊断报告 · 检查更新 · 自动升级 ·
     "main menu discovers reports without hiding existing update actions"
 assert_contains "$actual" '软件更新 · Swap · BBR · 用户与 sudo' \
     "main menu summarizes system-management capabilities"
+assert_contains "$actual" '普通 sudo 用户 · 公钥验证 · 密码/root 策略' \
+    "main menu exposes the verified login-hardening stages"
 assert_contains "$actual" '融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量' \
     "main menu summarizes external test capabilities"
 assert_contains "$actual" '立即检测 · 延迟 · 丢包 · 网卡流量记录' \
@@ -49,6 +53,14 @@ fi
 actual=$(printf '5\n0\n0\n' | "$CLI")
 assert_contains "$actual" '立即检测网络状态（无需预配置）' \
     "network menu exposes a configuration-free quick check"
+
+actual=$(printf '2\n2\n0\n0\n0\n' | "$CLI")
+assert_contains "$actual" '准备普通 sudo 用户与 GitHub 公钥' \
+    "security menu exposes ordinary-user and key preparation"
+assert_contains "$actual" '关闭 SSH 密码登录（需首次验证）' \
+    "security menu makes the first verification gate visible"
+assert_contains "$actual" 'root 仅允许公钥登录（需再次验证，推荐）' \
+    "security menu keeps root restriction behind a second verification"
 
 meminfo_file=$(mktemp)
 printf '%s\n' 'MemTotal:        1048576 kB' > "$meminfo_file"
@@ -79,12 +91,35 @@ assert_contains "$actual" '确认计划后请添加 --yes' \
     "remote desktop component repair requires explicit confirmation"
 
 actual=$("$CLI" update status)
-assert_contains "$actual" '更新通道: stable' "stable builds use the stable update channel"
+if [[ "$VERSION" == *-* ]]; then expected_channel=beta; else expected_channel=stable; fi
+assert_contains "$actual" "更新通道: $expected_channel" \
+    "installed build uses the expected update channel"
 assert_contains "$actual" '构建身份: sha256-' "update status exposes the installed build identity"
 
 actual=$("$CLI" ssh key import-github octocat --user root 2>&1 || true)
 assert_contains "$actual" '公钥导入计划' "SSH key command previews changes before confirmation"
 assert_contains "$actual" '不会自动关闭密码登录' "SSH key import keeps password login unchanged"
+
+actual=$("$CLI" login prepare --user deploy --github octocat 2>&1 || true)
+assert_contains "$actual" '新的公钥 SSH 会话' "login preparation previews the separate-session gate"
+assert_contains "$actual" '确认后请添加 --yes' "login preparation requires explicit confirmation"
+
+actual=$(VPS_LOGIN_SESSION='203.0.113.10 54321 192.0.2.20 32876' \
+    "$CLI" login verify --token 0123456789abcdef0123456789abcdef 2>&1 || true)
+if [[ "$actual" == *'用法：'* ]]; then
+    fail "login verification must accept the sudo-preserved session variable"
+else
+    pass "login verification accepts the sudo-preserved session variable"
+fi
+
+actual=$("$CLI" login disable-password --user deploy 2>&1 || true)
+assert_contains "$actual" '必须先完成新窗口验证' "password disabling explains the verification prerequisite"
+
+actual=$("$CLI" login restrict-root --user deploy --mode key-only 2>&1 || true)
+assert_contains "$actual" '必须在关闭密码后再次验证新窗口' "root restriction remains a separate final confirmation"
+
+actual=$("$CLI" login rollback 2>&1 || true)
+assert_contains "$actual" '回滚登录策略需要确认' "login policy rollback requires explicit confirmation"
 
 temporary_os_release=$(mktemp)
 temporary_auth_log=$(mktemp)
