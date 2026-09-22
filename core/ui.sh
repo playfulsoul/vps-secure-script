@@ -291,30 +291,96 @@ vps_ui_safe_init_flow() {
 
 vps_ui_login_safety_info() {
     printf '推荐的登录强化顺序：\n\n'
-    printf '  1. 导入或添加 SSH 公钥。\n'
-    printf '  2. 创建并确认普通 sudo 用户。\n'
+    printf '  1. 创建普通 sudo 用户并导入 SSH 公钥。\n'
+    printf '  2. 保持当前窗口，不修改现有 root、密码或端口设置。\n'
     printf '  3. 打开新的 SSH 窗口验证密钥和 sudo。\n'
-    printf '  4. 验证成功后，才考虑关闭密码登录。\n'
-    printf '  5. 最后再考虑限制 root 登录。\n\n'
-    printf '当前版本不会自动关闭密码登录或禁止 root，避免把用户锁在服务器外。\n'
+    printf '  4. 验证成功后，才允许关闭密码登录。\n'
+    printf '  5. 关闭密码后再次验证新窗口，最后才允许限制 root。\n\n'
+    printf '每一步独立确认并保存恢复记录；没有新窗口验证就无法进入下一步。\n'
+}
+
+vps_ui_login_prepare() {
+    local username github answer
+    (( EUID == 0 )) || { printf '请使用 sudo vps 运行登录安全向导。\n' >&2; return 30; }
+    read -r -p '请输入要创建或使用的普通用户名: ' username
+    read -r -p '请输入包含登录公钥的 GitHub 用户名: ' github
+    vps_module_run security.login-hardening plan --user "$username" --github "$github" || return $?
+    read -r -p '确认准备普通 sudo 用户和公钥？现有登录方式不会被关闭。(y/N): ' answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { printf '已取消。\n'; return 90; }
+    vps_module_run security.login-hardening apply --user "$username" --github "$github"
+}
+
+vps_ui_login_verify() {
+    local token session=${SSH_CONNECTION:-}
+    (( EUID == 0 )) || { printf '验证必须通过 sudo 执行。\n' >&2; return 30; }
+    [[ -n "$session" ]] || {
+        printf 'sudo 未保留 SSH_CONNECTION。请在新窗口运行准备步骤显示的完整验证命令。\n' >&2
+        return 60
+    }
+    read -r -p '请输入原窗口显示的一次性验证令牌: ' token
+    vps_module_run security.login-hardening verify --token "$token" --session "$session"
+}
+
+vps_ui_login_disable_password() {
+    local username answer
+    read -r -p '请输入已通过新窗口验证的普通用户名: ' username
+    vps_module_run security.login-hardening preflight "$username" || return $?
+    printf '\n此操作将关闭所有 SSH 密码和键盘交互登录，但不会修改 SSH 端口或 root 公钥。\n'
+    read -r -p '确认关闭密码登录？(y/N): ' answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { printf '已取消。\n'; return 90; }
+    vps_module_run security.login-hardening configure password-disable --user "$username"
+}
+
+vps_ui_login_restrict_root() {
+    local mode=$1 username answer description
+    read -r -p '请输入已完成第二次新窗口验证的普通用户名: ' username
+    if [[ "$mode" == key-only ]]; then
+        description='root 仅允许公钥登录（推荐）'
+    else
+        description='完全禁止 root 直接登录'
+    fi
+    printf '\n即将设置：%s。普通 sudo 用户必须继续可用。\n' "$description"
+    read -r -p '确认执行最后一步 root 登录限制？(y/N): ' answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { printf '已取消。\n'; return 90; }
+    vps_module_run security.login-hardening configure root-restrict --user "$username" --mode "$mode"
+}
+
+vps_ui_login_rollback() {
+    local answer
+    printf '只恢复本模块上一次提交的 SSH 登录策略，不改变 SSH 端口或其他配置。\n'
+    read -r -p '确认回滚？(y/N): ' answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { printf '已取消。\n'; return 90; }
+    vps_module_run security.login-hardening rollback
 }
 
 vps_ui_login_safety_menu() {
     local choice
     while true; do
         vps_ui_header
-        vps_ui_section '🔑' '登录安全基础设置'
-        printf '\n  1. 查看当前 SSH 端口\n'
-        printf '  2. 从 GitHub 导入登录公钥\n'
-        printf '  3. 管理普通用户与 sudo 权限\n'
-        printf '  4. 查看登录安全进阶步骤\n'
+        vps_ui_section '🔑' '分阶段登录安全设置'
+        printf '\n  1. 查看登录安全状态\n'
+        printf '  2. 准备普通 sudo 用户与 GitHub 公钥\n'
+        printf '  3. 在新的密钥登录窗口完成验证\n'
+        printf '  4. 关闭 SSH 密码登录（需首次验证）\n'
+        printf '  5. root 仅允许公钥登录（需再次验证，推荐）\n'
+        printf '  6. 完全禁止 root 登录（需再次验证）\n'
+        printf '  7. 回滚上一次登录策略修改\n'
+        printf '  8. 仅向现有用户导入 GitHub 公钥\n'
+        printf '  9. 管理普通用户与 sudo 权限\n'
+        printf ' 10. 查看安全步骤说明\n'
         printf '  0. 返回\n'
         read -r -p '请选择: ' choice
         case "$choice" in
-            1) vps_ui_show_result 'SSH 端口状态' vps_module_run security.ssh status ;;
-            2) vps_ui_show_result 'GitHub 登录公钥' vps_ui_github_key ;;
-            3) vps_ui_users_menu ;;
-            4) vps_ui_show_result '登录安全进阶说明' vps_ui_login_safety_info ;;
+            1) vps_ui_show_result '登录安全状态' vps_module_run security.login-hardening status ;;
+            2) vps_ui_show_result '准备普通管理员与公钥' vps_ui_login_prepare ;;
+            3) vps_ui_show_result '验证新 SSH 窗口' vps_ui_login_verify ;;
+            4) vps_ui_show_result '关闭 SSH 密码登录' vps_ui_login_disable_password ;;
+            5) vps_ui_show_result 'root 仅允许公钥登录' vps_ui_login_restrict_root key-only ;;
+            6) vps_ui_show_result '完全禁止 root 登录' vps_ui_login_restrict_root disable ;;
+            7) vps_ui_show_result '回滚登录策略' vps_ui_login_rollback ;;
+            8) vps_ui_show_result 'GitHub 登录公钥' vps_ui_github_key ;;
+            9) vps_ui_users_menu ;;
+            10) vps_ui_show_result '登录安全步骤说明' vps_ui_login_safety_info ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac
@@ -369,28 +435,30 @@ vps_ui_security_menu() {
         vps_ui_section '🛡️' 'SSH 与安全防护'
         printf '\n'
         printf '  1. 查看 SSH 端口\n'
-        printf '  2. 从 GitHub 导入登录公钥\n'
-        printf '  3. 安装并启用防火墙\n'
-        printf '  4. 检查防火墙运行与重启风险\n'
-        printf '  5. 修复防火墙启动冲突\n'
-        printf '  6. 查看防火墙状态\n'
-        printf '  7. 安装并启用 SSH 防暴力破解\n'
-        printf '  8. 查看 SSH 防护状态\n'
-        printf '  9. 撤销上一次防火墙修改\n'
-        printf ' 10. 撤销上一次 Fail2Ban 修改\n'
+        printf '  2. 分阶段设置普通用户、密钥、密码和 root 策略\n'
+        printf '  3. 仅从 GitHub 导入登录公钥\n'
+        printf '  4. 安装并启用防火墙\n'
+        printf '  5. 检查防火墙运行与重启风险\n'
+        printf '  6. 修复防火墙启动冲突\n'
+        printf '  7. 查看防火墙状态\n'
+        printf '  8. 安装并启用 SSH 防暴力破解\n'
+        printf '  9. 查看 SSH 防护状态\n'
+        printf ' 10. 撤销上一次防火墙修改\n'
+        printf ' 11. 撤销上一次 Fail2Ban 修改\n'
         printf '  0. 返回\n'
         read -r -p '请选择: ' choice
         case "$choice" in
             1) vps_ui_show_result 'SSH 端口状态' vps_module_run security.ssh status ;;
-            2) vps_ui_show_result 'GitHub 登录公钥' vps_ui_github_key ;;
-            3) vps_ui_show_result '启用防火墙' vps_ui_run_action security.firewall apply ;;
-            4) vps_ui_show_result '防火墙运行与重启风险' vps_module_run security.firewall preflight ;;
-            5) vps_ui_show_result '修复防火墙启动冲突' vps_ui_run_action security.firewall configure ;;
-            6) vps_ui_show_result '防火墙状态' vps_module_run security.firewall status ;;
-            7) vps_ui_show_result '启用 SSH 防暴力破解' vps_ui_run_action security.fail2ban apply ;;
-            8) vps_ui_show_result 'SSH 防护状态' vps_module_run security.fail2ban status ;;
-            9) vps_ui_show_result '撤销防火墙修改' vps_ui_run_action security.firewall rollback ;;
-            10) vps_ui_show_result '撤销 Fail2Ban 修改' vps_ui_run_action security.fail2ban rollback ;;
+            2) vps_ui_login_safety_menu ;;
+            3) vps_ui_show_result 'GitHub 登录公钥' vps_ui_github_key ;;
+            4) vps_ui_show_result '启用防火墙' vps_ui_run_action security.firewall apply ;;
+            5) vps_ui_show_result '防火墙运行与重启风险' vps_module_run security.firewall preflight ;;
+            6) vps_ui_show_result '修复防火墙启动冲突' vps_ui_run_action security.firewall configure ;;
+            7) vps_ui_show_result '防火墙状态' vps_module_run security.firewall status ;;
+            8) vps_ui_show_result '启用 SSH 防暴力破解' vps_ui_run_action security.fail2ban apply ;;
+            9) vps_ui_show_result 'SSH 防护状态' vps_module_run security.fail2ban status ;;
+            10) vps_ui_show_result '撤销防火墙修改' vps_ui_run_action security.firewall rollback ;;
+            11) vps_ui_show_result '撤销 Fail2Ban 修改' vps_ui_run_action security.fail2ban rollback ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac
@@ -832,7 +900,7 @@ vps_ui_main_menu() {
             '系统检查 · UFW · Fail2Ban · BBR · 智能 Swap'
         vps_ui_section '🔐' '安全与登录'
         vps_ui_menu_item 2 '🔑' 'SSH 与安全防护' \
-            '端口 · GitHub 公钥 · UFW · Fail2Ban · 回滚'
+            '普通 sudo 用户 · 公钥验证 · 密码/root 策略 · UFW · Fail2Ban'
         vps_ui_section '⚙️' '系统与应用'
         vps_ui_menu_item 3 '🧰' '系统管理' \
             '软件更新 · Swap · BBR · 用户与 sudo'

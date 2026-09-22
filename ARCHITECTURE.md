@@ -121,7 +121,9 @@ Security initialization must preserve every confirmed SSH listening port. Port d
 
 The platform combines confirmed ports from these sources, including the current connection port. It stops before enabling a firewall if no port can be reliably confirmed. Port 22 is never used as a fallback merely because configuration parsing failed.
 
-The SSH module imports public keys; it does not change SSH ports or disable password login. Firewall rollback retains a newly added rule when it protects the current SSH session and asks the user to switch to another allowed port before retrying.
+The basic SSH module imports public keys; it does not change SSH ports or disable password login. The separate high-risk login-hardening module can prepare an ordinary sudo user and change password/root policy only after a matching public-key session is proven in a new window. Password removal and root restriction are two distinct gates, each followed or preceded by a fresh-session check. The module owns one SSH drop-in, verifies effective daemon values after reload, and never writes a `Port` directive.
+
+Firewall rollback retains a newly added rule when it protects the current SSH session and asks the user to switch to another allowed port before retrying.
 
 ## 7. Monitoring direction
 

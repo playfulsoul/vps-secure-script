@@ -12,6 +12,7 @@
 - [架构说明](../ARCHITECTURE.md)：核心、适配器、模块和信任边界。
 - [模块规范](../MODULE_SPEC.md)：模块清单、生命周期和安全契约。
 - [兼容性政策](../COMPATIBILITY.md)：系统支持等级和必测场景。
+- [分阶段登录安全](LOGIN_HARDENING.md)：普通 sudo 用户、新窗口验证、密码与 root 策略的安全顺序。
 - [测试指南](TESTING.md)：本地、CI 和真实 VPS 测试要求。
 - [发布流程](RELEASE_PROCESS.md)：从版本冻结到 Release 和迁移入口更新。
 

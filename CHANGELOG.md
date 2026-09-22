@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0-beta.1 - 2026-09-22
+
+- Add a staged login-hardening workflow that prepares an ordinary sudo user and imports GitHub public keys without changing the current SSH port or disabling existing login methods.
+- Require a fresh, matching public-key SSH session and working sudo before password authentication can be disabled; stale authentication logs and password-authenticated sessions cannot unlock the step.
+- Require a second fresh public-key session after password authentication is disabled before root can be limited to public keys or disabled entirely.
+- Own a single SSH drop-in, verify the effective daemon policy after reload, compensate failed changes, retain layered rollback points, and refuse to overwrite an unrelated file at the owned path.
+
 ## 2.0.0 - 2026-09-22
 
 - Promote the accepted rc.1 functionality to the first stable 2.x release without changing platform or module behavior.

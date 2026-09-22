@@ -91,6 +91,7 @@ A module writes only files with a project-specific name, for example:
 
 ```text
 /etc/ssh/sshd_config.d/90-vps-secure.conf
+/etc/ssh/sshd_config.d/00-vps-secure-login-hardening.conf
 /etc/fail2ban/jail.d/90-vps-secure.local
 /etc/sysctl.d/90-vps-secure.conf
 ```

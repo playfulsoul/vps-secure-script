@@ -51,6 +51,12 @@ VPS 管理与安全平台
   vps init
   vps ssh status
   vps ssh key import-github <GitHub用户名> [--user <服务器用户>] --yes
+  vps login status [--user <普通用户>]
+  vps login prepare --user <普通用户> --github <GitHub用户名> --yes
+  vps login verify --token <一次性令牌> [--session "$SSH_CONNECTION"]
+  vps login disable-password --user <普通用户> --yes
+  vps login restrict-root --user <普通用户> --mode <key-only|disable> --yes
+  vps login rollback --yes
   vps firewall <plan|preflight|status|apply|verify|repair-persistence|rollback>
   vps fail2ban <plan|preflight|status|apply|verify|rollback>
   vps desktop <check|plan|preflight|status|connection|apply|verify|doctor|repair|rollback|uninstall>
@@ -59,6 +65,71 @@ VPS 管理与安全平台
 模块操作：check plan preflight apply verify status backup rollback configure
           start stop uninstall doctor
 EOF
+}
+
+command_login() {
+    local subcommand=${1:-} username='' github='' token=''
+    local session=${VPS_LOGIN_SESSION:-${SSH_CONNECTION:-}}
+    local mode='' confirmed=no
+    shift || true
+    while (( $# > 0 )); do
+        case $1 in
+            --user) username=${2:-}; shift 2 ;;
+            --github) github=${2:-}; shift 2 ;;
+            --token) token=${2:-}; shift 2 ;;
+            --session) session=${2:-}; shift 2 ;;
+            --mode) mode=${2:-}; shift 2 ;;
+            --yes) confirmed=yes; shift ;;
+            *) show_help >&2; return 64 ;;
+        esac
+    done
+    case "$subcommand" in
+        status)
+            [[ "$confirmed" == no && -z "$github$token$mode" ]] || { show_help >&2; return 64; }
+            vps_module_run security.login-hardening status "$username"
+            ;;
+        prepare)
+            [[ -n "$username" && -n "$github" && -z "$token$mode" ]] || { show_help >&2; return 64; }
+            if [[ "$confirmed" != yes ]]; then
+                vps_module_run security.login-hardening plan --user "$username" --github "$github" || return $?
+                printf '\n这是创建管理员与登录授权的操作。确认后请添加 --yes。\n' >&2
+                return 64
+            fi
+            vps_module_run security.login-hardening apply --user "$username" --github "$github"
+            ;;
+        verify)
+            [[ -n "$token" && -n "$session" && -z "$username$github$mode" && "$confirmed" == no ]] || {
+                show_help >&2; return 64;
+            }
+            vps_module_run security.login-hardening verify --token "$token" --session "$session"
+            ;;
+        disable-password)
+            [[ -n "$username" && -z "$github$token$mode" ]] || { show_help >&2; return 64; }
+            [[ "$confirmed" == yes ]] || {
+                printf '此操作会关闭 SSH 密码和键盘交互登录；必须先完成新窗口验证。确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            vps_module_run security.login-hardening configure password-disable --user "$username"
+            ;;
+        restrict-root)
+            [[ -n "$username" && "$mode" =~ ^(key-only|disable)$ && -z "$github$token" ]] || {
+                show_help >&2; return 64;
+            }
+            [[ "$confirmed" == yes ]] || {
+                printf '这是最后一步 root 登录限制；必须在关闭密码后再次验证新窗口。确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            vps_module_run security.login-hardening configure root-restrict --user "$username" --mode "$mode"
+            ;;
+        rollback)
+            [[ -z "$username$github$token$mode" && "$confirmed" == yes ]] || {
+                printf '回滚登录策略需要确认：vps login rollback --yes\n' >&2
+                return 64
+            }
+            vps_module_run security.login-hardening rollback
+            ;;
+        *) show_help >&2; return 64 ;;
+    esac
 }
 
 show_module_info() {
@@ -264,6 +335,9 @@ main() {
                     ;;
                 *) show_help >&2; return 64 ;;
             esac
+            ;;
+        login)
+            command_login "$@"
             ;;
         firewall)
             [[ $# -ge 1 ]] || { show_help >&2; return 64; }
