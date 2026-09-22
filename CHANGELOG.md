@@ -5,7 +5,7 @@
 - Promote the accepted rc.1 functionality to the first stable 2.x release without changing platform or module behavior.
 - Keep transactional installation, update and restoration safeguards, SSH authorization-preserving rollback, and visible UFW/Fail2Ban compensation failures.
 - Move installed stable versions to the stable update channel while preserving the existing prerelease-to-stable upgrade ordering.
-- Keep the standalone 1.x migration assistant pinned to beta.11 until the public stable archive completes post-release verification.
+- Point the standalone 1.x migration assistant to the pinned 2.0.0 archive after its public assets complete post-release verification.
 
 ## 2.0.0-rc.1 - 2026-09-22
 
