@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0-beta.1.1 - 2026-09-27
+
+- Restart the installed platform entry immediately after a successful interactive update or version restoration so the menu displays the switched version without requiring the user to exit and run `vps` again.
+- Keep no-update, cancelled, and failed update paths in the current menu, and exit the stale process with a direct recovery instruction if the installed entry cannot be restarted.
+- Add regression coverage for successful updates, no-op updates, failed updates, successful restoration, and restart-entry failures.
+
 ## 2.1.0-beta.1 - 2026-09-22
 
 - Add a staged login-hardening workflow that prepares an ordinary sudo user and imports GitHub public keys without changing the current SSH port or disabling existing login methods.
