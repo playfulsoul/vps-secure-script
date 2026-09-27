@@ -289,6 +289,7 @@ vps_update_notice() {
 vps_update_apply() {
     local latest latest_build relation archive_name base_url temporary_dir checksum_file archive
     local expected actual extract_dir extracted_build old_umask
+    export VPS_PLATFORM_RESTART_REQUIRED=no
     (( EUID == 0 )) || {
         printf '安装平台更新需要 root 权限，请使用 sudo vps update apply --yes。\n' >&2
         return 30
@@ -386,7 +387,8 @@ vps_update_apply() {
         return "$install_result"
     fi
     rm -rf -- "$temporary_dir"
-    printf '更新完成。请重新输入 vps 使用新版本。\n'
+    export VPS_PLATFORM_RESTART_REQUIRED=yes
+    printf '更新完成。重新运行 vps 将使用新版本。\n'
 }
 
 vps_update_backup_list() {
@@ -407,6 +409,7 @@ vps_update_prepare_restore() {
 }
 
 vps_update_rollback() {
+    export VPS_PLATFORM_RESTART_REQUIRED=no
     (( EUID == 0 )) || {
         printf '恢复平台版本需要 root 权限。\n' >&2
         return 30
@@ -415,6 +418,7 @@ vps_update_rollback() {
     source "$VPS_PLATFORM_ROOT/core/install_transaction.sh" || return 60
     vps_install_transaction "$VPS_PLATFORM_ROOT" "${VPS_BIN_DIR:-/usr/local/bin}/vps" \
         vps_update_prepare_restore unused || return $?
+    export VPS_PLATFORM_RESTART_REQUIRED=yes
     printf '已恢复并验证上一版本，原备份保持不变。\n'
-    printf '请重新输入 vps。\n'
+    printf '重新运行 vps 将使用已恢复的版本。\n'
 }
