@@ -29,6 +29,11 @@ prepare_install() (
     mkdir -- "$staging" || return 40
     cp -R "$SOURCE_ROOT/bin" "$SOURCE_ROOT/core" "$SOURCE_ROOT/modules" \
         "$SOURCE_ROOT/docs" "$staging/" || return 40
+    mkdir -- "$staging/scripts" || return 40
+    cp "$SOURCE_ROOT/scripts/manual_join_client.py" \
+        "$SOURCE_ROOT/scripts/beszel-backup-watchdog.sh" \
+        "$SOURCE_ROOT/scripts/vps-secure-beszel-backup-watchdog.service" \
+        "$staging/scripts/" || return 40
     cp "$SOURCE_ROOT/VERSION" "$SOURCE_ROOT/README.md" \
         "$SOURCE_ROOT/ARCHITECTURE.md" "$SOURCE_ROOT/MODULE_SPEC.md" \
         "$SOURCE_ROOT/COMPATIBILITY.md" "$staging/" || return 40

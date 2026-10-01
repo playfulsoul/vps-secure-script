@@ -24,6 +24,9 @@ assert_contains "$actual" 'system.doctor' "CLI lists the system doctor module"
 assert_contains "$actual" 'security.ssh' "CLI lists the SSH module"
 assert_contains "$actual" 'security.login-hardening' "CLI lists the verified login hardening module"
 assert_contains "$actual" 'monitoring.network' "CLI lists the network monitoring module"
+assert_contains "$actual" 'monitoring.beszel-agent' "CLI lists the central monitoring agent module"
+assert_contains "$actual" 'applications.beszel-hub' "CLI lists the portable Hub module"
+assert_contains "$actual" 'monitoring.vnstat' "CLI lists the monthly traffic quota module"
 
 actual=$(printf '0\n' | "$CLI")
 assert_contains "$actual" 'VPS 管理与安全平台' "CLI opens the beginner-friendly Chinese menu"
@@ -53,6 +56,68 @@ fi
 actual=$(printf '5\n0\n0\n' | "$CLI")
 assert_contains "$actual" '立即检测网络状态（无需预配置）' \
     "network menu exposes a configuration-free quick check"
+assert_contains "$actual" '中央 VPS 状态监控（Beszel）' \
+    "monitoring menu exposes central VPS monitoring"
+
+actual=$(printf '5\n7\n0\n0\n0\n' | "$CLI")
+assert_contains "$actual" 'Agent 主动连接' \
+    "central monitoring menu explains the outbound-only connection"
+assert_contains "$actual" '更换固定 Hub 入口' \
+    "central monitoring menu exposes migration-friendly rebinding"
+assert_contains "$actual" '中央 Hub 备份与迁移' \
+    "central monitoring menu exposes Hub migration"
+assert_contains "$actual" '手动隐藏输入接入' \
+    "central monitoring menu exposes manual enrollment"
+
+actual=$("$CLI" monitor rebind --hub-url https://monitor.example.com 2>&1 || true)
+assert_contains "$actual" '确认后请添加 --yes' \
+    "central monitoring rebind requires explicit confirmation"
+actual=$("$CLI" help)
+assert_contains "$actual" 'vps monitor join-prompt' \
+    "CLI exposes hidden-input manual enrollment"
+if "$CLI" monitor pair >/dev/null 2>&1; then
+    fail "unreleased pairing entry must be unavailable"
+else
+    pass "unreleased pairing entry is unavailable"
+fi
+actual=$("$CLI" monitor leave 2>&1 || true)
+assert_contains "$actual" 'vps monitor leave --yes' \
+    "central monitoring leave requires explicit confirmation"
+actual=$("$CLI" monitor hub backup 2>&1 || true)
+assert_contains "$actual" '短暂停止服务' \
+    "Hub offline backup requires explicit confirmation"
+actual=$("$CLI" monitor hub restore --archive /tmp/beszel.tar.gz 2>&1 || true)
+assert_contains "$actual" '替换活动数据' \
+    "Hub restore requires explicit confirmation"
+actual=$("$CLI" monitor hub onedrive-test --remote vps-onedrive-crypt 2>&1 || true)
+assert_contains "$actual" '上传加密副本' \
+    "OneDrive round-trip test requires explicit confirmation"
+actual=$("$CLI" monitor hub onedrive-schedule-enable --remote vps-onedrive-crypt 2>&1 || true)
+assert_contains "$actual" '每天短暂停止 Hub' \
+    "OneDrive schedule enable requires explicit confirmation"
+actual=$("$CLI" monitor hub onedrive-schedule-disable 2>&1 || true)
+assert_contains "$actual" '停用 OneDrive 定时备份需要确认' \
+    "OneDrive schedule disable requires explicit confirmation"
+actual=$("$CLI" monitor hub onedrive-run 2>&1 || true)
+assert_contains "$actual" '运行已配置的 OneDrive 备份需要确认' \
+    "manual scheduled-run entry requires explicit confirmation"
+actual=$("$CLI" monitor traffic configure --interface eth0 --quota-gib 1000 \
+    --reset-day 1 --warn-percent 80 --critical-percent 90 2>&1 || true)
+assert_contains "$actual" '请添加 --yes' "traffic quota configuration requires confirmation"
+actual=$("$CLI" monitor traffic configure --interface eth0 --quota-gb 3072 \
+    --reset-day 1 --warn-percent 80 --critical-percent 90 2>&1 || true)
+assert_contains "$actual" '请添加 --yes' "CLI accepts the documented decimal GB quota"
+if "$CLI" monitor traffic notify-schedule-enable --yes >/dev/null 2>&1; then
+    fail "unreleased traffic notifier entry must be unavailable"
+else
+    pass "unreleased traffic notifier entry is unavailable"
+fi
+
+actual=$(printf '5\n7\n10\n0\n0\n0\n0\n' | "$CLI")
+assert_contains "$actual" '启用或更新 OneDrive 每日备份' \
+    "Hub menu exposes daily OneDrive backup management"
+assert_contains "$actual" '停用 OneDrive 定时备份（保留文件）' \
+    "Hub menu makes non-deletion explicit"
 
 actual=$(printf '2\n2\n0\n0\n0\n' | "$CLI")
 assert_contains "$actual" '准备普通 sudo 用户与 GitHub 公钥' \

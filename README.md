@@ -39,7 +39,7 @@ SSH 防暴力破解：运行正常
 4. 应用安装
    Docker · Docker Compose · 1Panel · 远程图形桌面
 5. 基础网络检查与监控
-   立即检测 · 延迟 · 丢包 · 网卡流量记录
+   立即检测 · 延迟 · 丢包 · 网卡流量记录 · Beszel 中央监控
 6. VPS 测试工具
    融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量
 7. 服务器完整体检
@@ -92,6 +92,68 @@ vps desktop status
 vps desktop connection
 sudo vps desktop rollback --yes
 ```
+
+## 中央 VPS 状态监控与 Hub 迁移
+
+在 **5. 基础网络检查与监控 → 中央 VPS 状态监控（Beszel）** 中，可以把当前 VPS 接入已有的 Beszel Hub。Agent 使用固定的 HTTPS 域名主动建立 WebSocket 连接，并关闭内置 SSH 监听；模块不会开放防火墙端口，也不会自动授予 Docker socket 或磁盘设备权限。
+
+Hub 公钥和 Token 必须分别放在权限不超过 `600` 的普通文件中。模块只接受文件路径，不接受命令行中的明文 Token。下载固定版本 Agent 时会同时下载该版本的官方校验清单，并在 SHA-256 验证成功后才安装。
+
+```bash
+sudo vps monitor join \
+  --hub-url https://monitor.example.com \
+  --key-file /root/beszel-public-key \
+  --token-file /root/beszel-token \
+  --yes
+
+# 在目标 VPS 的交互式 SSH 会话中，也可使用无回显提示输入单节点凭据：
+sudo vps monitor join-prompt
+
+vps monitor status
+vps monitor verify
+sudo vps monitor rebind --hub-url https://new-monitor.example.com --yes
+sudo vps monitor leave --yes
+```
+
+`status` 和 `verify` 会分别报告本地文件、权限、systemd 服务和 Hub HTTPS 健康接口；这些结果仍不能代替 Hub 页面中的最新采样时间。只有 Hub 实际收到新数据，才能确认节点端到端在线。
+
+对于已经通过 systemd 运行的 Hub，平台提供一致性迁移包：备份时短暂停止服务，复制完整数据目录，生成格式清单和 SHA-256，再恢复原运行状态。恢复时先检查摘要、路径和文件类型，在同一文件系统中完成 staging 和切换；启动或健康验证失败时自动恢复目标原数据。
+
+```bash
+sudo vps monitor hub backup --yes
+sudo vps monitor hub restore --archive /absolute/path/beszel-hub.tar.gz --yes
+```
+
+配置好以 OneDrive 为底层的 `rclone crypt` 远端后，可以执行一次完整的异地备份验证。平台会新建离线迁移包，通过 crypt 远端加密上传归档和摘要，再重新下载并校验 SHA-256；不会删除本地或云端文件，也不会把 OneDrive 挂载成磁盘。
+
+```bash
+sudo vps monitor hub onedrive-test \
+  --remote vps-onedrive-crypt \
+  --path roundtrip-tests \
+  --yes
+
+sudo vps monitor hub onedrive-schedule-enable \
+  --remote vps-onedrive-crypt \
+  --path scheduled \
+  --time 04:30 \
+  --timezone Asia/Shanghai \
+  --yes
+vps monitor hub onedrive-schedule-status
+sudo vps monitor hub onedrive-retention-preview
+sudo vps monitor hub onedrive-schedule-disable --yes
+```
+
+每台 VPS 可单独保存基于 vnStat 的月度流量额度；首次配置会在需要时安装 vnStat，并在网卡已有采样后才保存。当前只提供本机状态和阈值标记，不会把计数误称为服务商账单，也尚未发送额度通知：
+
+```bash
+sudo vps monitor traffic configure --interface eth0 --quota-gib 1000 \
+  --reset-day 1 --warn-percent 80 --critical-percent 90 --yes
+vps monitor traffic status
+```
+
+每日备份由 systemd timer 执行同一套“离线备份 → 加密上传 → 云端回读 → SHA-256 校验 → Hub 健康检查”流程。定时器带有最多 10 分钟随机延迟，错过计划时间时会在机器恢复运行后补执行。每次定时运行的成功或失败会写入受保护的状态文件，供状态命令查看。保留策略预览以 30 天、至少 7 份已验证副本为基准，逐一核对本地摘要与云端归档、摘要；预览不会删除文件。停用定时器会保留配置以及所有已有的本地、云端备份；当前也不会自动清理旧备份。
+
+模块只接受由 root 所有且组/其他用户无权限的 rclone 配置，并核验指定远端确实是以 OneDrive 为底层、未关闭数据加密的 crypt 远端。Hub 模块当前不负责安装或升级 Beszel，也不配置 DNS、Cloudflare Tunnel、Tailscale 或云盘挂载。实时 `beszel_data` 必须留在本地文件系统；OneDrive、Google Drive、QNAP 或对象存储只用于迁移包的加密副本。
 
 ## 安装 beta 版本
 

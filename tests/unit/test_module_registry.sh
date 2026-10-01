@@ -25,6 +25,10 @@ assert_contains "$actual" $'security.fail2ban\tFail2Ban SSH protection\t2.0.0-be
     "module registry discovers the Fail2Ban module"
 assert_contains "$actual" $'applications.remote-desktop\tSecure remote graphical desktop\t0.1.1\tapplications\tbuiltin' \
     "module registry discovers the remote desktop module"
+assert_contains "$actual" $'monitoring.beszel-agent\tBeszel central monitoring agent\t0.1.0\tmonitoring\tbuiltin' \
+    "module registry discovers the central monitoring agent"
+assert_contains "$actual" $'applications.beszel-hub\tBeszel Hub backup and restore\t0.1.0\tapplications\tbuiltin' \
+    "module registry discovers the portable Hub module"
 
 manifest=$(vps_module_find security.ssh)
 assert_contains "$manifest" '/modules/builtin/security-ssh/module.conf' \

@@ -3,3 +3,5 @@
 *.tmp
 .test-tmp/
 dist/
+__pycache__/
+*.pyc

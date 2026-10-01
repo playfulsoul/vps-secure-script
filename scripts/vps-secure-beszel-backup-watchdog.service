@@ -1,0 +1,18 @@
+# Managed by VPS Secure: Beszel backup watchdog
+[Unit]
+Description=VPS Secure Beszel Hub backup health watchdog
+After=network-online.target vps-secure-beszel-hub-onedrive.timer
+Wants=vps-secure-beszel-hub-onedrive.timer
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/libexec/vps-secure-beszel-backup-watchdog watch
+Restart=no
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

@@ -60,11 +60,214 @@ VPS 管理与安全平台
   vps firewall <plan|preflight|status|apply|verify|repair-persistence|rollback>
   vps fail2ban <plan|preflight|status|apply|verify|rollback>
   vps desktop <check|plan|preflight|status|connection|apply|verify|doctor|repair|rollback|uninstall>
+  vps monitor join --hub-url <HTTPS地址> --key-file <文件> --token-file <文件> [--version <版本>] --yes
+  vps monitor join-prompt                 # 手动隐藏输入每节点公钥与令牌
+  vps monitor <status|verify|doctor>
+  vps monitor traffic configure --interface <网卡> (--quota-gb|--quota-gib) <整数> --reset-day <1-31> --warn-percent <1-99> --critical-percent <1-99> --yes
+  vps monitor traffic status
+  vps monitor rebind --hub-url <HTTPS地址> --yes
+  vps monitor <start|stop|backup|rollback|leave> --yes
+  vps monitor hub <plan|status|verify>
+  vps monitor hub backup [--output <绝对路径>] --yes
+  vps monitor hub restore --archive <文件> [--checksum-file <文件>|--sha256 <摘要>] --yes
+  vps monitor hub onedrive-test --remote <rclone加密远端> [--path <相对路径>] [--config <绝对路径>] --yes
+  vps monitor hub onedrive-schedule-enable --remote <rclone加密远端> [--path <相对路径>] [--time <HH:MM>] [--timezone <时区>] --yes
+  vps monitor hub onedrive-schedule-status
+  vps monitor hub onedrive-health
+  vps monitor hub onedrive-schedule-disable --yes
+  vps monitor hub onedrive-run --yes
+  vps monitor hub onedrive-retention-preview
   vps update <check|status|apply|rollback>
 
 模块操作：check plan preflight apply verify status backup rollback configure
           start stop uninstall doctor
 EOF
+}
+
+command_monitor_hub() {
+    local action=${1:-} confirmed=no module_action
+    local arguments=()
+    shift || true
+    while (( $# > 0 )); do
+        case $1 in
+            --yes) confirmed=yes; shift ;;
+            --output|--archive|--checksum-file|--sha256|--remote|--path|--config|--time|--timezone)
+                [[ -n ${2:-} ]] || { show_help >&2; return 64; }
+                arguments+=("$1" "$2")
+                shift 2
+                ;;
+            *) show_help >&2; return 64 ;;
+        esac
+    done
+    case "$action" in
+        plan|status|verify)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run applications.beszel-hub "$action"
+            ;;
+        backup)
+            [[ "$confirmed" == yes ]] || {
+                printf 'Hub 离线备份会短暂停止服务；确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            vps_module_run applications.beszel-hub backup "${arguments[@]}"
+            ;;
+        restore)
+            [[ "$confirmed" == yes ]] || {
+                printf 'Hub 恢复会替换活动数据；确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            module_action=apply
+            vps_module_run applications.beszel-hub "$module_action" "${arguments[@]}"
+            ;;
+        onedrive-test)
+            [[ "$confirmed" == yes ]] || {
+                printf 'OneDrive 测试会创建离线备份并上传加密副本；确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            module_action=configure
+            vps_module_run applications.beszel-hub "$module_action" "${arguments[@]}"
+            ;;
+        onedrive-schedule-enable)
+            [[ "$confirmed" == yes ]] || {
+                printf '启用定时备份会每天短暂停止 Hub 并上传加密副本；确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            vps_module_run applications.beszel-hub start "${arguments[@]}"
+            ;;
+        onedrive-schedule-status)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run applications.beszel-hub doctor onedrive-schedule
+            ;;
+        onedrive-health)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run applications.beszel-hub doctor onedrive-health
+            ;;
+        onedrive-watchdog)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run applications.beszel-hub watchdog
+            ;;
+        onedrive-retention-preview)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run applications.beszel-hub doctor onedrive-retention
+            ;;
+        onedrive-run)
+            [[ "$confirmed" == yes && ${#arguments[@]} -eq 0 ]] || {
+                printf '运行已配置的 OneDrive 备份需要确认：vps monitor hub onedrive-run --yes\n' >&2
+                return 64
+            }
+            vps_module_run applications.beszel-hub configure --scheduled
+            ;;
+        onedrive-schedule-disable)
+            [[ "$confirmed" == yes && ${#arguments[@]} -eq 0 ]] || {
+                printf '停用 OneDrive 定时备份需要确认：vps monitor hub onedrive-schedule-disable --yes\n' >&2
+                return 64
+            }
+            vps_module_run applications.beszel-hub stop
+            ;;
+        *) show_help >&2; return 64 ;;
+    esac
+}
+
+command_monitor() {
+    local subcommand=${1:-} confirmed=no
+    local arguments=()
+    shift || true
+    if [[ "$subcommand" == hub ]]; then
+        command_monitor_hub "$@"
+        return
+    fi
+    if [[ "$subcommand" == traffic ]]; then
+        command_monitor_traffic "$@"
+        return
+    fi
+    if [[ "$subcommand" == join-prompt ]]; then
+        [[ $# -eq 0 ]] || { show_help >&2; return 64; }
+        command -v python3 >/dev/null 2>&1 || {
+            printf '交互式接入需要 Python 3。\n' >&2
+            return 20
+        }
+        python3 "$VPS_PLATFORM_ROOT/scripts/manual_join_client.py"
+        return
+    fi
+    while (( $# > 0 )); do
+        case $1 in
+            --yes) confirmed=yes; shift ;;
+            --hub-url|--key-file|--token-file|--version)
+                [[ -n ${2:-} ]] || { show_help >&2; return 64; }
+                arguments+=("$1" "$2")
+                shift 2
+                ;;
+            *) show_help >&2; return 64 ;;
+        esac
+    done
+    case "$subcommand" in
+        join)
+            if [[ "$confirmed" != yes ]]; then
+                vps_module_run monitoring.beszel-agent plan "${arguments[@]}" || return $?
+                printf '\n这是安装并接入中央监控的操作。确认后请添加 --yes。\n' >&2
+                return 64
+            fi
+            vps_module_run monitoring.beszel-agent apply "${arguments[@]}"
+            ;;
+        rebind)
+            if [[ "$confirmed" != yes ]]; then
+                printf '更换 Hub 入口会重启 Agent；确认后请添加 --yes。\n' >&2
+                return 64
+            fi
+            vps_module_run monitoring.beszel-agent configure "${arguments[@]}"
+            ;;
+        status|verify|doctor)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run monitoring.beszel-agent "$subcommand"
+            ;;
+        start|stop|backup|rollback)
+            [[ ${#arguments[@]} -eq 0 && "$confirmed" == yes ]] || {
+                printf '此操作会修改 Agent 状态；确认后请添加 --yes。\n' >&2
+                return 64
+            }
+            vps_module_run monitoring.beszel-agent "$subcommand"
+            ;;
+        leave)
+            [[ ${#arguments[@]} -eq 0 && "$confirmed" == yes ]] || {
+                printf '退出中央监控需要确认：vps monitor leave --yes\n' >&2
+                return 64
+            }
+            vps_module_run monitoring.beszel-agent uninstall
+            ;;
+        *) show_help >&2; return 64 ;;
+    esac
+}
+
+command_monitor_traffic() {
+    local action=${1:-} confirmed=no
+    local arguments=()
+    shift || true
+    while (( $# > 0 )); do
+        case $1 in
+            --yes) confirmed=yes; shift ;;
+            --interface|--quota-gb|--quota-gib|--reset-day|--warn-percent|--critical-percent)
+                [[ -n ${2:-} ]] || { show_help >&2; return 64; }
+                arguments+=("$1" "$2")
+                shift 2
+                ;;
+            *) show_help >&2; return 64 ;;
+        esac
+    done
+    case $action in
+        configure)
+            if [[ "$confirmed" != yes ]]; then
+                vps_module_run monitoring.vnstat plan "${arguments[@]}" || return $?
+                printf '确认安装所需组件并保存本机流量额度，请添加 --yes。\n' >&2
+                return 64
+            fi
+            vps_module_run monitoring.vnstat apply "${arguments[@]}"
+            ;;
+        status)
+            [[ "$confirmed" == no && ${#arguments[@]} -eq 0 ]] || { show_help >&2; return 64; }
+            vps_module_run monitoring.vnstat status
+            ;;
+        *) show_help >&2; return 64 ;;
+    esac
 }
 
 command_login() {
@@ -371,6 +574,9 @@ main() {
                     ;;
                 *) show_help >&2; return 64 ;;
             esac
+            ;;
+        monitor)
+            command_monitor "$@"
             ;;
         update)
             case ${1:-} in
