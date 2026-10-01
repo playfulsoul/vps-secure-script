@@ -706,10 +706,10 @@ hub_parse_schedule_args() {
         printf 'OneDrive 目标路径必须是安全的相对路径。\n' >&2
         return 64
     }
-    hub_path_safe "$config" && [[ ! "$config" =~ [[:space:]] ]] || {
+    if ! hub_path_safe "$config" || [[ "$config" =~ [[:space:]] ]]; then
         printf 'rclone 配置必须是不含空白字符的安全绝对路径。\n' >&2
         return 64
-    }
+    fi
     [[ "$time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || {
         printf '每日备份时间必须使用 24 小时 HH:MM 格式。\n' >&2
         return 64
@@ -820,14 +820,14 @@ hub_onedrive_schedule_enable() {
     parsed=$(hub_parse_schedule_args "$@") || return $?
     IFS=$'\t' read -r remote path config time timezone <<< "$parsed"
     hub_onedrive_remote_valid "$config" "$remote" || return $?
-    hub_path_safe "$BESZEL_HUB_ONEDRIVE_CONFIG" && \
-        hub_path_safe "$BESZEL_HUB_ONEDRIVE_SERVICE" && \
-        hub_path_safe "$BESZEL_HUB_ONEDRIVE_TIMER" && \
-        hub_path_safe "$BESZEL_HUB_VPS_COMMAND" && \
-        [[ ! "$BESZEL_HUB_VPS_COMMAND" =~ [[:space:]] ]] || {
+    if ! hub_path_safe "$BESZEL_HUB_ONEDRIVE_CONFIG" || \
+        ! hub_path_safe "$BESZEL_HUB_ONEDRIVE_SERVICE" || \
+        ! hub_path_safe "$BESZEL_HUB_ONEDRIVE_TIMER" || \
+        ! hub_path_safe "$BESZEL_HUB_VPS_COMMAND" || \
+        [[ "$BESZEL_HUB_VPS_COMMAND" =~ [[:space:]] ]]; then
         printf 'vps 命令路径必须是不含空白字符的安全绝对路径。\n' >&2
         return 30
-    }
+    fi
     [[ -x "$BESZEL_HUB_VPS_COMMAND" && ! -d "$BESZEL_HUB_VPS_COMMAND" ]] || {
         printf '未找到可执行的 vps 命令: %s\n' "$BESZEL_HUB_VPS_COMMAND" >&2
         return 30
@@ -881,8 +881,12 @@ hub_onedrive_schedule_enable() {
         systemctl disable --now "$timer_unit" >/dev/null 2>&1 || true
         hub_schedule_restore_files "$backup" "$config_had" "$service_had" "$timer_had" || true
         systemctl daemon-reload >/dev/null 2>&1 || true
-        [[ "$previous_enabled" == yes ]] && systemctl enable "$timer_unit" >/dev/null 2>&1 || true
-        [[ "$previous_active" == yes ]] && systemctl start "$timer_unit" >/dev/null 2>&1 || true
+        if [[ "$previous_enabled" == yes ]]; then
+            systemctl enable "$timer_unit" >/dev/null 2>&1 || true
+        fi
+        if [[ "$previous_active" == yes ]]; then
+            systemctl start "$timer_unit" >/dev/null 2>&1 || true
+        fi
         rm -rf -- "$staging" "$backup"
         printf 'OneDrive 定时备份启用失败；已尝试恢复原定时状态。\n' >&2
         return 40

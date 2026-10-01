@@ -87,10 +87,10 @@ traffic_apply() {
     directory=$(dirname -- "$TRAFFIC_CONFIG")
     [[ ! -L "$directory" ]] || { printf '配置目录是符号链接，已停止。\n' >&2; return 30; }
     if [[ -e "$TRAFFIC_CONFIG" ]]; then
-        [[ -f "$TRAFFIC_CONFIG" ]] && IFS= read -r existing_marker < "$TRAFFIC_CONFIG" && \
-            [[ "$existing_marker" == "$TRAFFIC_MARKER" ]] || {
+        if [[ ! -f "$TRAFFIC_CONFIG" ]] || ! IFS= read -r existing_marker < "$TRAFFIC_CONFIG" || \
+            [[ "$existing_marker" != "$TRAFFIC_MARKER" ]]; then
             printf '现有额度配置不是本模块创建的，已停止以避免覆盖。\n' >&2; return 30;
-        }
+        fi
         mode=$(stat -c %a "$TRAFFIC_CONFIG" 2>/dev/null || stat -f %Lp "$TRAFFIC_CONFIG") || return 30
         (( (8#$mode & 077) == 0 )) || { printf '现有额度配置权限过宽，已停止。\n' >&2; return 30; }
     fi
