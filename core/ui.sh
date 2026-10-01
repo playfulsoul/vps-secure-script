@@ -105,13 +105,11 @@ vps_ui_confirm() {
 
 vps_ui_restart_platform() {
     local entry=${VPS_ENTRY:-}
-
     unset VPS_UPDATE_AVAILABLE
     if [[ -n "$entry" && -x "$entry" ]]; then
         printf '\n正在启动已安装的平台版本……\n'
         exec "$entry"
     fi
-
     printf '\n平台版本已经切换，但无法自动启动新入口。请重新输入 vps。\n' >&2
     return 1
 }
@@ -840,6 +838,119 @@ vps_ui_monitor_collect() {
     vps_module_run monitoring.network apply --target "$target"
 }
 
+vps_ui_beszel_join() {
+    local hub_url key_file token_file
+    read -r -p '固定 Hub HTTPS 地址: ' hub_url
+    read -r -p 'Hub 公钥文件路径: ' key_file
+    read -r -p 'Hub Token 文件路径: ' token_file
+    vps_ui_run_action monitoring.beszel-agent apply \
+        --hub-url "$hub_url" --key-file "$key_file" --token-file "$token_file"
+}
+
+vps_ui_beszel_rebind() {
+    local hub_url
+    read -r -p '新的固定 Hub HTTPS 地址: ' hub_url
+    vps_ui_run_action monitoring.beszel-agent configure --hub-url "$hub_url"
+}
+
+vps_ui_beszel_hub_restore() {
+    local archive
+    read -r -p '请输入已校验迁移包的绝对路径: ' archive
+    vps_ui_run_action applications.beszel-hub apply --archive "$archive"
+}
+
+vps_ui_beszel_hub_onedrive_test() {
+    local remote path
+    read -r -p 'OneDrive 加密远端名称 [vps-onedrive-crypt]: ' remote
+    read -r -p '云端逻辑目录 [roundtrip-tests]: ' path
+    remote=${remote:-vps-onedrive-crypt}
+    path=${path:-roundtrip-tests}
+    vps_ui_run_action applications.beszel-hub configure \
+        --remote "$remote" --path "$path"
+}
+
+vps_ui_beszel_hub_schedule_enable() {
+    local remote path time timezone
+    read -r -p 'OneDrive 加密远端名称 [vps-onedrive-crypt]: ' remote
+    read -r -p '云端逻辑目录 [scheduled]: ' path
+    read -r -p '每日备份时间 [04:30]: ' time
+    read -r -p '时区 [Asia/Shanghai]: ' timezone
+    remote=${remote:-vps-onedrive-crypt}
+    path=${path:-scheduled}
+    time=${time:-04:30}
+    timezone=${timezone:-Asia/Shanghai}
+    vps_ui_run_action applications.beszel-hub start \
+        --remote "$remote" --path "$path" --time "$time" --timezone "$timezone"
+}
+
+vps_ui_beszel_hub_menu() {
+    local choice
+    while true; do
+        vps_ui_header
+        vps_ui_section '📦' '中央 Hub 备份与迁移'
+        printf '\n仅管理现有 systemd Hub · 离线一致性备份 · 校验后恢复\n\n'
+        printf '  1. 查看 Hub 和数据目录状态\n'
+        printf '  2. 验证本机 Hub 健康状态\n'
+        printf '  3. 创建离线迁移包\n'
+        printf '  4. 从迁移包恢复\n'
+        printf '  5. OneDrive 加密上传与回读测试\n'
+        printf '  6. 启用或更新 OneDrive 每日备份\n'
+        printf '  7. 查看 OneDrive 定时备份状态\n'
+        printf '  8. 停用 OneDrive 定时备份（保留文件）\n'
+        printf '  0. 返回中央监控\n'
+        read -r -p '请选择: ' choice
+        case "$choice" in
+            1) vps_ui_show_result 'Hub 状态' vps_module_run applications.beszel-hub status ;;
+            2) vps_ui_show_result 'Hub 健康验证' vps_module_run applications.beszel-hub verify ;;
+            3) vps_ui_show_result '创建 Hub 迁移包' vps_ui_run_action applications.beszel-hub backup ;;
+            4) vps_ui_show_result '恢复 Hub 迁移包' vps_ui_beszel_hub_restore ;;
+            5) vps_ui_show_result 'OneDrive 备份测试' vps_ui_beszel_hub_onedrive_test ;;
+            6) vps_ui_show_result '启用 OneDrive 每日备份' vps_ui_beszel_hub_schedule_enable ;;
+            7) vps_ui_show_result 'OneDrive 定时备份状态' vps_module_run applications.beszel-hub doctor onedrive-schedule ;;
+            8) vps_ui_show_result '停用 OneDrive 定时备份' vps_ui_run_action applications.beszel-hub stop ;;
+            0) return 0 ;;
+            *) printf '输入无效。\n' ;;
+        esac
+    done
+}
+
+vps_ui_beszel_menu() {
+    local choice
+    while true; do
+        vps_ui_header
+        vps_ui_section '🖥️' '中央 VPS 状态监控'
+        printf '\nBeszel Agent 主动连接 · 不开放入站端口 · 支持固定域名迁移\n\n'
+        printf '  1. 查看本机接入状态\n'
+        printf '  2. 安装并接入中央 Hub\n'
+        printf '  3. 更换固定 Hub 入口\n'
+        printf '  4. 验证本地 Agent 服务\n'
+        printf '  5. 启动 Agent\n'
+        printf '  6. 停止 Agent\n'
+        printf '  7. 备份本机 Agent 配置\n'
+        printf '  8. 恢复上一次修改前状态\n'
+        printf '  9. 退出中央监控\n'
+        printf '  10. 中央 Hub 备份与迁移\n'
+        printf '  11. 手动隐藏输入接入\n'
+        printf '  0. 返回监控菜单\n'
+        read -r -p '请选择: ' choice
+        case "$choice" in
+            1) vps_ui_show_result '中央监控接入状态' vps_module_run monitoring.beszel-agent status ;;
+            2) vps_ui_show_result '接入中央监控' vps_ui_beszel_join ;;
+            3) vps_ui_show_result '更换 Hub 入口' vps_ui_beszel_rebind ;;
+            4) vps_ui_show_result '验证 Agent 服务' vps_module_run monitoring.beszel-agent verify ;;
+            5) vps_ui_show_result '启动 Agent' vps_ui_run_action monitoring.beszel-agent start ;;
+            6) vps_ui_show_result '停止 Agent' vps_ui_run_action monitoring.beszel-agent stop ;;
+            7) vps_ui_show_result '备份 Agent 配置' vps_ui_run_action monitoring.beszel-agent backup ;;
+            8) vps_ui_show_result '恢复 Agent 配置' vps_ui_run_action monitoring.beszel-agent rollback ;;
+            9) vps_ui_show_result '退出中央监控' vps_ui_run_action monitoring.beszel-agent uninstall ;;
+            10) vps_ui_beszel_hub_menu ;;
+            11) vps_ui_show_result '手动隐藏输入接入' python3 "$VPS_PLATFORM_ROOT/scripts/manual_join_client.py" ;;
+            0) return 0 ;;
+            *) printf '输入无效。\n' ;;
+        esac
+    done
+}
+
 vps_ui_monitoring_menu() {
     local choice
     while true; do
@@ -853,6 +964,7 @@ vps_ui_monitoring_menu() {
         printf '  4. 启动定时监控\n'
         printf '  5. 停止定时监控\n'
         printf '  6. 检查监控服务是否正常\n'
+        printf '  7. 中央 VPS 状态监控（Beszel）\n'
         printf '  0. 返回首页\n'
         read -r -p '请选择: ' choice
         case "$choice" in
@@ -862,6 +974,7 @@ vps_ui_monitoring_menu() {
             4) vps_ui_show_result '启动网络监控' vps_ui_run_action monitoring.network start ;;
             5) vps_ui_show_result '停止网络监控' vps_ui_run_action monitoring.network stop ;;
             6) vps_ui_show_result '网络监控服务检查' vps_module_run monitoring.network verify ;;
+            7) vps_ui_beszel_menu ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac
@@ -931,7 +1044,7 @@ vps_ui_main_menu() {
             'Docker · Docker Compose · 1Panel · 远程图形桌面'
         vps_ui_section '📡' '监控与测试'
         vps_ui_menu_item 5 '📶' '基础网络检查与监控' \
-            '立即检测 · 延迟 · 丢包 · 网卡流量记录'
+            '立即检测 · 延迟 · 丢包 · 网卡流量记录 · Beszel 中央监控'
         vps_ui_menu_item 6 '🧪' 'VPS 测试工具' \
             '融合怪 · YABS · Bench · 回程 · 流媒体 · IP 质量'
         vps_ui_section '🛠️' '检查与维护'

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+case ${1:-} in
+    is-enabled|is-active)
+        [[ ${VPS_TEST_TIMER_HEALTH:-healthy} == healthy ]]
+        ;;
+    show)
+        printf '%s\n' "${VPS_TEST_BACKUP_SERVICE_RESULT:-success}"
+        ;;
+    *) exit 64 ;;
+esac

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0-beta.2
+
+- Preserve the published beta.1.1 interactive update and restore restart fix.
+- Resolve manual enrollment to its own installed platform entry rather than searching PATH.
+
+- Add a checksum-verified Beszel Agent module that enrolls a VPS through a stable HTTPS Hub hostname, disables the inbound SSH listener, keeps credentials in protected files, and does not change firewall rules or grant Docker and disk-device privileges.
+- Add manual hidden-input enrollment for a separately created Hub node; successful local installation still requires a new Hub sample to verify connection.
+- Add explicit Agent status, verification, Hub rebinding, backup, rollback, start, stop, and safe removal workflows without treating local service health as proof that the Hub received data.
+- Add offline, checksummed backup and guarded restore for an existing systemd Beszel Hub, including archive safety checks, target-data preservation, local health verification, and automatic compensation on a failed restore.
+- Wait for Hub health after restore and compensation restarts so a normal startup delay does not falsely fail recovery.
+- Add a non-mounting OneDrive backup test that requires a protected OneDrive-backed rclone crypt remote, uploads a fresh Hub archive and checksum, downloads both, and verifies the round trip without deleting either copy.
+- Add an explicitly confirmed persistent systemd timer for daily OneDrive-backed Hub round-trip backups, including status and non-destructive disable commands, timezone selection, and bounded randomized delay.
+- Record scheduled backup success or failure in a protected state file, mark only fully verified cloud round trips, and provide a non-deleting retention preview that checks local and cloud copy integrity.
+- Add per-VPS vnStat quota configuration and read-only billing-cycle reporting with independent reset day, thresholds, and incomplete-history warning.
+- Accept exact decimal GB quotas alongside GiB quotas without changing existing saved configurations.
+- Expose central monitoring and Hub migration through the Chinese menu and `vps monitor` command while keeping live Hub data off cloud-drive mounts.
+- This build does not provide one-time pairing or monthly traffic email notifications.
+
 ## 2.1.0-beta.1.1 - 2026-09-27
 
 - Restart the installed platform entry immediately after a successful interactive update or version restoration so the menu displays the switched version without requiring the user to exit and run `vps` again.
