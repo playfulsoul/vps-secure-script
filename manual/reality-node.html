@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>独立 REALITY 节点操作指南 · VPS 管理与安全平台</title><link rel="stylesheet" href="manual.css?v=20261002-links"></head><body>
+<header><div class="meta" style="color:#b4e3d8">节点操作指南 · 2026-10-02 核对</div><h1>准备证书，再安全管理独立节点</h1><p>先核对系统与登录，再按手册准备自有本机 HTTPS 目标，最后安装节点、保护客户端配置并验证真实联网。</p><span class="tag beta">2.1.0-beta.3 预发布</span><span class="tag">仅 Debian 13 · x86_64 · 单 IPv4</span><p><a style="color:white" href="index.html">← 返回完整操作手册</a></p><div class="community-links" aria-label="项目与作者链接"><a href="https://github.com/playfulsoul/vps-secure-script">⭐ GitHub 主项目</a><a href="https://www.youtube.com/@playfulsoul-net">▶ YouTube 频道</a><a href="https://playfulsoul.net/">🌐 PlayfulSoul 博客</a></div></header>
+<div class="layout"><aside><label for="search"><strong>查找节点操作</strong></label><input id="search" type="search" placeholder="证书、导出、恢复…" autocomplete="off"><p id="count" class="meta" aria-live="polite">搜索按章节筛选</p><nav aria-label="节点目录"><a href="#scope">1 适用与停止条件</a><a href="#install">2 安装与安全准备</a><a href="#dns">3 域名与HTTP01</a><a href="#certificate">4 证书与目标</a><a href="#node">5 安装节点与导出</a><a href="#client">6 客户端安全参考</a><a href="#recovery">7 备份、更新与卸载</a><a href="#repair">8 排错与边界</a></nav><p><button id="print" type="button">打印 / 保存 PDF</button></p></aside><main><p id="empty" class="empty">没有匹配章节，请换一个关键词。</p>
+<section id="scope"><h2>1. 适用与停止条件</h2>
+<div class="note"><strong>更新边界：</strong>平台升级不会自动更新独立证书配套 runtime；不要把平台更新成功当作节点内核、证书配套都已更新。更新后仍需逐项验证，具体见第 7 节。</div>
+<p>仅适用于 Debian 13、x86_64、systemd、单公网 IPv4、简单 UFW；管理一个 VLESS + REALITY + Vision 节点。不接管现有 x-ui、Xray、网站、复杂路由或容器防火墙。其他系统不属于本模块支持范围。</p>
+<p>节点连接到自有的 IPv4 回环 HTTPS 目标，不使用任意外站作为目标。目标需提供系统信任、域名匹配的证书以及 TLS 1.3/h2。私网路由拒绝是节点配置中的防护，不能据此宣称整台主机的所有进程已实现出口隔离。</p>
+<p>保留可用 SSH 管理连接和供应商救援入口。先检查实际 SSH 端口、系统、DNS、监听和防火墙所有者；发现冲突或待恢复事务时停止，不清空规则表、不删除 pending 文件、不停止旧网站来绕过检查。</p>
+</section>
+<section id="install"><h2>2. 持久安装与依赖</h2>
+<p><strong>位置：目标 VPS 的 SSH 终端，不是本机电脑终端。以下命令按 root 编写，不要求安装 sudo。</strong> 已有 sudo 权限的普通管理员可先用 <code>sudo -i</code> 进入 root shell；没有该权限或没有 sudo 时停止，使用已有授权的 root 登录，不为执行本文放宽登录策略。保持另一条可用管理连接。</p>
+<p>节点模块对应 <code>2.1.0-beta.3</code>；README 的默认稳定版 <code>2.0.0</code> 安装块不含节点模块，不能替代。本页使用已发布的 <code>v2.1.0-beta.3</code> 预发布资产，稳定版仍为 2.0.0。 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。</p>
+<p>在目标 VPS 的 root 终端先准备 Debian 13 下载工具和 Python 3：</p>
+<pre><code>(
+  set -eu
+  test &quot;$(id -u)&quot; -eq 0
+  . /etc/os-release
+  test &quot;$ID&quot; = debian
+  test &quot;$VERSION_ID&quot; = 13
+  test &quot;$(uname -m)&quot; = x86_64
+  if ! command -v curl &gt;/dev/null 2&gt;&amp;1 || ! command -v python3 &gt;/dev/null 2&gt;&amp;1 || ! test -s /etc/ssl/certs/ca-certificates.crt; then
+    apt-get update
+    apt-get install -y --no-install-recommends ca-certificates curl python3
+  fi
+  python3 --version
+)</code></pre>
+<p>确认上述检查成功后，整体执行以下 Beta 安装块。每次都创建新的下载目录和空白 <code>source</code> 子目录；子 shell 中任意失败即停止，不改变原终端目录、变量或 umask：</p>
+<pre><code>(
+  set -eu
+  test &quot;$(id -u)&quot; -eq 0
+  umask 022
+  node_install_work=$(mktemp -d &quot;${TMPDIR:-/tmp}/vps-node-beta3-install.XXXXXX&quot;)
+  cd &quot;$node_install_work&quot;
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.3/vps-secure-platform-2.1.0-beta.3.tar.gz
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.3/vps-secure-platform-2.1.0-beta.3.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.1.0-beta.3.tar.gz.sha256
+  mkdir source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.3.tar.gz -C source
+  cd source
+  test &quot;$(cat VERSION)&quot; = 2.1.0-beta.3
+  test -f modules/builtin/applications-reality-node/target_service.py
+  ./install.sh
+  /usr/local/bin/vps --version
+  test &quot;$(cat /usr/lib/vps-secure/VERSION)&quot; = 2.1.0-beta.3
+  test &quot;$(cat /usr/lib/vps-secure/BUILD_ID)&quot; = &quot;$(cat BUILD_ID)&quot;
+  /usr/local/bin/vps module info applications.reality-node
+)</code></pre>
+<p>校验文件应显示 <code>OK</code>，安装后的版本、构建身份和节点模块应一致。外部 SHA 只验证压缩包，安装器还会校验解压树；不要把归档、摘要或个人笔记放进 <code>source</code>，不要删除 <code>BUILD_ID</code> 或绕过身份检查。包和解压目录不混用，安全解压参数配合 <code>umask 022</code> 保持预期权限。失败后不执行下节，先处理明确报错。</p>
+<p>以下示例采用正式持久目录 <code>/usr/lib/vps-secure</code>。配套首次运行会按源码位置记录平台 <code>bin/vps</code>，此后续期仍调用它检查防火墙。不要从临时解压目录运行配套，也不要搬走已记录的平台目录。</p>
+<p>Python 3 必须先存在，才能调用配套的 <code>dependencies</code>，上面的准备块已包含检查与发行版安装。平台的 UFW 安全准备在配套之前完成，保留检测出的实际 SSH 端口，并用新的 SSH 连接验证；需要 active/default deny 的简单规则环境。</p>
+<pre><code>(
+  set -eu
+  /usr/lib/vps-secure/bin/vps firewall plan
+  /usr/lib/vps-secure/bin/vps firewall apply --yes
+  /usr/lib/vps-secure/bin/vps firewall verify
+)</code></pre>
+<p>核对成功且新的 SSH 连接可用后，回到原 root 终端继续：</p>
+<pre><code>python3 -I /usr/lib/vps-secure/modules/builtin/applications-reality-node/target_service.py dependencies --yes</code></pre>
+<p>依赖安装拒绝覆盖已有 <code>policy-rc.d</code>，临时阻止软件包自动启动服务，只禁用本次新引入的默认 nginx/certbot 定时器。软件包会保留，事务回滚不等于卸载依赖或恢复整个操作系统。</p>
+</section>
+<section id="dns"><h2>3. 域名与公网 HTTP 验证准备</h2><p><strong>位置：你的电脑浏览器。</strong>在 Cloudflare 的自有域名 → DNS → Records 中，为专用子域名设置 A 记录，内容为 VPS 公网 IPv4，代理状态选 <strong>DNS only（灰云）</strong>。同名 AAAA 不适用于本指南的单 IPv4 路径；先确认用途，不删除其他业务记录，可改用独立名称。</p><p>DNS-only 返回源站地址，普通 Cloudflare HTTP 代理不是此节点的入口。核对同名记录没有混用代理或外部 CNAME。参考 <a href="https://developers.cloudflare.com/dns/proxy-status/">Cloudflare 官方说明</a>。</p><p><strong>位置：服务器。</strong>从服务商控制台核对公网 IP，用 DNS 查询核对域名 A/AAAA；有 dig 时可执行下方命令。域名在同一终端按下一节提示填入；未填写不要执行。若无 dig，可在本机可信 DNS 工具核对，不把命令不存在当作没有记录。</p><pre><code>dig +short A "$NODE_DOMAIN"
+dig +short AAAA "$NODE_DOMAIN"</code></pre><p><strong>成功：</strong>A 为本服务器 IPv4，AAAA 无不适用记录。<strong>失败停止：</strong>解析错误或缓存未更新时不签发。首次 HTTP-01 需要空闲公网 TCP 80，以及服务商外部防火墙允许它；不要预先添加模块自有 UFW 规则。若 80 已有网站占用，停止评估，不停网站抢端口。回环目标端口不对公网开放。无需在教程中手工创建挑战目录或 chmod 证书目录。</p></section>
+<section id="certificate"><h2>4. 证书与本机目标</h2>
+<p>两种模式分别处理：</p>
+<ul>
+<li>首次自行签发：自有域名 A 正确指向本机，不使用不适用的 AAAA 或普通 HTTP CDN 代理；标准 HTTP 端口空闲且公网可达。配套管理挑战专用 HTTP 服务及精确防火墙规则，普通路径返回 404。</li>
+<li>复用已有证书：明确原签发者负责续期，提供包含匹配证书链和私钥的受保护绝对目录。配套只校验、复制和同步，不接管签发者或原网站。</li>
+</ul>
+<p>以下参数在<strong>目标 VPS 的同一个交互式 root SSH 终端</strong>输入；新开终端后须重新填写。不填密码、私钥或完整节点链接。域名先核对 A/AAAA，端口先核对监听与已有规则；不能为空，不用未替换的占位符。</p>
+<pre><code>TARGET_TOOL=/usr/lib/vps-secure/modules/builtin/applications-reality-node/target_service.py
+NODE_CLI=/usr/lib/vps-secure/bin/vps
+printf '自有证书完整域名: '
+read -r NODE_DOMAIN
+printf '本服务器公网 IPv4: '
+read -r NODE_IPV4
+printf '已确认空闲的节点入口端口: '
+read -r NODE_PORT
+printf '已确认空闲的回环 HTTPS 目标端口: '
+read -r TARGET_PORT
+python3 -I &quot;$TARGET_TOOL&quot; --help</code></pre>
+<p>本机目标端口必须与节点入口和 HTTP 挑战端口不同，且不对公网放行。下面首次签发与已有证书路径二选一；不要先执行首次路径再改成已有证书路径。任一步返回失败时停止，保留错误和事务状态，不继续签发或安装节点。</p>
+<p>首次签发路径：</p>
+<pre><code>(
+  set -eu
+  : &quot;${TARGET_TOOL:?请在当前终端设置入口}&quot; &quot;${NODE_DOMAIN:?请填写域名}&quot; &quot;${TARGET_PORT:?请填写目标端口}&quot;
+  python3 -I &quot;$TARGET_TOOL&quot; preflight --server-name &quot;$NODE_DOMAIN&quot; --target-port &quot;$TARGET_PORT&quot;
+  python3 -I &quot;$TARGET_TOOL&quot; apply --yes --server-name &quot;$NODE_DOMAIN&quot; --target-port &quot;$TARGET_PORT&quot;
+  python3 -I &quot;$TARGET_TOOL&quot; verify
+)</code></pre>
+<p>首次模式此时显示 <code>TLS=awaiting_certificate</code>，不是证书已准备好。阅读并接受 CA 条款后，才运行：</p>
+<pre><code>(
+  set -eu
+  python3 -I &quot;${TARGET_TOOL:?请设置入口}&quot; issue --yes --accept-ca-terms
+  python3 -I &quot;$TARGET_TOOL&quot; verify
+)</code></pre>
+<p>新签发先走隔离 staging，再生产签发；账户无邮箱，不能依赖邮件提醒。已有自身 lineage 时验证并部署，不重新签发。正常续期不强制签发，且必须保留 HTTP-01 挑战入口。签发失败可能保留已确认的挑战服务及自有规则供修复或卸载；删除本地文件不能撤销 CA 侧签发。不要反复签发碰运气。</p>
+<p>已有证书路径（替代上面的首次签发路径）：先确认源目录和原签发者的续期责任，再在同一 root 终端输入：</p>
+<pre><code>printf '已有证书 lineage 的受保护绝对目录: '
+read -r TARGET_LINEAGE
+(
+  set -eu
+  : &quot;${TARGET_TOOL:?请设置入口}&quot; &quot;${NODE_DOMAIN:?请填写域名}&quot; &quot;${TARGET_PORT:?请填写目标端口}&quot; &quot;${TARGET_LINEAGE:?请填写证书目录}&quot;
+  python3 -I &quot;$TARGET_TOOL&quot; preflight --server-name &quot;$NODE_DOMAIN&quot; --target-port &quot;$TARGET_PORT&quot; --existing-lineage &quot;$TARGET_LINEAGE&quot; --external-renewal
+  python3 -I &quot;$TARGET_TOOL&quot; apply --yes --server-name &quot;$NODE_DOMAIN&quot; --target-port &quot;$TARGET_PORT&quot; --existing-lineage &quot;$TARGET_LINEAGE&quot; --external-renewal
+  python3 -I &quot;$TARGET_TOOL&quot; verify
+)</code></pre>
+<p>其定时器只同步源文件；源证书到期时应处理原签发者，不能误把同步当续期。<code>dependencies</code> 或同参数不变操作可能返回 10，需结合明确的“不变”状态核验，不当成新增成功，也不忽略其他错误码。</p>
+<p>新建公共 webroot 可由非特权 nginx worker 读取；私有证书状态仍保持私密。既有挑战目录若被改成不可遍历，Certbot 不会自动修复。不得为解决挑战失败而递归放宽证书私有目录。</p>
+</section>
+<section id="node"><h2>5. 节点、导出与验证</h2>
+<p>目标 <code>verify</code> 显示 <code>TLS=ready</code> 后，在保留上述参数的同一个 root 终端执行；新终端必须先重新填写参数：</p>
+<pre><code>(
+set -eu
+: &quot;${NODE_CLI:?请设置入口}&quot; &quot;${NODE_IPV4:?请填写公网IPv4}&quot; &quot;${NODE_PORT:?请填写入口端口}&quot; &quot;${TARGET_PORT:?请填写目标端口}&quot; &quot;${NODE_DOMAIN:?请填写域名}&quot;
+&quot;$NODE_CLI&quot; module run applications.reality-node preflight \
+  --public-address &quot;$NODE_IPV4&quot; --node-port &quot;$NODE_PORT&quot; \
+  --target-host 127.0.0.1 --target-port &quot;$TARGET_PORT&quot; --server-name &quot;$NODE_DOMAIN&quot;
+&quot;$NODE_CLI&quot; module run applications.reality-node apply --yes \
+  --public-address &quot;$NODE_IPV4&quot; --node-port &quot;$NODE_PORT&quot; \
+  --target-host 127.0.0.1 --target-port &quot;$TARGET_PORT&quot; --server-name &quot;$NODE_DOMAIN&quot;
+&quot;$NODE_CLI&quot; module run applications.reality-node verify
+&quot;$NODE_CLI&quot; module run applications.reality-node configure --yes --export-client
+)</code></pre>
+<p>模块管理自己的精确 TCP 规则，不要预先添加冲突规则。标准 HTTPS 端口被占用时可选择另一个空闲节点入口，但这不代表支持共用网站端口或自动分流。</p>
+<p>导出保存在 <code>/var/lib/vps-secure-reality-node/client-export.json</code> 和 <code>client-link.txt</code>，仅 root 可读。完整链接等同凭据；不要贴聊天、公开日志或在线二维码转换网站，不通过放宽权限获得导出。客户端传输需使用可信、已授权通道。</p>
+<p>实际客户端需完成认证后的 HTTPS 请求，并验证出口是预期服务器；active、配置检查、TCP 连通或公开 TLS 握手均不能替代它。分别验证 SSH、UFW、目标、节点和续期服务；手动定时任务成功不等于自然续期或真实换证已验收。</p>
+</section>
+<section id="client"><h2>6. 把配置安全交给客户端</h2><div class="note"><strong>位置：你的电脑；不是服务器菜单。</strong>本节为安全操作与官方客户端参考，GUI 导入和联网尚未实测，不是已验收的一键连接流程。教程不会读取或下载你的凭据。</div><p>服务器导出文件只供 root 读取。用已核验主机指纹、已授权的 SSH/SFTP 通道取得 <code>client-link.txt</code>；权限不足、传输失败或文件为空时停止。不要启用 root 密码登录、配置宽泛免密 sudo、把文件改成公开可读，或提交在线转换器。</p><p>本机保存配置属于凭据落盘；仅在本人允许且设备可信时进行，不放云盘/共享目录，不录屏或发送完整链接。不会因为完成服务器安装就默认允许修改现有客户端或系统代理。</p><h3>v2rayN：官方参考，不承诺所有客户端</h3><ol><li>使用已有、可信且支持 VLESS REALITY Vision 的客户端，记录应用和内核版本；保留原节点、路由和代理设置。</li><li>官方文档提供“从剪贴板导入分享链接”入口（记载 Ctrl+V）；Mac 具体菜单/快捷键未实测，不直接推定 Command+V。先在自身客户端确认对应入口。</li><li>私下复制单行链接导入；关闭跨设备剪贴板同步，完成后清理剪贴板和历史。核对 IPv4、节点入口、SNI、REALITY、Vision，服务器地址不能是回环 IP。</li><li>若解析失败或字段丢失，停止并核对客户端支持，不先重复修改服务器。原生 <code>client-export.json</code> 不是通用订阅格式。</li></ol><p><a href="https://github.com/2dust/v2rayN/wiki/Description-of-some-ui">v2rayN 官方操作参考</a> · <a href="https://github.com/2dust/v2rayN/wiki/Release-files-introduction">官方平台说明</a></p><h3>真正成功的判据</h3><p>显式选择此节点后，完成实际 HTTPS 请求，并在私下出口检查中确认是该 VPS 预期 IPv4，排除直连或其他代理；另开 SSH 窗口仍能登录，原业务未受影响。仅有延迟数值、active、本机 verify 或公开 TLS 握手都不够。验证后安全处理临时文件，保留客户端原设置或恢复，不公开链接和日志里的凭据。</p></section>
+<section id="recovery"><h2>7. 升级、恢复与卸载边界</h2>
+<ul>
+<li>节点菜单的内核升级仅选择当前固定校验版本，不追任意 latest。</li>
+<li><strong>平台升级不会自动更新 <code>/usr/local/lib/vps-secure-reality-target</code> 中的独立配套 runtime。没有已验收的通用配套自动升级/迁移流程。</strong> 不要手工覆盖受保护 runtime，也不要把平台更新成功解释为节点内核和证书配套一起更新成功。</li>
+<li>持久平台路径在常规升级/回滚后应保持可用；路径未变不能单独证明未来模块接口兼容。更新后仍须核验目标、续期和实际客户端。</li>
+<li>节点与证书/防火墙配套各自保留事务。显式备份恢复使用对应的 <code>--transaction</code>；不带 ID 的 rollback 不是“恢复最新备份”。</li>
+<li>配套 <code>runtime-pending.json</code> 或依赖恢复待处理时，按对应错误先执行不带 ID 的配套 rollback；不能删标记绕过。恢复依赖保留的证书代、二进制、runtime 和无关防火墙一致性，不是独立完整灾备。</li>
+<li>受管节点仍引用目标时，配套拒绝卸载。先确认并卸载节点，再处理目标；卸载保留签发账户、源证书、代文件、事务、runtime、webroot 和依赖，不是秘密擦除。</li>
+</ul>
+<p>本模块未完成 GUI 客户端、自然定时续期、到期换证或全部环境验收。既有代码的测试结果不自动适用于每个重新打包的构建；应分别核对版本、构建身份、归档摘要及对应验收范围。</p>
+<h3>备份与指定恢复：在服务器 root 终端执行</h3><p>先设置同一持久入口；节点备份和目标备份分别记录 ID，不展示原始事务 JSON。</p><pre><code>NODE_CLI=/usr/lib/vps-secure/bin/vps
+TARGET_TOOL=/usr/lib/vps-secure/modules/builtin/applications-reality-node/target_service.py
+"$NODE_CLI" module run applications.reality-node backup --yes
+python3 -I "$TARGET_TOOL" backup --yes</code></pre><p>输出分别为 <code>BACKUP=</code> 与 <code>TARGET_BACKUP=</code>。恢复节点备份：</p><pre><code>printf '节点备份 ID: '
+read -r NODE_BACKUP_ID
+(
+  set -eu
+  : "${NODE_BACKUP_ID:?请填写节点备份ID}"
+  "$NODE_CLI" module run applications.reality-node rollback --yes --transaction "$NODE_BACKUP_ID"
+  "$NODE_CLI" module run applications.reality-node verify
+)</code></pre><p>恢复目标配套备份（不是同一个 ID）：</p><pre><code>printf '目标配套备份 ID: '
+read -r TARGET_BACKUP_ID
+(
+  set -eu
+  : "${TARGET_BACKUP_ID:?请填写目标备份ID}"
+  python3 -I "$TARGET_TOOL" rollback --yes --transaction "$TARGET_BACKUP_ID"
+  python3 -I "$TARGET_TOOL" verify
+)</code></pre><p><strong>成功：</strong>恢复后检查通过，再做实际客户端验证。<strong>失败停止：</strong>旧内核/证书代/runtime缺失、旧证书过期、无关规则改变或 pending 未恢复时，不强行覆盖、不删标记。目标运行时恢复可能要求先不带 ID 的 <code>python3 -I "$TARGET_TOOL" rollback --yes</code>。</p><h3>菜单和保留项</h3><div class="route">vps 首页 4「应用安装」→ 4「独立 REALITY 节点」</div><ul><li>1 状态；2 安装；3 检查；4 升级到当前固定已校验内核（本版本默认 Xray 26.3.27）。</li><li>5 创建备份；6 撤销最近一次变更，不会自动选中刚建的备份，也不是连续回退整条历史。</li><li>7 停止：停止并取消开机启动，保留配置、导出、内核、备份和规则；8 启动：验证前置后启用服务及开机启动。</li><li>9 卸载节点：移除自身活动配置/服务/导出与节点规则，保留内核与恢复资料，不删独立目标或证书。10 生成受保护客户端配置。</li></ul><p>目标配套卸载必须先移除引用此目标端口的受管节点，再执行 <code>python3 -I "$TARGET_TOOL" uninstall --yes</code>。只移除目标单元/活动配置/自有 HTTP 规则；保留证书源、签发账户、generations、transactions、runtime、webroot 和依赖。不是秘密擦除或完整灾备。</p></section>
+<section id="repair"><h2>8. 排错与验收范围</h2><div class="table-scroll"><table><thead><tr><th>现象</th><th>先检查与停止点</th></tr></thead><tbody><tr><td>找不到节点或配套</td><td>确认 beta.3 与持久安装入口；稳定2.0.0和旧Beta不含模块。</td></tr><tr><td>sha OK但构建身份失败</td><td>源码混入归档、校验或旧文件；新建下载/源码分离目录，不删除BUILD_ID。</td></tr><tr><td>HTTP挑战403或签发失败</td><td>DNS、灰云、服务商80规则、实际挑战目录权限；既有不可遍历目录不会自动修复。只诊断公共路径，不递归放宽私钥目录。</td></tr><tr><td>TLS=awaiting_certificate</td><td>首次apply只准备挑战服务，尚未签发部署；不能安装节点。</td></tr><tr><td>服务正常但客户端失败</td><td>外部TCP入口、客户端字段/内核及真实出口；不清空防火墙。</td></tr><tr><td>pending恢复待处理</td><td>保留依赖/runtime/证书/防火墙事务记录，按对应错误rollback；不绕过锁或删除标记。</td></tr><tr><td>续期没换证</td><td>正常不变可返回10；检查源证书与实际呈现。外部模式只同步，原签发者负责续期。</td></tr></tbody></table></div><p>本指南对应 <a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.3">2.1.0-beta.3 发布说明</a>。GUI、自然续期和真实到期换证未验收；不宣称其他系统、旧面板接管、复杂容器网络或整机灾备已支持。反馈只提供版本、脱敏错误及步骤，不提供私钥、链接或原始备份。</p><p><a href="index.html">← 返回完整操作手册</a></p></section>
+</main></div><footer>静态指南，不连接 VPS、不读取配置、不收集凭据。命令按步骤执行，不要跨过失败点。</footer><script src="manual.js"></script></body></html>
