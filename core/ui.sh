@@ -797,6 +797,46 @@ vps_ui_remote_desktop_menu() {
     done
 }
 
+vps_ui_reality_install() {
+    local public_address node_port target_port server_name
+    printf '\n需要先准备本机 HTTPS 目标和公开可信证书；不会自动申请证书或接管网站。\n'
+    read -r -p '服务器公网 IPv4: ' public_address
+    read -r -p '节点入口端口 [443，已占用时请另选空闲端口]: ' node_port
+    read -r -p '本机 HTTPS 目标端口: ' target_port
+    read -r -p '证书对应的域名: ' server_name
+    vps_ui_run_action applications.reality-node apply \
+        --public-address "$public_address" --node-port "${node_port:-443}" \
+        --target-host 127.0.0.1 --target-port "$target_port" --server-name "$server_name"
+}
+
+vps_ui_reality_menu() {
+    local choice
+    while true; do
+        vps_ui_header
+        vps_ui_section '🔐' '独立 REALITY 节点'
+        printf '\n单节点 · 自有本机 HTTPS 目标 · 不接管旧面板\n\n'
+        printf '  1. 状态\n  2. 安装节点\n  3. 检查节点（不替代公网客户端验收）\n'
+        printf '  4. 升级到当前已校验内核\n  5. 创建受保护备份\n  6. 撤销最近一次变更\n'
+        printf '  7. 停止节点\n  8. 启动节点\n  9. 卸载节点（保留恢复资料）\n'
+        printf '  10. 生成服务器上的受保护客户端配置\n  0. 返回\n'
+        read -r -p '请选择: ' choice
+        case "$choice" in
+            1) vps_ui_show_result '节点状态' vps_module_run applications.reality-node status ;;
+            2) vps_ui_show_result '安装节点' vps_ui_reality_install ;;
+            3) vps_ui_show_result '检查节点' vps_module_run applications.reality-node verify ;;
+            4) vps_ui_show_result '升级内核' vps_ui_run_action applications.reality-node configure --upgrade ;;
+            5) vps_ui_show_result '节点备份' vps_ui_run_action applications.reality-node backup ;;
+            6) vps_ui_show_result '节点回滚' vps_ui_run_action applications.reality-node rollback ;;
+            7) vps_ui_show_result '停止节点' vps_ui_run_action applications.reality-node stop ;;
+            8) vps_ui_show_result '启动节点' vps_ui_run_action applications.reality-node start ;;
+            9) vps_ui_show_result '卸载节点' vps_ui_run_action applications.reality-node uninstall ;;
+            10) vps_ui_show_result '导出客户端' vps_ui_run_action applications.reality-node configure --export-client ;;
+            0) return 0 ;;
+            *) printf '输入无效。\n' ;;
+        esac
+    done
+}
+
 vps_ui_applications_menu() {
     local choice
     while true; do
@@ -806,12 +846,14 @@ vps_ui_applications_menu() {
         printf '  1. Docker 容器引擎与 Compose\n'
         printf '  2. 1Panel 管理面板\n'
         printf '  3. 远程图形桌面（SSH 安全通道）\n'
+        printf '  4. 独立 REALITY 节点（自有本机目标）\n'
         printf '  0. 返回首页\n'
         read -r -p '请选择: ' choice
         case "$choice" in
             1) vps_ui_docker_menu ;;
             2) vps_ui_1panel_menu ;;
             3) vps_ui_remote_desktop_menu ;;
+            4) vps_ui_reality_menu ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac

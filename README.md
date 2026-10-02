@@ -157,6 +157,14 @@ vps monitor traffic status
 
 模块只接受由 root 所有且组/其他用户无权限的 rclone 配置，并核验指定远端确实是以 OneDrive 为底层、未关闭数据加密的 crypt 远端。Hub 模块当前不负责安装或升级 Beszel，也不配置 DNS、Cloudflare Tunnel、Tailscale 或云盘挂载。实时 `beszel_data` 必须留在本地文件系统；OneDrive、Google Drive、QNAP 或对象存储只用于迁移包的加密副本。
 
+## 独立 REALITY 节点（Beta）
+
+节点模块只支持 Debian 13、x86_64、单公网 IPv4 和简单 UFW 环境，管理一个 VLESS + REALITY + Vision 节点。它不接管已有 x-ui、Xray 或网站；节点需要自有的本机 HTTPS 目标和公开可信证书。
+
+菜单入口为 **4. 应用安装 → 4. 独立 REALITY 节点**。证书/目标配套通过独立命令准备，不由节点安装菜单自动完成。安装条件、命令、恢复和升级边界见 [节点模块说明](docs/reality-node.md)。节点安装请使用其中对应 `2.1.0-beta.3` 的完整命令，**不是下面的稳定版安装块**；该 Beta 命令仅在对应 Release 发布并提供资产后可用，不表示资产现在已经上线。正式版 2.0.0 和此前的 Beta 包不因本文更新而获得该模块。
+
+**平台更新不会自动升级证书配套的独立 runtime。** 不支持通用配套自动升级；必须保留配套记录的持久平台路径。GUI 客户端与自然定时续期未完成验收，不能用节点状态或 TCP 连通替代真实客户端验证。
+
 ## 安装正式版 2.0.0
 
 全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
