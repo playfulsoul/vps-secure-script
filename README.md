@@ -157,7 +157,7 @@ vps monitor traffic status
 
 模块只接受由 root 所有且组/其他用户无权限的 rclone 配置，并核验指定远端确实是以 OneDrive 为底层、未关闭数据加密的 crypt 远端。Hub 模块当前不负责安装或升级 Beszel，也不配置 DNS、Cloudflare Tunnel、Tailscale 或云盘挂载。实时 `beszel_data` 必须留在本地文件系统；OneDrive、Google Drive、QNAP 或对象存储只用于迁移包的加密副本。
 
-## 安装 beta 版本
+## 安装正式版 2.0.0
 
 全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
 `curl: command not found`，先安装下载工具和 HTTPS 证书：
@@ -170,24 +170,36 @@ apt-get install -y ca-certificates curl
 上面两条命令适用于提示符以 `root@` 开头的 root 用户。普通 sudo 用户请在
 `apt-get` 前加上 `sudo`。
 
-然后从 GitHub Release 下载程序包和校验文件。以下命令使用 `&&` 串联，任意一步
-失败都会停止，不会在缺少安装包时继续执行解压或安装：
+然后从 GitHub Release 下载程序包和校验文件。整体复制下面命令：它在子 shell 中执行，
+不改变当前终端的目录、变量或 umask；任意一步失败即停止。下载目录与全新的源码子目录分离：
 
 ```bash
-mkdir -p ~/vps-secure-install &&
-cd ~/vps-secure-install &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256 &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz &&
-./install.sh &&
-vps
+(
+  set -e
+  umask 022
+  install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
+  cd "$install_work"
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256
+  mkdir source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz -C source
+  cd source
+  ./install.sh
+  /usr/local/bin/vps --version
+)
 ```
 
-普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
+普通 sudo 用户应把安装和版本检查改为 `sudo ./install.sh` 和 `sudo /usr/local/bin/vps --version`。
 校验成功时会显示 `vps-secure-platform-2.0.0.tar.gz: OK`。
-请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
-归档中的所有者或权限覆盖安装目录。
+成功后输入 `vps`（普通管理员输入 `sudo vps`）打开菜单。安装器将程序安装到
+`/usr/lib/vps-secure`，入口为 `/usr/local/bin/vps`，不依赖临时下载目录。
+不要把发布包直接解压到 `/root` 或旧源码目录；压缩包和校验文件不能放进 `source`。
+安全解压参数配合 `umask 022` 保持合适的所有者和权限。
+
+若压缩包 SHA-256 显示 `OK`，安装仍提示“构建身份不一致”，先停止。
+外部校验只验证压缩包，安装器还会校验源码目录；归档、校验文件或旧文件混入也会失败。
+重新运行上述命令建立全新工作目录，不要删除 `BUILD_ID`、修改清单或绕过校验。
 
 如果出现 `sudo: unable to resolve host`，这是 VPS 模板中的 `/etc/hostname` 与
 `/etc/hosts` 不一致，不是安装包下载失败。root 用户可以暂时不使用 `sudo`，并在

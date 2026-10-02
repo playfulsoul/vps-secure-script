@@ -15,23 +15,36 @@
 <h3>先选版本和服务器</h3><p>日常使用选正式版 2.0.0。Debian 12/13、Ubuntu 22.04/24.04 有已记录的主要流程实机验证；这些记录不代表所有功能在每一种系统上的每次构建都已复测。其他系统先查兼容性说明。</p><p>安装前确认已有可用 SSH 登录，并了解服务商控制台的位置。已有网站或节点的机器，先做体检和防火墙检查，再决定是否运行初始化。</p>
 <p>需要分阶段登录强化或集中监测时，请使用 <a href="#beta-install">Beta 安装说明</a>；普通基础管理优先使用正式版。</p><h3>安装正式版</h3><ol><li>通过 SSH 登录 VPS。提示符以 <code>root@</code> 开头时，按下面的 root 命令执行。</li><li>如果没有下载工具，先执行准备命令。</li><li>在独立空目录中下载程序和校验文件；确认校验结果是 <code>OK</code> 后，安装器才会继续。</li></ol>
 <pre><code>apt-get update &amp;&amp; apt-get install -y ca-certificates curl</code></pre>
-<details><summary>展开完整安装命令（在 VPS 执行）</summary><pre><code>mkdir -p ~/vps-secure-install-2.0.0 &amp;&amp;
-cd ~/vps-secure-install-2.0.0 &amp;&amp;
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz &amp;&amp;
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256 &amp;&amp;
-sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256 &amp;&amp;
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz &amp;&amp;
-./install.sh &amp;&amp;
-vps</code></pre><p>普通 sudo 用户在两条 <code>apt-get</code> 命令、<code>./install.sh</code> 和最后的 <code>vps</code> 前加 <code>sudo</code>。若目录里已有不确定的文件，换一个空安装目录。</p></details>
-<p><strong>正常结果：</strong>出现中文首页。以后 root 输入 <code>vps</code>，普通管理员输入 <code>sudo vps</code>；查看版本可输入 <code>vps --version</code>。</p><p><strong>失败处理：</strong>下载、校验或安装报错时先停在该步骤。两个下载链接分别是程序包和校验文件，作用不同。</p>
-<article id="beta-install"><h3>安装 2.1.0-beta.2（预发布）</h3><p>此版本包含进阶登录安全和集中监测。先阅读 <a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.2">发布说明</a>。下载到一个空目录；以下以 VPS 的 root 用户为例，普通 sudo 用户在安装和启动命令前加 sudo。安装程序不会自动执行安全初始化。</p><details><summary>展开 Beta 安装命令</summary><pre><code>mkdir -p ~/vps-secure-install-2.1.0-beta.2 &amp;&amp;
-cd ~/vps-secure-install-2.1.0-beta.2 &amp;&amp;
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.2/vps-secure-platform-2.1.0-beta.2.tar.gz &amp;&amp;
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.2/vps-secure-platform-2.1.0-beta.2.tar.gz.sha256 &amp;&amp;
-sha256sum -c vps-secure-platform-2.1.0-beta.2.tar.gz.sha256 &amp;&amp;
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.2.tar.gz &amp;&amp;
-./install.sh &amp;&amp;
-vps --version</code></pre></details><p>已安装正式版的用户不会通过默认稳定通道收到 Beta。主动安装前确认自己接受预发布版本；完成后重新输入 vps，检查实际版本与更新通道。</p></article><h3>1.x 老用户怎样迁移</h3><p>旧菜单的“检查更新与自助升级”会按旧入口版本进入更新或迁移流程。1.x 与 2.x 不采用覆盖单文件的方式迁移；不要为了迁移先删除 SSH、UFW 或 Fail2Ban 配置。若旧入口仍停在 1.x，可按上面的完整包安装流程更换管理入口，安装后检查版本。</p><p>安装 2.x 只更换管理程序，不会自动重新初始化系统。已有 SSH 端口、业务应用和系统配置仍需在安装后分别检查。</p></section>
+<details><summary>展开完整安装命令（在 VPS 执行，整体复制）</summary><pre><code>(
+  set -e
+  umask 022
+  install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
+  cd "$install_work"
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256
+  mkdir source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz -C source
+  cd source
+  ./install.sh
+  /usr/local/bin/vps --version
+)</code></pre><p>普通 sudo 用户在两条 <code>apt-get</code> 命令、<code>./install.sh</code> 和 <code>/usr/local/bin/vps --version</code> 前加 <code>sudo</code>。命令在子 shell 中执行，不改变当前终端目录、变量或 umask；失败即停止。下载文件留在工作目录，只向全新的 <code>source</code> 子目录解压。程序持久安装到 <code>/usr/lib/vps-secure</code>，不依赖临时下载目录。</p></details>
+<p><strong>正常结果：</strong>安装成功并显示版本。随后 root 输入 <code>vps</code>，普通管理员输入 <code>sudo vps</code>打开中文首页；查看版本可输入 <code>vps --version</code>。</p><p><strong>失败处理：</strong>下载、校验或安装报错时先停在该步骤。两个下载链接分别是程序包和校验文件，作用不同。</p>
+<p><strong>SHA-256 显示 OK，仍报构建身份不一致：</strong>外部校验验证的是压缩包，安装器另行检查源码目录。源码里混入下载包、校验文件或旧文件也会失败。停止安装，重新执行上述命令创建新工作目录；不要删除 BUILD_ID、修改构建清单或绕过校验。</p>
+<article id="beta-install"><h3>安装 2.1.0-beta.2（预发布）</h3><p>此版本包含进阶登录安全和集中监测。先阅读 <a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.2">发布说明</a>。以下以 VPS 的 root 用户为例，普通 sudo 用户在安装和版本检查前加 sudo。安装程序不会自动执行安全初始化。</p><details><summary>展开 Beta 安装命令（整体复制）</summary><pre><code>(
+  set -e
+  umask 022
+  install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
+  cd "$install_work"
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.2/vps-secure-platform-2.1.0-beta.2.tar.gz
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.2/vps-secure-platform-2.1.0-beta.2.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.1.0-beta.2.tar.gz.sha256
+  mkdir source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.2.tar.gz -C source
+  cd source
+  ./install.sh
+  /usr/local/bin/vps --version
+)</code></pre><p>同样在子 shell 内失败即停止，下载与干净源码目录分离，使用 <code>umask 022</code>；不要把归档或校验文件移入源码目录。安装后使用持久入口 <code>/usr/local/bin/vps</code>。</p></details><p>已安装正式版的用户不会通过默认稳定通道收到 Beta。主动安装前确认自己接受预发布版本；完成后重新输入 vps，检查实际版本与更新通道。</p></article><h3>1.x 老用户怎样迁移</h3><p>旧菜单的“检查更新与自助升级”会按旧入口版本进入更新或迁移流程。1.x 与 2.x 不采用覆盖单文件的方式迁移；不要为了迁移先删除 SSH、UFW 或 Fail2Ban 配置。若旧入口仍停在 1.x，可按上面的完整包安装流程更换管理入口，安装后检查版本。</p><p>安装 2.x 只更换管理程序，不会自动重新初始化系统。已有 SSH 端口、业务应用和系统配置仍需在安装后分别检查。</p></section>
 
 <section id="map"><h2>02 按菜单找到功能</h2><p>下表以 <strong>2.0.0 正式版</strong>为准。Beta 某些二级菜单编号不同，请优先按功能名称查找。输入数字后按回车；执行结果显示后，按提示回车返回，输入 0 返回上一层或退出。</p><div class="table-scroll"><table><thead><tr><th>首页入口</th><th>你可以做什么</th></tr></thead><tbody>
 <tr><td>1 VPS 安全与配置优化设置</td><td>推荐配置向导、登录基础、进入单项管理</td></tr><tr><td>2 SSH 与安全防护</td><td>查看端口、公钥导入、UFW、启动冲突、Fail2Ban、撤销修改</td></tr><tr><td>3 系统管理</td><td>系统软件更新、Swap、BBR、用户与 sudo</td></tr><tr><td>4 应用安装</td><td>Docker / Compose、1Panel、远程图形桌面</td></tr><tr><td>5 基础网络检查与监控</td><td>延迟、丢包、流量记录与定时采集</td></tr><tr><td>6 VPS 测试工具</td><td>融合怪、YABS、Bench、NextTrace、流媒体、IP 质量</td></tr><tr><td>7 服务器完整体检</td><td>检查系统、SSH、安全组件及问题提示</td></tr><tr><td>8 诊断报告与程序维护</td><td>更新、上一版本备份、恢复、脱敏报告</td></tr><tr><td>9 高级模式</td><td>按模块查看并执行已声明的操作</td></tr></tbody></table></div><p class="note">网页只是操作手册，不连接你的 VPS，也不会点击后代替你修改服务器。</p></section>
