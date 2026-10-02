@@ -159,6 +159,8 @@ vps monitor traffic status
 
 ## 独立 REALITY 节点（Beta）
 
+普通用户可直接阅读 [节点网页操作指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)，按步骤准备证书、安装、保护导出和恢复；网页无需打开 GitHub 源码页面。
+
 节点模块只支持 Debian 13、x86_64、单公网 IPv4 和简单 UFW 环境，管理一个 VLESS + REALITY + Vision 节点。它不接管已有 x-ui、Xray 或网站；节点需要自有的本机 HTTPS 目标和公开可信证书。
 
 菜单入口为 **4. 应用安装 → 4. 独立 REALITY 节点**。证书/目标配套通过独立命令准备，不由节点安装菜单自动完成。安装条件、命令、恢复和升级边界见 [节点模块说明](docs/reality-node.md)。节点安装请使用其中对应 `2.1.0-beta.3` 的完整命令，**不是下面的稳定版安装块**；该 Beta 命令仅在对应 Release 发布并提供资产后可用，不表示资产现在已经上线。正式版 2.0.0 和此前的 Beta 包不因本文更新而获得该模块。
