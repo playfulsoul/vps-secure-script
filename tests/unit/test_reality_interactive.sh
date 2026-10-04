@@ -77,7 +77,7 @@ actual=$(printf '7\n%sy\n0\n' "$valid" | FAIL_PLAN=yes interactive_module applic
 assert_no_apply "$actual" 'failed shared plan blocks installation'
 actual=$(
     # Called indirectly by the real installation wizard.
-    # shellcheck disable=SC2329
+    # shellcheck disable=SC2317,SC2329
     python3() { return 127; }
     printf '7\n%sy\n0\n' "$valid" | interactive_module applications.reality-node
 )
