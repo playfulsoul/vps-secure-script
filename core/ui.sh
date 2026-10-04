@@ -99,7 +99,7 @@ vps_ui_status_dashboard() {
 
 vps_ui_confirm() {
     local prompt=$1 answer
-    read -r -p "$prompt (y/N): " answer
+    read -r -p "$prompt (y/N): " answer || return 1
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
@@ -800,10 +800,36 @@ vps_ui_remote_desktop_menu() {
 vps_ui_reality_install() {
     local public_address node_port target_port server_name
     printf '\n需要先准备本机 HTTPS 目标和公开可信证书；不会自动申请证书或接管网站。\n'
-    read -r -p '服务器公网 IPv4: ' public_address
-    read -r -p '节点入口端口 [443，已占用时请另选空闲端口]: ' node_port
-    read -r -p '本机 HTTPS 目标端口: ' target_port
-    read -r -p '证书对应的域名: ' server_name
+    printf '任一步输入 q 返回；必填项不能为空。\n'
+    read -r -p '服务器公网 IPv4: ' public_address || { printf '已取消。\n'; return 90; }
+    [[ "$public_address" != q ]] || { printf '已取消。\n'; return 90; }
+    read -r -p '节点入口端口 [443，已占用时请另选空闲端口]: ' node_port || { printf '已取消。\n'; return 90; }
+    [[ "$node_port" != q ]] || { printf '已取消。\n'; return 90; }
+    read -r -p '本机 HTTPS 目标端口: ' target_port || { printf '已取消。\n'; return 90; }
+    [[ "$target_port" != q ]] || { printf '已取消。\n'; return 90; }
+    read -r -p '证书对应的域名: ' server_name || { printf '已取消。\n'; return 90; }
+    [[ "$server_name" != q ]] || { printf '已取消。\n'; return 90; }
+    [[ -n "$public_address" && -n "$target_port" && -n "$server_name" ]] || {
+        printf '未执行安装：公网 IPv4、本机 HTTPS 目标端口和证书域名均为必填项。\n'
+        return 64
+    }
+    # Reuse pure module validators; no host inspection, state directory or network access.
+    if ! python3 -I -B - "$VPS_PLATFORM_ROOT/modules/builtin/applications-reality-node" \
+        "$public_address" "${node_port:-443}" "$target_port" "$server_name" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+try:
+    from preflight import validate_endpoint
+    from target_check import validate_target
+    validate_endpoint(sys.argv[2])
+    validate_target('127.0.0.1', int(sys.argv[4]), sys.argv[5], int(sys.argv[3]))
+except Exception:
+    sys.exit(64)
+PY
+    then
+        printf '未执行安装：请检查 Python 3、模块文件及输入参数；需要公网 IPv4、有效且不同的端口和证书域名。\n'
+        return 64
+    fi
     vps_ui_run_action applications.reality-node apply \
         --public-address "$public_address" --node-port "${node_port:-443}" \
         --target-host 127.0.0.1 --target-port "$target_port" --server-name "$server_name"
@@ -819,7 +845,7 @@ vps_ui_reality_menu() {
         printf '  4. 升级到当前已校验内核\n  5. 创建受保护备份\n  6. 撤销最近一次变更\n'
         printf '  7. 停止节点\n  8. 启动节点\n  9. 卸载节点（保留恢复资料）\n'
         printf '  10. 生成服务器上的受保护客户端配置\n  0. 返回\n'
-        read -r -p '请选择: ' choice
+        read -r -p '请选择: ' choice || return 0
         case "$choice" in
             1) vps_ui_show_result '节点状态' vps_module_run applications.reality-node status ;;
             2) vps_ui_show_result '安装节点' vps_ui_reality_install ;;
@@ -848,7 +874,7 @@ vps_ui_applications_menu() {
         printf '  3. 远程图形桌面（SSH 安全通道）\n'
         printf '  4. 独立 REALITY 节点（自有本机目标）\n'
         printf '  0. 返回首页\n'
-        read -r -p '请选择: ' choice
+        read -r -p '请选择: ' choice || return 0
         case "$choice" in
             1) vps_ui_docker_menu ;;
             2) vps_ui_1panel_menu ;;
@@ -1097,7 +1123,7 @@ vps_ui_main_menu() {
         vps_ui_menu_item 9 '🧱' '高级模式' \
             '全部模块与专业操作'
         printf '\n  %b0.%b 退出\n' "$UI_YELLOW" "$UI_RESET"
-        read -r -p '请选择: ' choice
+        read -r -p '请选择: ' choice || return 0
         case "$choice" in
             1) vps_ui_optimization_menu ;;
             2) vps_ui_security_menu ;;
