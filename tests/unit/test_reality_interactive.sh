@@ -40,7 +40,7 @@ for pair in $'--public-address\nARG:8.8.8.8' $'--node-port\nARG:24443' $'--targe
 done
 assert_eq 1 "$(grep -c '^ACTION:applications.reality-node:plan$' <<< "$actual")" 'shared plan and confirmation path is not duplicated'
 
-actual=$(printf '4\n4\n2\n%sy\n0\n0\n0\n' "$valid" | vps_ui_main_menu)
+actual=$(printf '4\n4\n4\n%sy\n0\n0\n0\n' "$valid" | vps_ui_main_menu)
 assert_eq 1 "$(grep -c '^ACTION:applications.reality-node:apply$' <<< "$actual")" 'original dedicated menu still installs'
 actual=$(printf '7\n8.8.8.8\n\n8443\ntarget.example\ny\n0\n' | interactive_module applications.reality-node)
 assert_contains "$actual" $'ARG:--node-port\nARG:443' 'blank optional entrance uses existing default'
@@ -83,7 +83,7 @@ actual=$(
 )
 assert_contains "$actual" '未执行安装' 'missing validator runtime gives actionable rejection'
 assert_no_apply "$actual" 'unavailable validator never falls through to apply'
-actual=$(printf '4\n4\n2\n' | vps_ui_main_menu)
+actual=$(printf '4\n4\n4\n' | vps_ui_main_menu)
 assert_no_apply "$actual" 'EOF also unwinds the dedicated menu and its parents'
 
 actual=$(printf '1\n0\n' | interactive_module applications.reality-node)

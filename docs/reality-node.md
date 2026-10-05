@@ -12,7 +12,7 @@
 
 **位置：目标 VPS 的 SSH 终端，不是本机电脑终端。以下命令按 root 编写，不要求安装 sudo。** 已有 sudo 权限的普通管理员可先用 `sudo -i` 进入 root shell；没有该权限或没有 sudo 时停止，使用已有授权的 root 登录，不为执行本文放宽登录策略。保持另一条可用管理连接。
 
-节点模块对应 `2.1.0-beta.3`；README 的默认稳定版 `2.0.0` 安装块不含节点模块，不能替代。**以下下载命令仅在 `v2.1.0-beta.3` Release 发布并提供列出的资产后可用，不表示资产目前已上线。** 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。
+本指南对应 `2.1.0-beta.5` 待发布候选；README 的默认稳定版 `2.0.0` 安装块不含节点模块，不能替代。**以下下载命令仅在 `v2.1.0-beta.5` Release 发布并提供列出的资产后可用，不表示资产目前已上线。** 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。
 
 在目标 VPS 的 root 终端先准备 Debian 13 下载工具和 Python 3：
 
@@ -39,19 +39,19 @@
   set -eu
   test "$(id -u)" -eq 0
   umask 022
-  node_install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-node-beta3-install.XXXXXX")
+  node_install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-node-install.XXXXXX")
   cd "$node_install_work"
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.3/vps-secure-platform-2.1.0-beta.3.tar.gz
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.3/vps-secure-platform-2.1.0-beta.3.tar.gz.sha256
-  sha256sum -c vps-secure-platform-2.1.0-beta.3.tar.gz.sha256
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz
+  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
   mkdir source
-  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.3.tar.gz -C source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.tar.gz -C source
   cd source
-  test "$(cat VERSION)" = 2.1.0-beta.3
+  test "$(cat VERSION)" = 2.1.0-beta.5
   test -f modules/builtin/applications-reality-node/target_service.py
   ./install.sh
   /usr/local/bin/vps --version
-  test "$(cat /usr/lib/vps-secure/VERSION)" = 2.1.0-beta.3
+  test "$(cat /usr/lib/vps-secure/VERSION)" = 2.1.0-beta.5
   test "$(cat /usr/lib/vps-secure/BUILD_ID)" = "$(cat BUILD_ID)"
   /usr/local/bin/vps module info applications.reality-node
 )
@@ -169,6 +169,23 @@ set -eu
 模块管理自己的精确 TCP 规则，不要预先添加冲突规则。标准 HTTPS 端口被占用时可选择另一个空闲节点入口，但这不代表支持共用网站端口或自动分流。
 
 导出保存在 `/var/lib/vps-secure-reality-node/client-export.json` 和 `client-link.txt`，仅 root 可读。完整链接等同凭据；不要贴聊天、公开日志或在线二维码转换网站，不通过放宽权限获得导出。客户端传输需使用可信、已授权通道。
+
+以下新菜单适用于 `2.1.0-beta.5` 及其对应构建。旧 beta.3 / beta.4 的节点菜单 1 是状态、2 是安装、10 是文件导出；不要在旧版按新编号操作。首页 **4「应用安装」→ 4「独立 REALITY 节点」** 入口不变。
+
+普通用户优先选 **1「显示可复制导入链接」**，由本人手动选择复制到可信客户端；程序不会自动写入剪贴板。需本人在 root 管理员交互终端明确确认后才展示，不接受管道或重定向。链接等同访问凭据，注意共享会话、截图、录制及剪贴板同步，不发聊天或公开日志。清屏不能删除终端历史、会话录制、剪贴板历史或已有截图。
+
+可选 **2「显示本机二维码」**。仅使用本机 `qrencode` 生成，不上传第三方，也不自动安装依赖。工具缺失、窗口不足或生成失败时，可主动输入 `l` 改用链接；已显示但扫码困难时也可这样切换，字体和行距可能影响识别。合成二维码独立解码及真实 SSH 缺工具时的主动链接退路已验证；实际二维码手机扫码与 GUI 导入尚未验收，不能将二维码显示或链接生成当作客户端联网成功。
+
+**12「导出受保护文件」** 保留为高级用途，不直接显示链接；上面的 `configure --yes --export-client` 是此文件路线，不是交互显示命令。既有受保护文件和可信 SSH/SFTP 传输路线仍可用，不能为获取文件放宽权限。目标证书前置、适用平台和独立 runtime 的限制不变。
+
+### 节点菜单
+
+- 1：显示可复制导入链接；2：显示本机二维码。
+- 3：查看状态；4：安装节点；5：检查节点，不替代公网客户端验收。
+- 6：升级到当前已校验内核；7：创建受保护备份。
+- 8：撤销最近一次变更，不是自动恢复刚创建的备份。
+- 9：停止；10：启动；11：卸载节点并保留恢复资料。
+- 12：高级受保护文件导出；0：返回。
 
 实际客户端需完成认证后的 HTTPS 请求，并验证出口是预期服务器；active、配置检查、TCP 连通或公开 TLS 握手均不能替代它。分别验证 SSH、UFW、目标、节点和续期服务；手动定时任务成功不等于自然续期或真实换证已验收。
 

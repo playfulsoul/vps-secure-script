@@ -16,9 +16,9 @@ import subprocess
 import tempfile
 import time
 import uuid
-from urllib.parse import urlencode
 
 import artifacts
+from client_data import share_uri
 from node_config import server_config
 import preflight
 from target_check import check_target
@@ -629,6 +629,37 @@ WantedBy=multi-user.target
         durable_unlink(self.pending)
         return 0
 
+    def read_client_uri(self):
+        """Read existing owned settings without initializing state or changing transactions."""
+        if not self.root.exists() and not self.root.is_symlink():
+            raise NodeError('node_not_installed')
+        st = self.secure_path(self.root, directory=True)
+        if st.st_mode & 0o077:
+            raise NodeError('state_permissions_too_broad')
+        self.secure_path(self.root / 'owner')
+        if (self.root / 'owner').read_bytes() != MAGIC:
+            raise NodeError('state_ownership_conflict')
+        lock = self.root / 'lock'
+        expected = self.secure_path(lock)
+        fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            current = os.fstat(fd)
+            if ((current.st_dev, current.st_ino) != (expected.st_dev, expected.st_ino)
+                    or current.st_uid != os.geteuid() or current.st_mode & 0o077):
+                raise NodeError('unsafe_lock')
+            try:
+                fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise NodeError('another_node_operation_is_running') from None
+            if self.pending.exists():
+                raise NodeError('pending_recovery_blocks_export')
+            self.ownership()
+            if not self.installed():
+                raise NodeError('node_not_installed')
+            return share_uri(self.settings())
+        finally:
+            os.close(fd)
+
     def export_client(self):
         self.ownership()
         if self.pending.exists():
@@ -648,10 +679,7 @@ WantedBy=multi-user.target
         }
         after = self.capture()
         after['files']['export'] = encoded(json.dumps(config, sort_keys=True).encode())
-        query = urlencode({'encryption': 'none', 'security': 'reality', 'sni': settings['server_name'],
-                           'fp': 'chrome', 'pbk': settings['public_key'], 'sid': settings['short_id'],
-                           'type': 'tcp', 'flow': 'xtls-rprx-vision'})
-        uri = 'vless://' + settings['client_id'] + '@' + settings['public_address'] + ':' + str(settings['node_port']) + '?' + query + '#VPS-Secure'
+        uri = share_uri(settings)
         after['files']['share'] = encoded((uri + '\n').encode())
         manifest = {'schema': 1, 'files': {k: digest(base64.b64decode(v['data']))
                     for k, v in after['files'].items() if k != 'managed' and v is not None}}
