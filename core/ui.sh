@@ -835,28 +835,45 @@ PY
         --target-host 127.0.0.1 --target-port "$target_port" --server-name "$server_name"
 }
 
+vps_ui_reality_client_view() {
+    local result
+    if ! command -v python3 >/dev/null 2>&1; then
+        printf '缺少 Python 3，暂时不能安全显示导入信息。请先补齐平台运行依赖，再返回此菜单。\n'
+        vps_ui_pause
+        return 20
+    fi
+    python3 -I -B "$VPS_PLATFORM_ROOT/modules/builtin/applications-reality-node/client_view.py" "$1"
+    result=$?
+    # Successful viewing and cancellation already pause or return inside the viewer.
+    if [[ "$result" != 0 && "$result" != 90 ]]; then vps_ui_pause; fi
+    return 0
+}
+
 vps_ui_reality_menu() {
     local choice
     while true; do
         vps_ui_header
         vps_ui_section '🔐' '独立 REALITY 节点'
         printf '\n单节点 · 自有本机 HTTPS 目标 · 不接管旧面板\n\n'
-        printf '  1. 状态\n  2. 安装节点\n  3. 检查节点（不替代公网客户端验收）\n'
-        printf '  4. 升级到当前已校验内核\n  5. 创建受保护备份\n  6. 撤销最近一次变更\n'
-        printf '  7. 停止节点\n  8. 启动节点\n  9. 卸载节点（保留恢复资料）\n'
-        printf '  10. 生成服务器上的受保护客户端配置\n  0. 返回\n'
+        printf '  1. 显示可复制导入链接\n  2. 显示本机二维码\n'
+        printf '  3. 查看节点状态\n  4. 安装节点\n  5. 检查节点（不替代公网客户端验收）\n'
+        printf '  6. 升级到当前已校验内核\n  7. 创建受保护备份\n  8. 撤销最近一次变更\n'
+        printf '  9. 停止节点\n  10. 启动节点\n  11. 卸载节点（保留恢复资料）\n'
+        printf '  12. 导出受保护文件（高级用途，不直接显示）\n  0. 返回\n'
         read -r -p '请选择: ' choice || return 0
         case "$choice" in
-            1) vps_ui_show_result '节点状态' vps_module_run applications.reality-node status ;;
-            2) vps_ui_show_result '安装节点' vps_ui_reality_install ;;
-            3) vps_ui_show_result '检查节点' vps_module_run applications.reality-node verify ;;
-            4) vps_ui_show_result '升级内核' vps_ui_run_action applications.reality-node configure --upgrade ;;
-            5) vps_ui_show_result '节点备份' vps_ui_run_action applications.reality-node backup ;;
-            6) vps_ui_show_result '节点回滚' vps_ui_run_action applications.reality-node rollback ;;
-            7) vps_ui_show_result '停止节点' vps_ui_run_action applications.reality-node stop ;;
-            8) vps_ui_show_result '启动节点' vps_ui_run_action applications.reality-node start ;;
-            9) vps_ui_show_result '卸载节点' vps_ui_run_action applications.reality-node uninstall ;;
-            10) vps_ui_show_result '导出客户端' vps_ui_run_action applications.reality-node configure --export-client ;;
+            1) vps_ui_reality_client_view link ;;
+            2) vps_ui_reality_client_view qr ;;
+            3) vps_ui_show_result '节点状态' vps_module_run applications.reality-node status ;;
+            4) vps_ui_show_result '安装节点' vps_ui_reality_install ;;
+            5) vps_ui_show_result '检查节点' vps_module_run applications.reality-node verify ;;
+            6) vps_ui_show_result '升级内核' vps_ui_run_action applications.reality-node configure --upgrade ;;
+            7) vps_ui_show_result '节点备份' vps_ui_run_action applications.reality-node backup ;;
+            8) vps_ui_show_result '节点回滚' vps_ui_run_action applications.reality-node rollback ;;
+            9) vps_ui_show_result '停止节点' vps_ui_run_action applications.reality-node stop ;;
+            10) vps_ui_show_result '启动节点' vps_ui_run_action applications.reality-node start ;;
+            11) vps_ui_show_result '卸载节点' vps_ui_run_action applications.reality-node uninstall ;;
+            12) vps_ui_show_result '导出客户端' vps_ui_run_action applications.reality-node configure --export-client ;;
             0) return 0 ;;
             *) printf '输入无效。\n' ;;
         esac
@@ -868,7 +885,7 @@ vps_ui_applications_menu() {
     while true; do
         vps_ui_header
         vps_ui_section '📦' '应用安装'
-        printf '\nDocker · Docker Compose · 1Panel · 远程图形桌面\n\n'
+        printf '\nREALITY 节点 · Docker · Docker Compose · 1Panel · 远程图形桌面\n\n'
         printf '  1. Docker 容器引擎与 Compose\n'
         printf '  2. 1Panel 管理面板\n'
         printf '  3. 远程图形桌面（SSH 安全通道）\n'
@@ -1109,7 +1126,7 @@ vps_ui_main_menu() {
         vps_ui_menu_item 3 '🧰' '系统管理' \
             '软件更新 · Swap · BBR · 用户与 sudo'
         vps_ui_menu_item 4 '📦' '应用安装' \
-            'Docker · Docker Compose · 1Panel · 远程图形桌面'
+            'REALITY 节点 · Docker · Docker Compose · 1Panel · 远程图形桌面'
         vps_ui_section '📡' '监控与测试'
         vps_ui_menu_item 5 '📶' '基础网络检查与监控' \
             '立即检测 · 延迟 · 丢包 · 网卡流量记录 · Beszel 中央监控'
