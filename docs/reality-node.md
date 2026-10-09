@@ -12,7 +12,9 @@
 
 **位置：目标 VPS 的 SSH 终端，不是本机电脑终端。以下命令按 root 编写，不要求安装 sudo。** 已有 sudo 权限的普通管理员可先用 `sudo -i` 进入 root shell；没有该权限或没有 sudo 时停止，使用已有授权的 root 登录，不为执行本文放宽登录策略。保持另一条可用管理连接。
 
-本指南对应 `2.1.0-beta.5` 待发布候选；README 的默认稳定版 `2.0.0` 安装块不含节点模块，不能替代。**以下下载命令仅在 `v2.1.0-beta.5` Release 发布并提供列出的资产后可用，不表示资产目前已上线。** 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。
+本指南对应已发布的 `2.1.0-beta.5` 预发布版；README 的默认稳定版 `2.0.0` 安装块不含节点模块，不能替代。**从官方 Release 下载同版本的归档和校验文件。** 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。
+
+下载失败时先停止：curl 不存在就安装 curl 与 ca-certificates；连接超时先检查 VPS 到 GitHub 及其下载域名的 HTTPS 可达性，稍后重试，不能仅凭超时认定服务商封锁；404 核对版本和官方 Release 文件名；SHA-256 失败不要安装，重新下载同一版本的两个官方文件。不要关闭防火墙、改 DNS、使用未知镜像或跳过校验。
 
 在目标 VPS 的 root 终端先准备 Debian 13 下载工具和 Python 3：
 
@@ -41,8 +43,8 @@
   umask 022
   node_install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-node-install.XXXXXX")
   cd "$node_install_work"
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
   sha256sum -c vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
   mkdir source
   tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.tar.gz -C source
