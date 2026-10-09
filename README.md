@@ -2,6 +2,73 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
+## 快速安装
+
+**默认选稳定版 2.0.0。** 需要分阶段登录强化、集中监测或独立 REALITY 节点时，可主动选择已发布的 [2.1.0-beta.5 预发布版](https://playfulsoul.github.io/vps-secure-script/#beta-install)；节点流程请再读[节点指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)。预发布不代表所有环境已验收，普通基础管理优先用稳定版。
+
+以下是稳定版唯一安装命令段落，在 VPS 的 SSH 窗口执行；不要在自己电脑上直接安装。普通 sudo 管理员先运行 `sudo -i` 进入已授权的 root shell，再复制相同命令；没有 sudo 权限时停止，不为安装放宽登录策略。
+
+<a id="安装正式版-200"></a>
+
+### 安装稳定版 2.0.0
+
+全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
+`curl: command not found`，先安装下载工具和 HTTPS 证书：
+
+```bash
+apt-get update
+apt-get install -y ca-certificates curl
+```
+
+上面两条命令适用于 root shell；普通 sudo 用户先用 `sudo -i`，再执行相同命令。
+
+然后从 GitHub Release 下载程序包和校验文件。整体复制下面命令：它在子 shell 中执行，
+不改变当前终端的目录、变量或 umask；任意一步失败即停止。下载目录与全新的源码子目录分离：
+
+```bash
+(
+  set -eu
+  test "$(id -u)" -eq 0
+  umask 022
+  install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
+  cd "$install_work"
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256
+  mkdir source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz -C source
+  cd source
+  test "$(cat VERSION)" = 2.0.0
+  ./install.sh
+  /usr/local/bin/vps --version
+)
+```
+
+安装块按 root 编写；普通 sudo 用户先用 `sudo -i`，不要逐行猜改命令。
+校验成功时会显示 `vps-secure-platform-2.0.0.tar.gz: OK`。
+成功后输入 `vps`（普通管理员输入 `sudo vps`）打开菜单。安装器将程序安装到
+`/usr/lib/vps-secure`，入口为 `/usr/local/bin/vps`，不依赖临时下载目录。
+不要把发布包直接解压到 `/root` 或旧源码目录；压缩包和校验文件不能放进 `source`。
+安全解压参数配合 `umask 022` 保持合适的所有者和权限。
+
+若压缩包 SHA-256 显示 `OK`，安装仍提示“构建身份不一致”，先停止。
+外部校验只验证压缩包，安装器还会校验源码目录；归档、校验文件或旧文件混入也会失败。
+重新运行上述命令建立全新工作目录，不要删除 `BUILD_ID`、修改清单或绕过校验。
+
+如果出现 `sudo: unable to resolve host`，这是 VPS 模板中的 `/etc/hostname` 与
+`/etc/hosts` 不一致，不是安装包下载失败。root 用户可以暂时不使用 `sudo`，并在
+修改主机名配置前先执行 `hostname`、`cat /etc/hostname` 和 `cat /etc/hosts` 核对。
+
+安装和防火墙操作期间请保持当前 SSH 窗口打开。有条件时先创建 VPS 快照，并确认服务商网页控制台可用。
+
+项目不采用 `curl | bash` 直接把远程内容交给 root 执行。
+
+下载失败时先停止：curl 不存在就安装 curl 与 ca-certificates；连接超时先检查 VPS 到 GitHub 及其下载域名的 HTTPS 可达性，稍后重试，不能仅凭超时认定服务商封锁；404 核对版本和官方 Release 文件名；SHA-256 失败不要安装，重新下载同一版本的两个官方文件。不要关闭防火墙、改 DNS、使用未知镜像或跳过校验。
+
+每个文件连接超时为 10 秒、单次传输最多 180 秒，失败最多重试 2 次。600 秒限制的是开始重试的窗口，不是整个文件下载的硬截止；已开始的最后一次传输可能继续。整个安装块失败即停，不会继续解压或安装。两条链接分别下载归档和校验文件，并不是重复下载。
+
+网络受限时，可在可信电脑从同一官方 Release 下载同版本归档与 `.sha256`，通过已核验主机身份的 SSH/SFTP 上传到 VPS，再按[手册中的上传后安装路线](https://playfulsoul.github.io/vps-secure-script/#upload-install)校验安装。平台安装器本身不联网；后续软件包安装、更新和功能依赖仍可能需要网络，这不是完全离线运行承诺。
+
 📖 **[普通用户操作手册](https://playfulsoul.github.io/vps-secure-script/)**：按菜单学习安装、公钥登录、安全防护、系统优化、应用、网络测试、更新和恢复，支持搜索及打印保存 PDF。正式版与 Beta 功能分开标注。集中监测请看 [监测操作指南](https://playfulsoul.github.io/vps-secure-script/monitoring.html)。网页源码在 [manual](manual/)；下载整个目录可离线阅读。
 
 当前正式版本为 `2.0.0`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
@@ -163,63 +230,13 @@ vps monitor traffic status
 
 节点模块只支持 Debian 13、x86_64、单公网 IPv4 和简单 UFW 环境，管理一个 VLESS + REALITY + Vision 节点。它不接管已有 x-ui、Xray 或网站；节点需要自有的本机 HTTPS 目标和公开可信证书。
 
-菜单入口为 **4. 应用安装 → 4. 独立 REALITY 节点**。证书/目标配套通过独立命令准备，不由节点安装菜单自动完成。安装条件、命令、恢复和升级边界见 [节点模块说明](docs/reality-node.md)。节点安装请使用其中对应 `2.1.0-beta.5` 的完整命令，**不是下面的稳定版安装块**；该 Beta 命令仅在对应 Release 发布并提供资产后可用，不表示资产现在已经上线。这是待发布候选说明，不代表候选资产已存在。正式版 2.0.0 不含节点模块，旧 Beta 包也不会因本文更新而获得新菜单。
+菜单入口为 **4. 应用安装 → 4. 独立 REALITY 节点**。证书/目标配套通过独立命令准备，不由节点安装菜单自动完成。安装条件、命令、恢复和升级边界见 [节点模块说明](docs/reality-node.md)。节点安装请使用其中对应 `2.1.0-beta.5` 的完整命令，**不是文首稳定版 2.0.0 安装块**；该版本已预发布，下载前仍应核对官方 Release 的同版本归档与校验文件。正式版 2.0.0 不含节点模块，旧 Beta 包也不会因本文更新而获得新菜单。
 
 在 `2.1.0-beta.5` 中，节点菜单 **1 显示可复制导入链接、2 显示本机二维码、12 高级受保护文件导出**；旧 beta.3 / beta.4 的 1 是状态、2 是安装、10 是文件导出，请勿混用编号。展示需本人 root 管理员交互终端确认，不接受管道或重定向，不自动复制、上传第三方或安装二维码依赖。工具缺失或窗口不足时可主动选择链接，扫码困难时也可切换。链接和二维码等同凭据，清屏不能撤销终端历史、录制或截图。完整安全步骤见节点指南；手机扫码及 GUI 导入仍未验收。
 
 **平台更新不会自动升级证书配套的独立 runtime。** 不支持通用配套自动升级；必须保留配套记录的持久平台路径。GUI 客户端与自然定时续期未完成验收，不能用节点状态或 TCP 连通替代真实客户端验证。
 
-## 安装正式版 2.0.0
-
-全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
-`curl: command not found`，先安装下载工具和 HTTPS 证书：
-
-```bash
-apt-get update
-apt-get install -y ca-certificates curl
-```
-
-上面两条命令适用于提示符以 `root@` 开头的 root 用户。普通 sudo 用户请在
-`apt-get` 前加上 `sudo`。
-
-然后从 GitHub Release 下载程序包和校验文件。整体复制下面命令：它在子 shell 中执行，
-不改变当前终端的目录、变量或 umask；任意一步失败即停止。下载目录与全新的源码子目录分离：
-
-```bash
-(
-  set -e
-  umask 022
-  install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
-  cd "$install_work"
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
-  sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256
-  mkdir source
-  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz -C source
-  cd source
-  ./install.sh
-  /usr/local/bin/vps --version
-)
-```
-
-普通 sudo 用户应把安装和版本检查改为 `sudo ./install.sh` 和 `sudo /usr/local/bin/vps --version`。
-校验成功时会显示 `vps-secure-platform-2.0.0.tar.gz: OK`。
-成功后输入 `vps`（普通管理员输入 `sudo vps`）打开菜单。安装器将程序安装到
-`/usr/lib/vps-secure`，入口为 `/usr/local/bin/vps`，不依赖临时下载目录。
-不要把发布包直接解压到 `/root` 或旧源码目录；压缩包和校验文件不能放进 `source`。
-安全解压参数配合 `umask 022` 保持合适的所有者和权限。
-
-若压缩包 SHA-256 显示 `OK`，安装仍提示“构建身份不一致”，先停止。
-外部校验只验证压缩包，安装器还会校验源码目录；归档、校验文件或旧文件混入也会失败。
-重新运行上述命令建立全新工作目录，不要删除 `BUILD_ID`、修改清单或绕过校验。
-
-如果出现 `sudo: unable to resolve host`，这是 VPS 模板中的 `/etc/hostname` 与
-`/etc/hosts` 不一致，不是安装包下载失败。root 用户可以暂时不使用 `sudo`，并在
-修改主机名配置前先执行 `hostname`、`cat /etc/hostname` 和 `cat /etc/hosts` 核对。
-
-安装和防火墙操作期间请保持当前 SSH 窗口打开。有条件时先创建 VPS 快照，并确认服务商网页控制台可用。
-
-项目不采用 `curl | bash` 直接把远程内容交给 root 执行。
+安装命令见文首[快速安装](#快速安装)，无需往返查找。
 
 ## 使用 SSH 公钥登录（推荐）
 

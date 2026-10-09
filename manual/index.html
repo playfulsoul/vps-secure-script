@@ -6,45 +6,76 @@
 <link rel="stylesheet" href="manual.css?v=20261002-links">
 </head>
 <body>
-<header><div class="meta" style="color:#b4e3d8">完整脚本使用手册 · 2026-10-02 核对</div><h1>让 VPS 更安全，也更好用</h1><p>从第一次输入 vps，到公钥登录、系统优化、应用安装、检测和故障恢复。按你想完成的事情查找，每项操作都有菜单路径、操作步骤与结果判断。</p><span class="tag">主线：2.0.0 正式版</span><span class="tag beta">独立章节：2.1.0 Beta</span><span class="tag private">集中监测：beta.2 已预发布</span>
+<header><div class="meta" style="color:#b4e3d8">完整脚本使用手册 · 安装说明 2026-10-09 复核；功能依据仍按各章节版本与验收记录</div><h1>让 VPS 更安全，也更好用</h1><p>从第一次输入 vps，到公钥登录、系统优化、应用安装、检测和故障恢复。按你想完成的事情查找，每项操作都有菜单路径、操作步骤与结果判断。</p><span class="tag">主线：2.0.0 正式版</span><span class="tag beta">独立章节：2.1.0 Beta</span><span class="tag private">集中监测：beta.2 已预发布</span>
 <div class="community-links" aria-label="项目与作者链接"><a href="https://github.com/playfulsoul/vps-secure-script" target="_blank" rel="noopener noreferrer">⭐ GitHub 主项目</a><a href="https://www.youtube.com/@playfulsoul-net" target="_blank" rel="noopener noreferrer">▶ YouTube 频道</a><a href="https://playfulsoul.net/" target="_blank" rel="noopener noreferrer">🌐 PlayfulSoul 博客</a></div><p class="community-note">建议收藏本手册，方便随时查阅。如果工具对你有帮助，欢迎打开 GitHub 主项目，登录后点击页面右上角的 Star，为项目加星；视频和图文内容可通过频道与博客查看。</p></header>
 <div class="layout"><aside><label for="search"><strong>查找操作</strong></label><input id="search" type="search" placeholder="例如：公钥、Swap、更新" autocomplete="off"><p class="meta" id="count" aria-live="polite">搜索按章节筛选</p><nav aria-label="手册目录">
 <a href="#start">01 安装与开始使用</a><a href="#map">02 菜单与版本</a><a href="#setup">03 首次配置向导</a><a href="#ssh">04 公钥与 SSH 登录</a><a href="#firewall">05 防火墙与防护</a><a href="#system">06 系统优化与用户</a><a href="#apps">07 应用与远程桌面</a><a href="#network">08 网络检查与测试</a><a href="#maintenance">09 更新、恢复与报告</a><a href="#login-beta">10 进阶登录安全 Beta</a><a href="#monitor">11 集中监测 Beta</a><a href="#reality">12 独立 REALITY 节点 Beta</a><a href="#faq">13 常见故障</a><a href="#sources">版本依据与阅读说明</a></nav><p><button id="print" type="button">打印 / 保存 PDF</button></p><p class="meta">本页离线可阅读。下载时请同时保留样式、脚本、监测和节点章节。</p></aside>
 <main><p class="empty" id="empty">没有匹配章节。可尝试“登录”“网络”或“恢复”。</p>
 <section id="start"><span class="tag">2.0.0 正式版</span><h2>01 安装与开始使用</h2><p>工具安装在 VPS 上，通过中文菜单操作。你电脑中的 Termius 或终端负责连接 VPS；安装命令应在 VPS 窗口中执行。</p>
 <h3>先选版本和服务器</h3><p>日常使用选正式版 2.0.0。Debian 12/13、Ubuntu 22.04/24.04 有已记录的主要流程实机验证；这些记录不代表所有功能在每一种系统上的每次构建都已复测。其他系统先查兼容性说明。</p><p>安装前确认已有可用 SSH 登录，并了解服务商控制台的位置。已有网站或节点的机器，先做体检和防火墙检查，再决定是否运行初始化。</p>
-<p>需要分阶段登录强化或集中监测时，请使用 <a href="#beta-install">Beta 安装说明</a>；普通基础管理优先使用正式版。</p><h3>安装正式版</h3><ol><li>通过 SSH 登录 VPS。提示符以 <code>root@</code> 开头时，按下面的 root 命令执行。</li><li>如果没有下载工具，先执行准备命令。</li><li>在独立空目录中下载程序和校验文件；确认校验结果是 <code>OK</code> 后，安装器才会继续。</li></ol>
+<p>需要分阶段登录强化、集中监测或独立 REALITY 节点时，请使用 <a href="#beta-install">Beta 安装说明</a>；普通基础管理优先使用正式版。</p><h3>安装正式版</h3><ol><li>通过 SSH 登录 VPS。提示符以 <code>root@</code> 开头时，按下面的 root 命令执行。</li><li>普通 sudo 管理员先用 sudo -i；如果没有下载工具，再执行准备命令。</li><li>在独立空目录中下载程序和校验文件；确认校验结果是 <code>OK</code> 后，安装器才会继续。</li></ol>
 <pre><code>apt-get update &amp;&amp; apt-get install -y ca-certificates curl</code></pre>
-<details><summary>展开完整安装命令（在 VPS 执行，整体复制）</summary><pre><code>(
-  set -e
+<details open><summary>完整安装命令（在 VPS 执行，整体复制）</summary><pre><code>(
+  set -eu
+  test "$(id -u)" -eq 0
   umask 022
   install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
   cd "$install_work"
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
   sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256
   mkdir source
   tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz -C source
   cd source
+  test "$(cat VERSION)" = 2.0.0
   ./install.sh
   /usr/local/bin/vps --version
-)</code></pre><p>普通 sudo 用户在两条 <code>apt-get</code> 命令、<code>./install.sh</code> 和 <code>/usr/local/bin/vps --version</code> 前加 <code>sudo</code>。命令在子 shell 中执行，不改变当前终端目录、变量或 umask；失败即停止。下载文件留在工作目录，只向全新的 <code>source</code> 子目录解压。程序持久安装到 <code>/usr/lib/vps-secure</code>，不依赖临时下载目录。</p></details>
+)</code></pre><p>普通 sudo 管理员先运行 <code>sudo -i</code>，再执行相同 root 命令；没有该权限时停止，不放宽登录策略。命令在子 shell 中执行，不改变当前终端目录、变量或 umask；失败即停止。下载文件留在工作目录，只向全新的 <code>source</code> 子目录解压。程序持久安装到 <code>/usr/lib/vps-secure</code>，不依赖临时下载目录。</p></details>
 <p><strong>正常结果：</strong>安装成功并显示版本。随后 root 输入 <code>vps</code>，普通管理员输入 <code>sudo vps</code>打开中文首页；查看版本可输入 <code>vps --version</code>。</p><p><strong>失败处理：</strong>下载、校验或安装报错时先停在该步骤。两个下载链接分别是程序包和校验文件，作用不同。</p>
 <p><strong>SHA-256 显示 OK，仍报构建身份不一致：</strong>外部校验验证的是压缩包，安装器另行检查源码目录。源码里混入下载包、校验文件或旧文件也会失败。停止安装，重新执行上述命令创建新工作目录；不要删除 BUILD_ID、修改构建清单或绕过校验。</p>
-<article id="beta-install"><h3>安装 2.1.0-beta.2（预发布）</h3><p>此版本包含进阶登录安全和集中监测。先阅读 <a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.2">发布说明</a>。以下以 VPS 的 root 用户为例，普通 sudo 用户在安装和版本检查前加 sudo。安装程序不会自动执行安全初始化。</p><details><summary>展开 Beta 安装命令（整体复制）</summary><pre><code>(
-  set -e
+<article id="beta-install"><h3>安装 2.1.0-beta.5（预发布）</h3><p>此版本包含进阶登录安全、集中监测和独立 REALITY 节点；节点适用范围及证书前置见<a href="reality-node.html">节点指南</a>。先阅读 <a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.5">发布说明</a>。以下以 VPS 的 root 用户为例，普通 sudo 管理员先用 <code>sudo -i</code> 进入已授权的 root shell，再执行相同命令。安装程序不会自动执行安全初始化。</p><details><summary>展开 Beta 安装命令（整体复制）</summary><pre><code>(
+  set -eu
+  test "$(id -u)" -eq 0
   umask 022
   install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
   cd "$install_work"
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.2/vps-secure-platform-2.1.0-beta.2.tar.gz
-  curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.2/vps-secure-platform-2.1.0-beta.2.tar.gz.sha256
-  sha256sum -c vps-secure-platform-2.1.0-beta.2.tar.gz.sha256
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
   mkdir source
-  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.2.tar.gz -C source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.tar.gz -C source
   cd source
+  test "$(cat VERSION)" = 2.1.0-beta.5
   ./install.sh
   /usr/local/bin/vps --version
-)</code></pre><p>同样在子 shell 内失败即停止，下载与干净源码目录分离，使用 <code>umask 022</code>；不要把归档或校验文件移入源码目录。安装后使用持久入口 <code>/usr/local/bin/vps</code>。</p></details><p>已安装正式版的用户不会通过默认稳定通道收到 Beta。主动安装前确认自己接受预发布版本；完成后重新输入 vps，检查实际版本与更新通道。</p></article><h3>1.x 老用户怎样迁移</h3><p>旧菜单的“检查更新与自助升级”会按旧入口版本进入更新或迁移流程。1.x 与 2.x 不采用覆盖单文件的方式迁移；不要为了迁移先删除 SSH、UFW 或 Fail2Ban 配置。若旧入口仍停在 1.x，可按上面的完整包安装流程更换管理入口，安装后检查版本。</p><p>安装 2.x 只更换管理程序，不会自动重新初始化系统。已有 SSH 端口、业务应用和系统配置仍需在安装后分别检查。</p></section>
+
+)</code></pre><p>同样在子 shell 内失败即停止，下载与干净源码目录分离，使用 <code>umask 022</code>；不要把归档或校验文件移入源码目录。安装后使用持久入口 <code>/usr/local/bin/vps</code>。</p></details><p>已安装正式版的用户不会通过默认稳定通道收到 Beta。主动安装前确认自己接受预发布版本；完成后重新输入 vps，检查实际版本与更新通道。</p></article><article id="upload-install"><h3>网络受限：可信电脑下载后上传</h3><p>在可信电脑打开同一官方 Release：<a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.0.0">稳定2.0.0</a>或<a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.5">预发布beta.5</a>。下载文件名完全相同版本的归档和对应 .sha256，不能混用版本。通过已核验主机指纹的SSH/SFTP上传到VPS一个独立目录，不共享凭据。记下该目录的绝对路径。</p><p>回到VPS的root shell（普通sudo管理员先sudo -i），执行下方命令；它会复制到全新工作目录，先SHA核验再解压和安装。不要把包上传进现有源码或系统安装目录。</p><pre><code>(
+  set -eu
+  test "$(id -u)" -eq 0
+  printf '版本（2.0.0 或 2.1.0-beta.5）: '
+  read -r offline_version
+  case "$offline_version" in 2.0.0|2.1.0-beta.5) ;; *) echo '版本不支持，停止。' &gt;&amp;2; exit 64 ;; esac
+  printf '已上传两个官方文件的目录（绝对路径）: '
+  read -r upload_directory
+  case "$upload_directory" in /*) ;; *) echo '需要绝对目录，停止。' &gt;&amp;2; exit 64 ;; esac
+  test -d "$upload_directory" &amp;&amp; test ! -L "$upload_directory"
+  offline_archive="vps-secure-platform-$offline_version.tar.gz"
+  test -f "$upload_directory/$offline_archive" &amp;&amp; test ! -L "$upload_directory/$offline_archive"
+  test -f "$upload_directory/$offline_archive.sha256" &amp;&amp; test ! -L "$upload_directory/$offline_archive.sha256"
+  umask 022
+  offline_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-upload.XXXXXX")
+  cd "$offline_work"
+  cp -- "$upload_directory/$offline_archive" "$upload_directory/$offline_archive.sha256" .
+  sha256sum -c "$offline_archive.sha256"
+  mkdir source
+  tar --no-same-owner --no-same-permissions -xzf "$offline_archive" -C source
+  cd source
+  test "$(cat VERSION)" = "$offline_version"
+  ./install.sh
+  /usr/local/bin/vps --version
+)</code></pre><p>成功后root输入vps，普通管理员输入sudo vps。平台安装器本身不联网；系统需已有Bash及校验/解压工具。后续APT、应用安装、节点/监测依赖和更新仍可能需要网络，这不是完整离线运行。文件缺失、校验不通过或安装失败即停止，不绕过构建身份检查。</p></article>
+<article id="download-errors"><h3>下载失败：先区分原因</h3><p>下载失败时先停止：curl 不存在就安装 curl 与 ca-certificates；连接超时先检查 VPS 到 GitHub 及其下载域名的 HTTPS 可达性，稍后重试，不能仅凭超时认定服务商封锁；404 核对版本和官方 Release 文件名；SHA-256 失败不要安装，重新下载同一版本的两个官方文件。不要关闭防火墙、改 DNS、使用未知镜像或跳过校验。</p><p>每个文件：连接最多10秒，单次传输最多180秒，失败最多重试2次。600秒是开始重试的窗口，不是文件下载总时长硬截止；最后一次已开始的传输可能继续。归档和校验文件是两种文件；任何失败都会停止，不继续安装。</p></article>
+<h3>1.x 老用户怎样迁移</h3><p>旧菜单的“检查更新与自助升级”会按旧入口版本进入更新或迁移流程。1.x 与 2.x 不采用覆盖单文件的方式迁移；不要为了迁移先删除 SSH、UFW 或 Fail2Ban 配置。若旧入口仍停在 1.x，可按上面的完整包安装流程更换管理入口，安装后检查版本。</p><p>安装 2.x 只更换管理程序，不会自动重新初始化系统。已有 SSH 端口、业务应用和系统配置仍需在安装后分别检查。</p></section>
 
 <section id="map"><h2>02 按菜单找到功能</h2><p>下表以 <strong>2.0.0 正式版</strong>为准。Beta 某些二级菜单编号不同，请优先按功能名称查找。输入数字后按回车；执行结果显示后，按提示回车返回，输入 0 返回上一层或退出。</p><div class="table-scroll"><table><thead><tr><th>首页入口</th><th>你可以做什么</th></tr></thead><tbody>
 <tr><td>1 VPS 安全与配置优化设置</td><td>推荐配置向导、登录基础、进入单项管理</td></tr><tr><td>2 SSH 与安全防护</td><td>查看端口、公钥导入、UFW、启动冲突、Fail2Ban、撤销修改</td></tr><tr><td>3 系统管理</td><td>系统软件更新、Swap、BBR、用户与 sudo</td></tr><tr><td>4 应用安装</td><td>Docker / Compose、1Panel、远程图形桌面</td></tr><tr><td>5 基础网络检查与监控</td><td>延迟、丢包、流量记录与定时采集</td></tr><tr><td>6 VPS 测试工具</td><td>融合怪、YABS、Bench、NextTrace、流媒体、IP 质量</td></tr><tr><td>7 服务器完整体检</td><td>检查系统、SSH、安全组件及问题提示</td></tr><tr><td>8 诊断报告与程序维护</td><td>更新、上一版本备份、恢复、脱敏报告</td></tr><tr><td>9 高级模式</td><td>按模块查看并执行已声明的操作</td></tr></tbody></table></div><p class="note">网页只是操作手册，不连接你的 VPS，也不会点击后代替你修改服务器。</p></section>
@@ -86,7 +117,7 @@ vps update status</code></pre></details></section>
 
 <section id="monitor"><span class="tag beta">2.1.0-beta.2</span><h2>11 多 VPS 集中监测</h2><p>一期集中监测已随 2.1.0-beta.2 公开预发布，提供手动隐藏输入接入、Hub 备份恢复及本机流量查看；正式版 2.0.0 不包含这些新增能力。一次性配对、流量邮件自动化等不在一期交付范围。</p><p><a href="monitoring.html">打开集中监测操作指南 →</a></p><p>该章节说明现有 Hub 的准备要求、手动接入、结果验证、退出、备份和本机流量查看。基础网络采集已经在 2.0.0 中提供，两者入口和范围不同。</p><p class="meta">打印本页不会自动包含链接页面；需要监测章节时，请打开该章单独打印或保存 PDF。</p></section>
 
-<section id="reality"><span class="tag beta">2.1.0-beta.5 待发布候选</span><h2>12 独立 REALITY 节点：证书、安装、导出与恢复</h2><p>仅适用 Debian 13、x86_64、单公网 IPv4、简单 UFW。先按手册准备自有本机 HTTPS 目标，再进入首页 4「应用安装」→ 4「独立 REALITY 节点」。稳定 2.0.0 和 beta.3 之前的 Beta 不含此模块；不会接管旧面板或网站。</p><div class="community-links"><a style="background:#087f72;border-color:#087f72" href="reality-node.html">🔐 打开完整节点操作指南 →</a></div><p>2.1.0-beta.5 提供本人确认后的链接/本机二维码入口：节点菜单 1 链接、2 二维码、12 高级文件导出。旧版本编号不同，请按节点指南的版本标注操作。候选尚未发布，不表示下载资产已经存在。</p><p>指南说明安装、证书准备、本人确认后的链接/二维码导入、受保护文件及备份恢复；各流程以章节版本标注为准。平台更新不自动更新证书配套 runtime；GUI 仅官方操作参考未实测，自然续期未验收。</p><p class="meta">这是手册辅助路线，不是已验收的 GUI 一键全流程；打印该章节请打开新页单独打印。</p></section>
+<section id="reality"><span class="tag beta">2.1.0-beta.5 已预发布</span><h2>12 独立 REALITY 节点：证书、安装、导出与恢复</h2><p>仅适用 Debian 13、x86_64、单公网 IPv4、简单 UFW。先按手册准备自有本机 HTTPS 目标，再进入首页 4「应用安装」→ 4「独立 REALITY 节点」。稳定 2.0.0 和 beta.3 之前的 Beta 不含此模块；不会接管旧面板或网站。</p><div class="community-links"><a style="background:#087f72;border-color:#087f72" href="reality-node.html">🔐 打开完整节点操作指南 →</a></div><p>2.1.0-beta.5 提供本人确认后的链接/本机二维码入口：节点菜单 1 链接、2 二维码、12 高级文件导出。旧版本编号不同，请按节点指南的版本标注操作。对应版本已预发布；安装前仍需校验官方归档。</p><p>指南说明安装、证书准备、本人确认后的链接/二维码导入、受保护文件及备份恢复；各流程以章节版本标注为准。平台更新不自动更新证书配套 runtime；GUI 仅官方操作参考未实测，自然续期未验收。</p><p class="meta">这是手册辅助路线，不是已验收的 GUI 一键全流程；打印该章节请打开新页单独打印。</p></section>
 <section id="faq"><h2>13 常见故障：先判断发生在哪一步</h2><div class="table-scroll"><table><thead><tr><th>现象</th><th>先做什么</th></tr></thead><tbody>
 <tr><td>curl: command not found</td><td>回到安装章节，安装 curl 与 HTTPS 证书后再下载。</td></tr><tr><td>sudo: unable to resolve host</td><td>核对 hostname、/etc/hostname、/etc/hosts 的一致性；不要盲目替换整份 hosts。root 可暂时不加 sudo。</td></tr><tr><td>升级下载超时</td><td>保留旧版本，核对 GitHub 网络可达性后重试；不跳过 SHA-256。旧客户端超时策略可能与新版不同。</td></tr><tr><td>升级后首页还是旧版本</td><td>退出脚本，再输入 vps；参考 2.1.0-beta.1.1 首次启用说明。</td></tr><tr><td>公钥登录退回密码</td><td>核对主机用户、客户端私钥、服务器公钥指纹；进行仅公钥测试，停止反复尝试错误凭据。</td></tr><tr><td>连接在 SSH 握手阶段关闭</td><td>还不能归因于密钥。检查服务、封禁和服务器日志；失去 SSH 时使用服务商控制台。</td></tr><tr><td>自己的 IP 被封</td><td>从控制台确认 sshd jail 中的当前出口 IP，定向解封后修正认证问题。</td></tr><tr><td>UFW active 但节点不可达</td><td>检查运行与重启风险、实际监听、协议和服务商安全组；由诊断结果决定是否修复启动冲突。</td></tr><tr><td>Fail2Ban socket 不存在</td><td>检查服务实际状态和日志。已安装不等于运行；回滚到此前 inactive 状态也可能出现。</td></tr><tr><td>VNC 中文菜单乱码</td><td>可能是控制台字体不支持中文。优先用 SSH 阅读菜单；救援时用简短命令，不盲选乱码菜单。</td></tr><tr><td>提示事务中断 / 锁存在</td><td>确认是否仍有安装任务运行，保留锁、备份和事务记录，按诊断结果恢复。</td></tr></tbody></table></div></section>
 
