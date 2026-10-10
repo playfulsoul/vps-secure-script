@@ -140,7 +140,7 @@ else
 fi
 
 quiesce_line=$(grep -n 'rd_quiesce_xrdp_units ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
-session_line=$(grep -n "rd_quiesce_xrdp_sessions \"\$user\" ||" "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+session_line=$(grep -n 'rd_quiesce_transaction_sessions "$transaction" "$user" ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 purge_line=$(grep -n 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 if [[ -n "$quiesce_line" && -n "$session_line" && -n "$purge_line" ]] && \
    (( quiesce_line < session_line && session_line < purge_line )) && \

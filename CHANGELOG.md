@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0-beta.5.2 - 2026-10-11
+
+- Restore the original desktop service masks after early installation failures even when the requested desktop user has not yet been created.
+- Record installation stages before package and user setup. The absent-user rollback path requires an early-stage transaction, no prior user or xrdp installation, confirmed account absence, and no remaining xrdp sessions or processes. Existing users retain strict session cleanup; ambiguous queries and legacy transactions remain fail-closed.
+- Do not claim that a desktop user was retained when no such user exists. Add regression coverage for partial masking, package-index failures, partial package installation, and unsafe rollback conditions.
+- This narrow prerelease does not change software repositories or REALITY functionality. Synthetic tests and isolated installation do not establish successful desktop installation or login on a live server.
+
 ## 2.1.0-beta.5.1 - 2026-10-10
 
 - Fix remote-desktop preflight on systemd versions that return a failure for an unmatched 1Panel service glob: enumerate all service units, then apply the existing strict 1Panel name filter.
