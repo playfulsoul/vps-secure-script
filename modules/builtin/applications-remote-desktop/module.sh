@@ -874,12 +874,15 @@ rd_service_state() {
 }
 
 rd_panel_service_states() {
-    local units line unit unit_names='' service state snapshot=''
-    if ! units=$(
-        systemctl list-unit-files --type=service --no-legend --no-pager \
-            '1panel*.service' 2>/dev/null
-    ); then
-        printf '无法枚举 1Panel 服务，拒绝继续基线检查。\n' >&2
+    local units line unit unit_names='' service state snapshot='' query_status
+    # Some systemd versions return nonzero for an unmatched unit glob. Query
+    # all services first so absence and an actual enumeration failure differ.
+    if units=$(LC_ALL=C systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null); then
+        :
+    else
+        query_status=$?
+        printf '无法获取系统服务清单（退出码 %s），无法检查 1Panel 状态，已停止。\n' "$query_status" >&2
+        printf '请先运行 systemctl list-unit-files --type=service --no-legend --no-pager 查看原因；不要跳过检查或反复安装。\n' >&2
         return 1
     fi
     while IFS= read -r line; do
