@@ -38,9 +38,15 @@ operation=${1:-}
 unit=${2:-}
 case "$operation" in
     list-unit-files)
+        # Reproduce systemd 249: unmatched filtered queries fail, but the
+        # complete service list succeeds. Do not hide this behind an empty stub.
+        if [[ ${VPS_TEST_PANEL_LAYOUT:-absent} == absent && "$*" == *'1panel*.service'* ]]; then
+            exit 1
+        fi
         case ${VPS_TEST_PANEL_LAYOUT:-absent} in
-            absent) ;;
+            absent) printf '%s\n' 'ssh.service enabled' 'not-1panel.service enabled' '1panel-helper.socket enabled' ;;
             failure) exit 1 ;;
+            partial-failure) printf '1panel.service enabled\n'; exit 1 ;;
             single) printf '1panel.service enabled\n' ;;
             split)
                 printf '%s\n' \
@@ -139,6 +145,11 @@ fi
 
 VPS_TEST_PANEL_LAYOUT='absent'
 export VPS_TEST_PANEL_LAYOUT
+if systemctl list-unit-files --type=service --no-legend --no-pager '1panel*.service' >/dev/null; then
+    fail "systemd 249 fixture must reject the unmatched filtered query"
+else
+    pass "systemd 249 fixture reproduces the unmatched filtered query failure"
+fi
 actual=$(rd_panel_service_states)
 assert_eq absent "$actual" "remote desktop records an absent 1Panel installation"
 VPS_TEST_PANEL_LAYOUT='single'
@@ -157,6 +168,14 @@ if rd_panel_service_states >/dev/null 2>&1; then
     fail "remote desktop must not treat a failed 1Panel enumeration as absent"
 else
     pass "remote desktop fails closed when 1Panel enumeration fails"
+fi
+VPS_TEST_PANEL_LAYOUT='partial-failure'
+if actual=$(rd_panel_service_states 2>&1); then
+    fail "remote desktop must reject incomplete enumeration even with a matching service"
+else
+    pass "remote desktop rejects incomplete enumeration even with a matching service"
+    assert_contains "$actual" '退出码 1' "enumeration failure reports its exit status"
+    assert_contains "$actual" 'systemctl list-unit-files' "enumeration failure gives a read-only diagnostic step"
 fi
 
 VPS_REMOTE_DESKTOP_MEMORY_MB=1024

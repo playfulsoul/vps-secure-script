@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0-beta.5.1 - 2026-10-10
+
+- Fix remote-desktop preflight on systemd versions that return a failure for an unmatched 1Panel service glob: enumerate all service units, then apply the existing strict 1Panel name filter.
+- Continue to reject failed or incomplete service enumeration, with its exit status and a read-only diagnostic command.
+- Add regression coverage for absent, unrelated, and partially returned service entries. Local fixture and isolated-install checks do not establish successful installation on a live server; user verification remains outstanding.
+- This prerelease does not change REALITY functionality or the stable update channel.
+
 ## 2.1.0-beta.2
 
 - Preserve the published beta.1.1 interactive update and restore restart fix.
