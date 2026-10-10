@@ -329,7 +329,9 @@ rd_package_present() {
 }
 
 rd_present_packages() {
-    dpkg-query -W -f='${binary:Package}\t${Status}\n' 2>/dev/null |
+    local inventory
+    inventory=$(dpkg-query -W -f='${binary:Package}\t${Status}\n' 2>/dev/null) || return 40
+    printf '%s\n' "$inventory" |
         awk -F '\t' 'NF == 2 && $2 != "unknown ok not-installed" { print $1 }' |
         sort -u
 }

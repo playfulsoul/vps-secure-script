@@ -7,6 +7,10 @@ VPS_PLATFORM_ROOT=$PROJECT_ROOT
 VPS_MODULE_ID=applications.remote-desktop
 export VPS_PLATFORM_ROOT VPS_MODULE_ID
 source "$PROJECT_ROOT/modules/builtin/applications-remote-desktop/module.sh"
+dpkg-query() { printf 'xrdp\tinstall ok installed\n'; return 1; }
+rd_present_packages >/dev/null
+assert_eq 40 "$?" "failed partial package inventory is not trusted as a baseline"
+unset -f dpkg-query
 temporary_root=$(mktemp -d)
 trap 'rm -rf -- "$temporary_root"' EXIT
 export VPS_STATE_DIR="$temporary_root/state"
