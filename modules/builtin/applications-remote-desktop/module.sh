@@ -329,7 +329,9 @@ rd_package_present() {
 }
 
 rd_present_packages() {
-    dpkg-query -W -f='${binary:Package}\t${Status}\n' 2>/dev/null |
+    local inventory
+    inventory=$(dpkg-query -W -f='${binary:Package}\t${Status}\n' 2>/dev/null) || return 40
+    printf '%s\n' "$inventory" |
         awk -F '\t' 'NF == 2 && $2 != "unknown ok not-installed" { print $1 }' |
         sort -u
 }
@@ -947,6 +949,30 @@ rd_restore_path() {
     fi
 }
 
+rd_confirm_user_absent() {
+    local user=$1 record status accounts
+    if record=$(getent passwd "$user" 2>/dev/null); then
+        return 50
+    else
+        status=$?
+    fi
+    # A failed id lookup alone is not evidence of absence. Require the NSS
+    # not-found status plus a successful, nonempty enumeration without the user.
+    [[ "$status" == 2 && -z "$record" ]] || return 50
+    accounts=$(getent passwd 2>/dev/null) || return 50
+    [[ -n "$accounts" ]] || return 50
+    if awk -F: -v user="$user" '$1 == user { found=1 } END { exit !found }' <<< "$accounts"; then
+        return 50
+    fi
+    return 0
+}
+
+rd_set_install_phase() {
+    local transaction=$1 phase=$2
+    printf '%s\n' "$phase" > "$transaction/install-phase" || return 40
+    chmod 600 "$transaction/install-phase" || return 40
+}
+
 rd_create_transaction() {
     local transaction group_existed=no user_existed=no user_group=no user_sudo=no
     local ssh_ports default_target panel_services
@@ -970,6 +996,8 @@ rd_create_transaction() {
         user_existed=yes
         id -nG "$RD_USER" | tr ' ' '\n' | grep -Fxq "$RD_GROUP" && user_group=yes
         id -nG "$RD_USER" | tr ' ' '\n' | grep -Fxq sudo && user_sudo=yes
+    else
+        rd_confirm_user_absent "$RD_USER" || return 40
     fi
     ssh_ports=$(vps_require_ssh_ports 2>/dev/null | sort -n | paste -sd, -)
     default_target=$(systemctl get-default 2>/dev/null || printf 'unknown')
@@ -997,6 +1025,7 @@ panel_services=$panel_services
 EOF
     chmod 600 "$transaction/metadata"
     rd_present_packages > "$transaction/packages.present.before" || return 40
+    rd_set_install_phase "$transaction" prepared || return 40
     printf '%s\n' "$transaction"
 }
 
@@ -1586,6 +1615,35 @@ rd_restore_service_state() {
     esac
 }
 
+rd_quiesce_transaction_sessions() {
+    local transaction=$1 user=$2 phase sessions line session service before
+    if id -u "$user" >/dev/null 2>&1; then
+        rd_quiesce_xrdp_sessions "$user"
+        return $?
+    fi
+    # Legacy/unknown phases and any prior user or xrdp installation retain the
+    # strict failure path. Never infer safety from a missing account alone.
+    [[ -f "$transaction/install-phase" ]] || return 50
+    phase=$(<"$transaction/install-phase")
+    [[ "$phase" == prepared || "$phase" == packages ]] || return 50
+    [[ $(rd_transaction_value "$transaction" user_existed) == no ]] || return 50
+    [[ -f "$transaction/packages.present.before" ]] || return 50
+    before=$(cat "$transaction/packages.present.before") || return 50
+    if grep -Eq '^(xrdp|xorgxrdp)(:|$)' <<< "$before"; then
+        return 50
+    fi
+    rd_confirm_user_absent "$user" || return 50
+    sessions=$(loginctl list-sessions --no-legend --no-pager 2>/dev/null) || return 50
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        read -r session _ <<< "$line"
+        [[ "$session" =~ ^[a-zA-Z0-9_-]+$ ]] || return 50
+        service=$(rd_loginctl_value "$session" Service) || return 50
+        [[ -n "$service" && "$service" != xrdp-sesman ]] || return 50
+    done <<< "$sessions"
+    rd_confirm_no_xrdp_processes
+}
+
 rd_restore_transaction() {
     local transaction=$1 package packages=() user group group_existed user_group user_sudo
     local grant_sudo result=0
@@ -1617,7 +1675,7 @@ rd_restore_transaction() {
         printf '无法确认 xrdp 受管进程已全部退出；回滚在软件包清理前停止。\n' >&2
         return 60
     }
-    rd_quiesce_xrdp_sessions "$user" || {
+    rd_quiesce_transaction_sessions "$transaction" "$user" || {
         printf '无法确认 xrdp 图形会话已全部退出；回滚在软件包清理前停止。\n' >&2
         return 60
     }
@@ -1669,7 +1727,8 @@ rd_restore_transaction() {
     (( result == 0 )) || return 60
     : > "$transaction/rolled_back"
     chmod 600 "$transaction/rolled_back"
-    if [[ $(rd_transaction_value "$transaction" user_existed) != yes ]]; then
+    if [[ $(rd_transaction_value "$transaction" user_existed) != yes ]] && \
+       id "$user" >/dev/null 2>&1; then
         printf '已保留安装期间创建的用户 %s 及其主目录；没有删除用户数据。\n' "$user"
     fi
     printf '远程图形桌面模块变更已回滚。未执行 apt autoremove。\n'
@@ -1787,6 +1846,7 @@ rd_apply() {
 
     rd_mask_units_for_install || { rd_apply_failure "$transaction" 40; return $?; }
     vps_apt_update || { rd_apply_failure "$transaction" 40; return $?; }
+    rd_set_install_phase "$transaction" packages || { rd_apply_failure "$transaction" 40; return $?; }
     vps_apt_install --no-install-recommends "${packages[@]}" || {
         rd_record_new_packages "$transaction" || true
         rd_apply_failure "$transaction" 40
@@ -1808,6 +1868,7 @@ rd_apply() {
     }
     rd_prepare_owned_config || { rd_apply_failure "$transaction" 40; return $?; }
     rd_write_systemd_dropins || { rd_apply_failure "$transaction" 40; return $?; }
+    rd_set_install_phase "$transaction" user-setup || { rd_apply_failure "$transaction" 40; return $?; }
     rd_install_user_access || { rd_apply_failure "$transaction" 40; return $?; }
     rd_write_state "$transaction" || { rd_apply_failure "$transaction" 40; return $?; }
     rd_unmask_units_for_start || { rd_apply_failure "$transaction" 40; return $?; }
