@@ -2,6 +2,12 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
+## PHP 安全专项 · 2026-10-23 核验
+
+收到 PHP 漏洞预警或正在运行 PHP 网站，请先阅读 **[PHP 专项修复操作指南](https://playfulsoul.github.io/vps-secure-script/php-security-20261023.html)**。按 APT、1Panel／容器或自编译选择路线；包含 10 月 21 日两个 CVE 的更新要求及 10 月 23 日新增的 session upload progress 提醒。包已更新不等于 Web worker 已生效，CLI 版本也不代表网站版本。
+
+这是独立操作文档，不是自动修复器；不需要更新本平台才能阅读，也不会连接或修改你的服务器。实际升级、配置调整及 worker 重启须由管理员核对影响后执行。
+
 ## 快速安装
 
 **默认选稳定版 2.0.0。** 需要分阶段登录强化、集中监测或独立 REALITY 节点时，可主动选择已发布的 [2.1.0-beta.5 预发布版](https://playfulsoul.github.io/vps-secure-script/#beta-install)；节点流程请再读[节点指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)。预发布不代表所有环境已验收，普通基础管理优先用稳定版。
