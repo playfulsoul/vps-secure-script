@@ -1,26 +1,31 @@
 <!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PHP 安全专项修复指南 · 2026-10-23 · VPS 管理与安全平台</title>
+<title>PHP 漏洞预警：检查与处理指南 · 2026-10-23 · VPS 管理与安全平台</title>
 <link rel="stylesheet" href="manual.css?v=20261002-links"></head>
 <body>
-<header><div class="meta" style="color:#b4e3d8">PHP 专项 · 官方事实核验于 2026-10-23 · 非自动修复器</div>
-<h1>更新 PHP，还要确认网站真的用上了补丁</h1>
-<p>先确认安装方式与网站对应的运行环境，再备份、更新、替换旧 worker，最后验证网站功能。收到预警不代表已经遭入侵。</p>
+<header><div class="meta" style="color:#b4e3d8">PHP 专项 · 操作说明修订于 2026-10-24</div>
+<h1>收到 PHP 漏洞预警，我该怎么处理？</h1>
+<p>先看这台 VPS 有没有使用 PHP，再按你的安装方式处理。你不需要先理解漏洞原理，也不要为了修复而安装原本没有的 PHP。</p>
 <p><a style="color:white" href="index.html">← 返回完整手册</a></p></header>
 <div class="layout"><aside><label for="search"><strong>查找处理步骤</strong></label><input id="search" type="search" placeholder="APT、1Panel、会话、回滚…" autocomplete="off"><p id="count" class="meta" aria-live="polite">搜索按章节筛选</p>
-<nav aria-label="PHP 专项目录"><a href="#now">1 现在先做什么</a><a href="#facts">2 漏洞与版本</a><a href="#identify">3 找到实际 Web PHP</a><a href="#prepare">4 变更前准备</a><a href="#apt">5 APT 安装路线</a><a href="#containers">6 1Panel／容器路线</a><a href="#custom">7 自编译与未知来源</a><a href="#session">8 今日新增提醒</a><a href="#verify">9 验收与恢复</a><a href="#sources">10 来源与验证边界</a></nav>
+<nav aria-label="PHP 专项目录"><a href="#now">1 升级入口在哪里</a><a href="#facts">2 漏洞与版本</a><a href="#identify">3 不知道有没有 PHP</a><a href="#prepare">4 变更前准备</a><a href="#apt">5 用命令安装的 PHP</a><a href="#containers">6 1Panel 更新步骤</a><a href="#custom">7 自编译与未知来源</a><a href="#session">8 上传进度设置</a><a href="#verify">9 怎样确认成功</a><a href="#help">看不懂时怎么求助</a><a href="#sources">10 来源与验证边界</a></nav>
 <p><button id="print" type="button">打印 / 保存 PDF</button></p></aside>
 <main><p id="empty" class="empty">没有匹配章节，请换一个关键词。</p>
-<section id="now"><h2>1. 现在先做什么</h2>
-<div class="note"><strong>不是一条升级命令就能结案。</strong>本页是专项操作指引，不扫描、不自动修改服务器；不需要安装或升级 VPS 管理平台。命令示例只做有限只读查询，不执行未知 PHP 二进制或项目代码。</div>
-<ol><li>在面板或部署记录中找到每个 PHP 网站绑定的运行环境。选择 <a href="#apt">APT</a>、<a href="#containers">1Panel／容器</a>或<a href="#custom">自编译／其他</a>路线。</li>
-<li>按官方公告确认同一分支的修复包；保存网站、数据库、配置和恢复资料，再安排维护窗口。</li>
-<li>将 <a href="#session">10 月 23 日新增提醒</a>与升级任务一起核对；不能只检查四个版本号。</li>
-<li>更新后确认网站所用的全部 worker 已替换，再验收登录、上传等业务。无法确认就记录“待核实”，不要标成安全。</li></ol>
-<p>不确定是哪种部署、没有权限、查询失败或供应商没有明确修复记录时，暂停变更，向维护者索取证据。不要为排查停止 SSH、节点、面板或其他无关服务。</p></section>
+<section id="now"><h2>1. 从这里开始：升级入口在哪里？</h2>
+<div class="note"><strong>当前 vps 菜单没有 PHP 专项检查或升级按钮。</strong>这是项目随附的网页操作说明。升级 <code>vps</code> 只会更新管理工具，不能修复 PHP。PHP 需要在你原来安装它的地方更新，例如 1Panel 或服务器的软件包管理工具。</div>
+<p>PHP 是 WordPress 等网站背后的运行程序。收到服务商群发的预警，不代表你的服务器一定安装了 PHP，也不代表已经被入侵。</p>
+<h3>选一个符合你的情况</h3>
+<div class="grid">
+<div class="tile"><strong>我用 1Panel 建网站</strong><p>在电脑浏览器打开 1Panel 后台，按下方说明找到网站使用的 PHP，再更新它。</p><a href="#containers">进入 1Panel 操作步骤 →</a></div>
+<div class="tile"><strong>我用命令安装过 PHP</strong><p>Debian／Ubuntu 用户先在服务器终端查清已安装的软件包。不同来源的更新版本不一样。</p><a href="#apt">进入命令行检查步骤 →</a></div>
+<div class="tile"><strong>我只搭了节点，或不知道有没有 PHP</strong><p>节点本身不说明是否安装 PHP。不要直接升级全部软件；先确认有没有网站或其他 PHP 应用。</p><a href="#identify">先判断是否需要处理 →</a></div>
+<div class="tile"><strong>我用其他面板、Docker，或别人帮我装的</strong><p>按原来的部署方式处理，不要照搬宿主机升级命令。</p><a href="#help">准备信息并请求协助 →</a></div>
+</div>
+<p><strong>本页能帮你完成什么：</strong>找到处理入口、检查安装信息，并按适用路线安排更新。1Panel 步骤依据官方公告整理，尚未在各版本面板实机走通；命令行路线提供检查步骤，尚不是可以不加判断地照抄完成升级的教程。</p>
+<p><strong>怎么才算完成：</strong>网站实际使用了带补丁的 PHP，相关服务已加载新版本，网站登录、后台和上传等功能正常。只更新管理工具、只下载新版或只看到网站首页正常，都不够。</p></section>
 
-<section id="facts"><h2>2. 两次公告，不能合并成一个“安全版本”</h2>
+<section id="facts"><h2>2. PHP 应该更新到哪个版本？</h2>
 <p>PHP 官方 10 月 21 日公告涉及 <strong>CVE-2026-109618</strong> 与 <strong>CVE-2026-109619</strong>，影响处理 Web 请求的 PHP，包括 FPM、mod_php、CGI、FrankenPHP 和 LiteSpeed。具体可利用条件不同，不代表每台机器已被攻击。见 <a href="https://www.php.net/archive/2026.php">PHP 官方公告</a>及 <a href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w">OOM 公告</a>、<a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">全局状态公告</a>。</p>
 <div class="table-scroll"><table><thead><tr><th>上游分支</th><th>上述两个 CVE 的修复版本</th></tr></thead><tbody>
 <tr><td>8.2</td><td>8.2.35</td></tr><tr><td>8.3</td><td>8.3.36</td></tr><tr><td>8.4</td><td>8.4.27</td></tr><tr><td>8.5</td><td>8.5.12</td></tr>
@@ -30,14 +35,19 @@
 <p>PHP 8.1 及更旧分支已结束上游支持，但不等于完全没有修补途径：发行版、LTS 供应商可能提供回移修复；PHP 团队也为 7.4／8.0／8.1 提供了最小源码回移材料。源码补丁需要构建者验证，不恢复上游长期支持，也不是推荐普通用户现场手工打补丁。</p>
 <div class="note"><strong>10 月 23 日另有 CVE-2026-115560 提醒。</strong>官方建议在后续常规 bugfix 发布前关闭 session upload progress；适用条件与如何处理见<a href="#session">第 8 节</a>。不要只因已到上表版本就忽略它。</div></section>
 
-<section id="identify"><h2>3. 三类证据缺一不可</h2>
-<div class="table-scroll"><table><thead><tr><th>要确认什么</th><th>能证明什么</th><th>不能替代什么</th></tr></thead><tbody>
+<section id="identify"><h2>3. 不知道有没有 PHP：先做这一步</h2>
+<ol><li><strong>用面板管理服务器：</strong>打开面板的网站列表，看看有没有 WordPress、Laravel 或标为 PHP 的网站；同时检查已安装应用和运行环境。有这类项目，就需要核对 PHP；网站列表为空，也不能排除独立安装的应用。</li>
+<li><strong>确认这台机器从未安装 PHP，也没有 PHP 网站或应用：</strong>不需要为这次 PHP 预警专门安装或升级 PHP。这个判断只针对本次 PHP 问题。</li>
+<li><strong>不确定：</strong>Debian／Ubuntu 可展开下面的软件包查询。没有结果仍不能排除 Docker 或手工安装；把情况交给安装者确认，不把“没查到”当成“已修复”。</li></ol>
+<p>在 <strong>SSH 登录后的 VPS 终端</strong>执行下面的查询，不是在 Mac 本机终端，也不是在 <code>vps</code> 菜单的数字选择框里。若正在菜单中，先按菜单提示返回并退出，看到服务器的命令提示符后，再完整复制代码块执行。查询不会安装、更新或重启服务。</p>
+<details><summary>给维护者：如何确认查到的是网站正在使用的 PHP</summary><div class="table-scroll"><table><thead><tr><th>要确认什么</th><th>能证明什么</th><th>不能替代什么</th></tr></thead><tbody>
 <tr><td>已安装的包／构建</td><td>完整包版本、来源及对应公告；镜像构建记录／摘要</td><td>磁盘已更新，不证明旧进程已退出</td></tr>
 <tr><td>运行中的 worker</td><td>具体 FPM 池、Apache／其他运行实例，实际加载的构建及替换证据</td><td>服务显示 active 或 PID 改变，不单独证明补丁正确</td></tr>
 <tr><td>网站路由映射</td><td>网站→虚拟主机→FPM socket／上游容器或 Apache 模块→实例</td><td>命令行 PHP、另一个网站或另一个容器的结果</td></tr>
 </tbody></table></div>
 <p>先用已有面板和部署清单逐站核对绑定关系。Nginx 的 FastCGI 目标、Apache 的模块／代理处理方式应由管理员在本机确认；不要公开完整配置或运行会泄露敏感字段的全量配置转储。共享运行环境、多个池、多副本、停用但能自动拉起的旧实例都要登记。</p>
-<details><summary>Debian／Ubuntu：有限只读包清单（不是自动检测器）</summary>
+</details>
+<details open><summary>展开命令：查询 Debian／Ubuntu 已安装的 PHP 软件包</summary>
 <p>仅在目标 Linux 主机已授权终端中使用可信系统工具。只列包名、完整版本和安装状态，不运行 PHP。失败显示“证据不足”；无输出仅表示该包清单未匹配，不能排除容器或自编译。</p>
 <pre><code>(
   if php_package_rows=$(LC_ALL=C dpkg-query -W -f='${binary:Package}\t${Version}\t${db:Status-Status}\n' 2&gt;/dev/null); then
@@ -46,7 +56,9 @@
     printf '证据不足：包清单查询失败。\n' &gt;&amp;2
     exit 1
   fi
-)</code></pre></details>
+)</code></pre>
+<p><strong>结果怎么读：</strong>每行依次是“软件包名、完整版本、安装状态”。例如 <code>php8.2-fpm　8.2.x-…　installed</code> 表示安装了 PHP 8.2 的网站运行组件；这里只是格式示例，不是安全版本。<code>installed</code> 才表示已安装；其他状态或只有 CLI 命令行包，仍需核对网站实际使用什么。</p>
+<p><strong>下一步：</strong>有 PHP 包 → 继续<a href="#apt">系统软件包路线</a>；没有输出或报错 → 继续核对面板／Docker，或用<a href="#help">协助清单</a>联系安装者。不要为让查询“有结果”而安装 PHP。</p></details>
 <details><summary>Linux：有限只读进程名称线索</summary><p>不输出完整命令行。名称会截断或被修改；Apache 可能不加载 PHP，<code>php</code> 也可能只是 CLI。本命令不能识别版本、证明网站绑定或覆盖所有运行环境。无权限、进程命名不同及其他 PID 命名空间均可能漏检。</p>
 <pre><code>(
   if php_process_rows=$(LC_ALL=C ps -eo pid=,ppid=,comm= 2&gt;/dev/null); then
@@ -65,51 +77,76 @@
 <li>确认所有站点与实例映射。包安装脚本可能自动重启服务，不能把升级命令当成无中断操作；容器重建同样会影响请求。</li></ol>
 <p>任何软件源认证、签名、网络或依赖错误都应先处理，不跳过签名校验、不静默换源、不执行通用一键 <code>apt upgrade</code>。本指南不修改 Caddy、网络、防火墙或节点配置。</p></section>
 
-<section id="apt"><h2>5. 系统 APT 包：按发行版修复公告更新</h2>
-<ol><li>用第 3 节包清单核对实际 Web 分支及完整安装版本；向发行版安全公告确认两个 CVE 的修复状态。第三方仓库另查其维护者公告。</li>
-<li>在维护窗口刷新 APT 索引，并确认所有相关源成功。源出错就停止，不把旧索引的“没有可升级包”当成安全。</li>
-<li>组成<strong>已确认的同分支包名列表</strong>：实际 Web SAPI、公共运行库及需要同步更新的扩展；不要只更新 CLI 或只安装 <code>php</code> 元包。先用 <code>apt-get -s install --only-upgrade</code> 加该列表查看模拟方案；不把这里的命令前缀单独执行。</li>
-<li>检查候选来源、完整版本、依赖、删除项和跨分支变化；无法解释就暂停。审核后由管理员执行相应的非模拟定向升级，保留交互确认，不加自动同意参数。具体包列表因部署不同，本页不提供通用写入命令。</li>
-<li>按第 8 节检查 session 配置。确认升级可能已经触发服务重启，再通过该部署支持的服务操作替换所有旧 Web worker：FPM 对应实际服务／池，mod_php 对应承载它的 Apache，不能只重启 Nginx。</li>
-<li>确认旧 worker 已全部退出、新 worker 使用修复后的构建；优雅 reload 可能保留处理长请求的旧 worker，不能只看到 reload 成功就结案。需要完整重启时先确认中断影响。</li></ol>
-<p><a href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html">APT 官方手册</a>说明了模拟和定向升级参数。模拟不安装包，但仍需管理员评估依赖和服务影响。本页未在你的发行版或生产服务上执行升级。</p></section>
+<section id="apt"><h2>5. 用命令安装的 PHP：先查清包名，再更新</h2>
+<p><strong>适用：</strong>Debian／Ubuntu 中用 APT 安装的 PHP。若网站的 PHP 在 1Panel 或 Docker 容器里，请改走<a href="#containers">面板／容器路线</a>。这里的命令不会更新容器内 PHP。</p>
+<ol><li>在服务器 SSH 终端执行<a href="#identify">第 3 节的软件包查询</a>，保留完整包名和版本。</li>
+<li>复制下面命令，查看系统版本。它不会修改系统。</li></ol>
+<pre><code>cat /etc/os-release</code></pre>
+<p>找到 <code>ID</code> 和 <code>VERSION_ID</code> 两行，例如 <code>ID=debian</code>、<code>VERSION_ID="13"</code>。</p>
+<p><strong>接下来需要核对软件来源和可更新版本。</strong>不同系统可能在旧版本号上补安全修复，所以不能仅凭“8.2 比 8.5 小”就升级大版本。把系统版本、完整 PHP 包清单交给维护者，使用下方流程核对；不确定时直接使用<a href="#help">协助清单</a>。</p>
+<div class="note"><strong>这里暂时没有适用于所有机器的一键升级命令。</strong>尚未确定你的网站对应哪个 PHP 服务、包来自哪里时，不能安全地给出完整更新命令。这条路线目前能完成信息收集；执行升级需要针对该机器确认包名和服务名，不能算作已完成修复。</div>
+<details><summary>给维护者：定向更新流程</summary><ol>
+<li>确认网站使用的 PHP 分支、服务和扩展，核对软件来源与发行版公告中的完整修复版本。</li>
+<li>完成<a href="#prepare">备份</a>后，在维护窗口刷新软件包索引；有源错误先处理，不使用过期索引判断无更新。</li>
+<li>用 <code>apt-get -s install --only-upgrade</code> 加上已确认的包名列表模拟更新。这只是命令格式，不能直接照抄；确认不会删除必要组件或跨 PHP 分支后，再执行对应的定向升级。</li>
+<li>按<a href="#session">第 8 节</a>核对配置。让实际处理网站请求的 PHP 服务加载新版本：FPM 更新对应 PHP 服务，Apache 内嵌 PHP 更新对应 Apache 服务。仅重启 Nginx 无法替代这一步。</li>
+<li>确认原来的 PHP 进程已退出、新进程加载了修复版本，然后进行<a href="#verify">网站验证</a>。</li></ol>
+<p>参考 <a href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html">APT 官方手册</a>。本页未在你的服务器上执行这些变更。</p></details></section>
 
-<section id="containers"><h2>6. 1Panel／容器：更新网站绑定的运行环境</h2>
-<ol><li>在 1Panel 的网站详情确认当前 PHP 运行环境及关联网站；再到运行环境／容器管理找到对应实例。界面名称随版本变化，不能仅更新 1Panel 面板本身。</li>
-<li>备份网站、数据库、运行环境配置、扩展及挂载，并保存旧镜像摘要和部署定义。不要将面板生成的含凭据配置公开。</li>
-<li>选择维护者已确认包含补丁的同分支运行环境／镜像；保留所需扩展和配置。若面板可选版本尚未包含修复，向维护者确认，不把其他来源的镜像直接替换进生产。</li>
-<li>在确认维护窗口后，通过面板支持的更新／重建流程替换<strong>该网站实际绑定</strong>的 PHP 容器。自管 Compose 应更新已核准的镜像或重新构建，再针对对应服务重新创建容器；不要对整个项目盲目执行 down。</li>
-<li>逐个核对所有副本的实际容器镜像 ID／摘要和可信构建记录，以及实际运行 PHP 和站点映射。可变 tag、镜像名称、拉取成功或容器健康状态均不足以单独证明修复。</li>
-<li>检查第 8 节配置确实进入容器内对应 Web 运行环境；只改宿主机 php.ini 可能完全无效。重建后配置必须保留，随后执行第 9 节验收。</li></ol>
-<p><a href="https://docs.docker.com/reference/cli/docker/compose/pull/">Docker 官方文档</a>明确拉取镜像不会启动新容器；<a href="https://docs.docker.com/reference/cli/docker/compose/up/">重新创建容器</a>是另一项会影响运行服务的操作。不要只 pull 或 restart 旧容器就声称加载了新镜像。宿主机 APT 升级也不等于容器内 PHP 已更新。</p>
-<p>本页不执行容器 exec，不运行容器内未知二进制；版本无法通过可信镜像构建材料与运行实例对应时，状态为“待核实”，请维护者补证据。</p></section>
+<section id="containers"><h2>6. 1Panel：PHP 更新入口在这里</h2>
+<p><strong>在哪里操作：</strong>电脑浏览器里的 1Panel 后台，不是 <code>vps</code> 菜单，也不是 SSH 命令窗口。以下依据 <a href="https://awesome.1panel.cn/archives/1panel-php-nodejs-security-upgrade">1Panel 2026-10-22 升级公告</a>整理；不同版本的布局可能不同，尚未逐版实机验证。</p>
+<ol><li><strong>先找对网站。</strong>进入“网站”，打开要处理的网站设置，记下它使用的 PHP 运行环境名称和版本。一个环境可能供多个网站使用，把这些网站一起记下。</li>
+<li><strong>先备份。</strong>保存网站文件、数据库、PHP 配置和扩展列表，确认可以恢复。选择网站访问较少的时候操作，下面的更新和重启可能短暂中断网站。</li>
+<li><strong>刷新版本列表。</strong>进入“应用商店”，点击“更新远程应用”。这一步只刷新可选版本，不代表 PHP 已更新。</li>
+<li><strong>选择 PHP 版本。</strong>打开刚才记录的 PHP 运行环境配置，在版本下拉框里选择同一分支的修复版本。例如正在使用 8.2，就核对 8.2.35 或该分支更新的安全版本；其他分支看<a href="#facts">版本表</a>。这一步不是去升级 1Panel 面板本身。</li>
+<li><strong>保存并重启对应服务。</strong>按面板提示完成运行环境更新，确认没有报错。仅选好版本、拉取镜像或更新应用列表都不算完成。若找不到相同入口，或者没有目标版本，停止在这一步，用<a href="#help">协助清单</a>求助，不要删除运行环境重装。</li>
+<li><strong>检查附加配置与网站。</strong>查看<a href="#session">第 8 节的上传进度设置</a>，再按<a href="#verify">第 9 节</a>测试每个关联网站。后台出现新版还需核对实际运行实例，不能单靠版本下拉框宣布修复完成。</li></ol>
+<p><strong>还在用 PHP 8.1 或更旧版本？</strong>先查 1Panel 公告对该分支的 patched 镜像说明，并确认你的环境适用。不要直接跳到 8.5；老网站可能不兼容。无法确认就让安装者协助处理。</p>
+<details><summary>自己管理 Docker／Compose 的用户</summary><p>先确认哪个容器提供网站的 PHP，备份数据库、配置和挂载数据。按原部署方式选择已包含补丁的镜像，重新创建对应容器，并确认所有副本都使用了新镜像。不要直接替换其他来源的镜像。</p><p><a href="https://docs.docker.com/reference/cli/docker/compose/pull/">拉取镜像</a>只是下载；需要通过<a href="https://docs.docker.com/reference/cli/docker/compose/up/">重新创建容器</a>使用它。宿主机 APT 更新、下载成功、重启旧容器都不能证明容器内 PHP 已更新。不要对整个项目盲目执行 down。</p><p>需由维护者核对实际镜像构建、所有运行副本和网站绑定关系；配置修改也必须进入容器实际使用的 PHP 配置。不能确认时用<a href="#help">协助清单</a>，不要猜镜像名执行替换。</p></details></section>
 
 <section id="custom"><h2>7. 自编译、其他面板与未知来源</h2>
-<p>交由负责该运行环境的维护者，从官方修复源码或有明确修复声明的供应商构建生成替代版本，在隔离环境完成编译、扩展与应用回归，再按原部署方式切换和替换 workers。保留构建版本、补丁来源、摘要及切换记录。不要在生产机器下载不明脚本，不执行未知路径的 PHP 来“测版本”。</p>
+<p>交由负责该运行环境的维护者，从官方修复源码或有明确修复声明的供应商构建生成替代版本，在隔离环境完成编译、扩展与应用回归，再按原部署方式切换和替换 PHP 工作进程。保留构建版本、补丁来源、摘要及切换记录。不要在生产机器下载不明脚本，不执行未知路径的 PHP 来“测版本”。</p>
 <p>旧分支按上游 EOL、发行版／LTS 支持、最小源码回移分别判断；不要自动从旧分支跳到 PHP 8.5。只有源码版本号、文件名或口头“已打补丁”而无法对应运行构建时，不标为已完成。普通用户应让供应商给出具体公告、包／镜像版本、切换方法与恢复方案。</p></section>
 
-<section id="session"><h2>8. 10 月 23 日：session upload progress 新提醒</h2>
+<section id="session"><h2>8. 更新之外，还要检查一个上传进度设置</h2>
+<p><strong>在哪里改：</strong>网站实际使用的 PHP 配置文件。1Panel 用户从对应网站／运行环境的 PHP 配置入口查找此项；找不到入口时，把下方配置行交给维护者，不要粘贴进终端。修改前保存原配置，修改后需让对应 PHP 服务重新加载配置，并验证网站上传功能。</p>
 <p>PHP 官方指出，罕见组合涉及配置使用 <code>php_binary</code> 或 <code>php_serialize</code>，应用再于 <code>session_start()</code> 前用 <code>ini_set()</code> 切到 <code>php</code>，且上传进度仍启用；关联 <strong>CVE-2026-115560</strong>，完整公告随后续常规版本发布。见<a href="https://www.php.net/archive/2026.php">10 月 23 日官方原文</a>。</p>
 <p>对于不确定应用是否会切换处理器的用户，按官方建议在相应 Web PHP 的<strong>启动配置</strong>中设置：</p>
 <pre><code>session.upload_progress.enabled=0</code></pre>
-<p>这是 php.ini 配置行，<strong>不是终端命令</strong>。管理员应先备份实际生效配置，确认使用的是 FPM、Apache 还是容器内的配置，并采用该运行环境支持的管理方式。不要依赖应用内 <code>ini_set()</code> 或 FPM 的 <code>.user.ini</code> 作为请求解析前的防护。处理后需确认全部旧 workers 退出、设置对实际 Web 请求生效。CLI 的设置不能证明 Web 配置生效。</p>
+<p>这是 php.ini 配置行，<strong>不是终端命令</strong>。管理员应先备份实际生效配置，确认使用的是 FPM、Apache 还是容器内的配置，并采用该运行环境支持的管理方式。不要依赖应用内 <code>ini_set()</code> 或 FPM 的 <code>.user.ini</code> 作为请求解析前的防护。处理后需确认全部旧 PHP 工作进程 退出、设置对实际 Web 请求生效。CLI 的设置不能证明 Web 配置生效。</p>
 <p>该项关闭的是 PHP 会话上传进度跟踪，不等同于禁止文件上传，但依赖此功能的应用进度展示可能受影响，必须测试。已按先前公告关闭并确认实际生效的，保留该设置；官方说明从不在运行时切换处理器的应用可保留功能，但不能靠猜测确认代码行为。后续解除缓解前重新阅读官方公告，不能按日期自动恢复。</p>
 <div class="note">这项设置不是 10 月 21 日两个 CVE 的完整修复替代品。仍须更新；WAF、隐藏错误、请求限制或一次测试都不等于完整修复。不要一键设置 <code>memory_limit=-1</code>：它会改变资源边界，也不能覆盖底层分配失败；如无法及时更新，应由维护者按两份 GHSA 逐项评估临时措施。</div></section>
 
-<section id="verify"><h2>9. 验收：何时可以标为已处理</h2>
-<ul><li><strong>包／构建：</strong>对应来源明确覆盖两个 CVE；今日 session 提醒也已单独处理或有可核实的不适用依据。</li>
-<li><strong>全部实例：</strong>每个实际 Web worker、容器副本和可自动拉起的部署定义均已核实；磁盘新版但进程旧、映射不明或无权限都记为未完成。</li>
+<section id="verify"><h2>9. 做完后，怎样确认成功？</h2>
+<p>先在浏览器打开每个关联网站，实际完成一次登录、进入后台、提交表单，以及上传一张允许的测试图片（有这些功能时）。如出现白屏、502 或上传失败，先停止继续改动，保存错误提示并联系维护者。</p>
+<p><strong>网站能打开只说明业务可用。</strong>还要由维护者确认下面的补丁与配置已经生效，才能把本次处理记为完成。</p>
+<ul><li><strong>包／构建：</strong>对应来源明确覆盖两个 CVE；10 月 23 日的上传进度提醒也已单独处理或有可核实的不适用依据。</li>
+<li><strong>全部实例：</strong>每个实际 网站 PHP 工作进程、容器副本和可自动拉起的部署定义均已核实；磁盘新版但进程旧、映射不明或无权限都记为未完成。</li>
 <li><strong>真实业务：</strong>检查目标网站首页、登录、会话、表单、上传／导入、后台及相关任务；观察错误率和资源占用。不能用静态首页 200 或 CLI 成功代替网站 PHP 验收。</li>
 <li><strong>最少披露：</strong>如需要运行时证据，由管理员通过已有受保护的诊断路径核对版本与这一项设置；仅记录必要字段，不新增公开 phpinfo 或调试端点。本页不提供注入网站的检测代码。</li>
-<li><strong>结案记录：</strong>本地记录核验日期、部署方式、来源公告、完整包／构建版本、worker 替换与站点映射证据、功能结果、未知项。官方发布补丁不等于本机已完成；本页不会自动删除仍对旧实例有用的提醒。</li></ul>
+<li><strong>结案记录：</strong>本地记录核验日期、部署方式、来源公告、完整包／构建版本、网站 PHP 进程替换与站点映射证据、功能结果、未知项。官方发布补丁不等于本机已完成；本页不会自动删除仍对旧实例有用的提醒。</li></ul>
 <h3>更新或验收失败怎么办</h3><p>暂停继续改动，保留脱敏错误和变更记录。按已验证的备份／镜像／配置恢复方案处理，注意数据库及应用升级可能使单纯回退 PHP 无效；APT 不保证旧包仍可下载。回到漏洞版本只能算业务恢复，不能算安全修复，须立即由负责人决定有限暴露措施和再次更新路径。不要盲目关闭站点、绕过证书校验或卸载整个面板。怀疑入侵时另走事件响应，不把补丁安装当成清除入侵证据。</p></section>
 
+<section id="help"><h2>看不懂结果或找不到按钮：这样请求协助</h2>
+<p>把下面清单填好，发给给你安装网站的人或你的维护者。没有维护者时，也可以通过项目 README 中的交流入口描述问题。无需提供密码、私钥或面板登录链接。</p>
+<pre><code>我需要处理 2026-10 的 PHP 安全预警。
+系统和版本：
+安装方式：1Panel / 其他面板 / 系统软件包 / Docker / 不知道
+面板版本（如果有）：
+PHP 完整版本或软件包查询结果：
+网站类型：WordPress / 其他 / 不知道
+卡在哪一步、看到什么错误：
+网站和数据库是否已有备份：
+请帮我确认：要更新哪一个 PHP、具体操作入口或命令、
+会中断哪些网站、更新后怎样验证，以及失败时怎样恢复。</code></pre>
+<p>截图前遮住 IP、域名、账号和访问地址；不要贴完整配置文件、数据库密码、私钥或容器环境变量。没有查到 PHP 或不能判断来源，就写“不知道”，不用猜。</p></section>
+
 <section id="sources"><h2>10. 来源、范围与验证边界</h2>
-<p>截至 2026-10-23 核实的主要来源：</p><ul>
+<p>公告内容复核于 2026-10-24；以下 10 月 21／23 日的历史提醒保留原日期：</p><ul>
 <li><a href="https://www.php.net/archive/2026.php">PHP 官方：10/21 安全公告与 10/23 Session upload progress 提醒</a></li>
 <li><a href="https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w">GHSA-w8hw-w9fx-j79w / CVE-2026-109618</a></li>
 <li><a href="https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp">GHSA-6wmf-4rv5-p3rp / CVE-2026-109619</a></li>
 <li><a href="https://www.php.net/manual/en/session.configuration.php">PHP Session 配置手册</a>；<a href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html">APT 官方手册</a></li>
-</ul><p>这是一份有日期的操作指南，不是漏洞利用测试、全机安全扫描或自动修复模块。两段只读查询只提供有限线索；输出仅供本地核对，不自动上传。未在真实 VPS 上升级 PHP、修改配置、重启 workers 或验收网站；1Panel 各版本界面和具体运行环境也未实机验证。发布验证仅覆盖文档结构、链接、只读命令语法／合成夹具及页面显示。</p>
+</ul><p>这是一份有日期的操作指南，不是漏洞利用测试、全机安全扫描或自动修复模块。两段只读查询只提供有限线索；输出仅供本地核对，不自动上传。未在真实 VPS 上升级 PHP、修改配置、重启 PHP 工作进程 或验收网站；1Panel 各版本界面和具体运行环境也未实机验证。发布验证仅覆盖文档结构、链接、只读命令语法／合成夹具及页面显示。</p>
 <p>执行变更前重新查看官方公告。新增修复、供应商回移状态或部署差异可能改变所需步骤；证据不足时保持待核实，不宣称整机安全。</p></section>
-</main></div><footer>PHP 专项操作指南 · 2026-10-23 · 与程序版本独立发布</footer><script src="manual.js?v=20261002-links"></script></body></html>
+</main></div><footer>PHP 检查与处理指南 · 修订于 2026-10-24 · 网页文档，无需升级 vps</footer><script src="manual.js?v=20261002-links"></script></body></html>

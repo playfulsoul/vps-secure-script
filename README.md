@@ -4,7 +4,7 @@
 
 ## PHP 安全专项 · 2026-10-23 核验
 
-收到 PHP 漏洞预警或正在运行 PHP 网站，请先阅读 **[PHP 专项修复操作指南](https://playfulsoul.github.io/vps-secure-script/php-security-20261023.html)**。按 APT、1Panel／容器或自编译选择路线；包含 10 月 21 日两个 CVE 的更新要求及 10 月 23 日新增的 session upload progress 提醒。包已更新不等于 Web worker 已生效，CLI 版本也不代表网站版本。
+收到 PHP 漏洞预警，不知道该从哪里处理？打开 **[PHP 检查与处理指南](https://playfulsoul.github.io/vps-secure-script/php-security-20261023.html)**，先判断有没有 PHP，再按 1Panel 或命令行路线操作。**当前 `vps` 菜单没有 PHP 升级入口；更新本工具不会升级 PHP。** 指南包含 1Panel 更新入口、只读检查命令、结果解释与求助清单；不能确认安装来源时，不要直接升级全部软件。
 
 这是独立操作文档，不是自动修复器；不需要更新本平台才能阅读，也不会连接或修改你的服务器。实际升级、配置调整及 worker 重启须由管理员核对影响后执行。
 
