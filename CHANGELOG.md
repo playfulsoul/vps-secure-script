@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.2 - 2026-10-31 (stable maintenance)
+
+- Synchronize shared fixes already available in the development channel: absent 1Panel detection, guarded early desktop-install rollback, package baseline errors, menu restart after platform switch, rejection of incomplete confirmation input, and correct advanced-menu result titles.
+- Keep development-only login, monitoring and node features out of the stable release.
+- Require affected-channel review and matching regression evidence for shared fixes in the release process.
+
 ## 2.1.0-beta.5.3 - 2026-10-31
 
 - Fix the install/repair loop when UFW is inactive and another firewall persistence service is enabled. The confirmed repair removes conflicting boot loading without enabling UFW, stopping services, or flushing rules; users must review business-port rules before separately enabling UFW.
