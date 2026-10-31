@@ -2,7 +2,9 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前正式版本为 `2.0.1`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前正式版本为 `2.0.2`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+
+2.0.2 修复了未安装 1Panel 时远程桌面安装被误拦截、早期安装失败回滚，以及升级后菜单仍停留在旧版本的问题。高级菜单查看结果与输入结束处理也已修正。
 
 2.0.1 修复了 UFW 未启用时无法处理持久化冲突、服务别名误判和 APT 更新失败后继续安装的问题。修复防火墙冲突不会自动启用 UFW，请先确认业务端口，再执行应用配置。
 
@@ -24,7 +26,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.1
+  🎯 VPS 管理与安全平台  2.0.2
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -116,11 +118,11 @@ apt-get install -y ca-certificates curl
 umask 022 &&
 install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX") &&
 cd "$install_work" &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.1/vps-secure-platform-2.0.1.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.1/vps-secure-platform-2.0.1.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.1.tar.gz.sha256 &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.2/vps-secure-platform-2.0.2.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.2/vps-secure-platform-2.0.2.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.2.tar.gz.sha256 &&
 mkdir source &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.1.tar.gz -C source &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.2.tar.gz -C source &&
 cd source &&
 ./install.sh &&
 vps
@@ -128,7 +130,7 @@ vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.1.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.2.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 

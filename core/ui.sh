@@ -99,8 +99,19 @@ vps_ui_status_dashboard() {
 
 vps_ui_confirm() {
     local prompt=$1 answer
-    read -r -p "$prompt (y/N): " answer
+    read -r -p "$prompt (y/N): " answer || return 1
     [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+vps_ui_restart_platform() {
+    local entry=${VPS_ENTRY:-}
+    unset VPS_UPDATE_AVAILABLE
+    if [[ -n "$entry" && -x "$entry" ]]; then
+        printf '\n正在启动已安装的平台版本……\n'
+        exec "$entry"
+    fi
+    printf '\n平台版本已经切换，但无法自动启动新入口。请重新输入 vps。\n' >&2
+    return 1
 }
 
 vps_ui_confirm_default_yes() {
@@ -421,7 +432,12 @@ vps_ui_update_menu() {
             2)
                 vps_update_check yes || true
                 if vps_ui_confirm '确认下载、校验并安装新版本？'; then
-                    vps_update_apply
+                    if vps_update_apply; then
+                        if [[ ${VPS_PLATFORM_RESTART_REQUIRED:-no} == yes ]]; then
+                            vps_ui_restart_platform || true
+                            exit 0
+                        fi
+                    fi
                     vps_ui_pause
                 fi
                 ;;
@@ -429,7 +445,12 @@ vps_ui_update_menu() {
             5) vps_ui_show_result '生成脱敏诊断报告' vps_report_command ;;
             4)
                 if vps_ui_confirm '确认恢复上一版本？'; then
-                    vps_update_rollback
+                    if vps_update_rollback; then
+                        if [[ ${VPS_PLATFORM_RESTART_REQUIRED:-no} == yes ]]; then
+                            vps_ui_restart_platform || true
+                            exit 0
+                        fi
+                    fi
                     vps_ui_pause
                 fi
                 ;;
@@ -722,7 +743,7 @@ vps_ui_applications_menu() {
         printf '  2. 1Panel 管理面板\n'
         printf '  3. 远程图形桌面（SSH 安全通道）\n'
         printf '  0. 返回首页\n'
-        read -r -p '请选择: ' choice
+        read -r -p '请选择: ' choice || return 0
         case "$choice" in
             1) vps_ui_docker_menu ;;
             2) vps_ui_1panel_menu ;;
@@ -855,7 +876,7 @@ vps_ui_main_menu() {
         vps_ui_menu_item 9 '🧱' '高级模式' \
             '全部模块与专业操作'
         printf '\n  %b0.%b 退出\n' "$UI_YELLOW" "$UI_RESET"
-        read -r -p '请选择: ' choice
+        read -r -p '请选择: ' choice || return 0
         case "$choice" in
             1) vps_ui_optimization_menu ;;
             2) vps_ui_security_menu ;;
