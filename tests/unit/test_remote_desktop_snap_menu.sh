@@ -19,6 +19,11 @@ cat > "$temporary_root/bin/dbus-run-session" <<'MOCK'
 printf '%s\n' "$XDG_DATA_DIRS"
 MOCK
 chmod +x "$temporary_root/bin/dbus-run-session"
+cat > "$temporary_root/bin/dbus-send" <<'MOCK'
+#!/usr/bin/env bash
+exit 1
+MOCK
+chmod +x "$temporary_root/bin/dbus-send"
 export PATH="$temporary_root/bin:$PATH"
 
 for profile in lxqt xfce mate; do
@@ -49,7 +54,7 @@ for profile in lxqt xfce mate; do
     cp "$temporary_root/legacy-startwm" "$RD_LIB_DIR/startwm.sh"
     chmod +x "$RD_LIB_DIR/startwm.sh"
     actual=$(HOME="$temporary_root/home" rd_repair)
-    assert_contains "$actual" '应用菜单路径已更新' "$profile refreshes the installed launcher even when fonts and WM are ready"
+    assert_contains "$actual" '会话环境与应用菜单路径已更新' "$profile refreshes the installed launcher even when fonts and WM are ready"
     assert_contains "$actual" '注销图形桌面后重新登录' "$profile explains when the menu change takes effect"
     actual=$(XDG_DATA_DIRS='/custom/data' "$RD_LIB_DIR/startwm.sh")
     assert_eq '/custom/data:/var/lib/snapd/desktop' "$actual" "$profile repaired launcher exports the required path"

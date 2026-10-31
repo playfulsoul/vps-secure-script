@@ -25,6 +25,11 @@ cat > "$temporary_root/bin/openbox" <<'MOCK'
 exit 0
 MOCK
 chmod +x "$temporary_root/bin/openbox"
+cat > "$temporary_root/bin/dbus-send" <<'MOCK'
+#!/usr/bin/env bash
+exit 1
+MOCK
+chmod +x "$temporary_root/bin/dbus-send"
 export PATH="$temporary_root/bin:$PATH"
 
 rd_managed_transaction() { printf '%s\n' "$test_transaction"; }
