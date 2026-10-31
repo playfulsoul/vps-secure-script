@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 - 2026-10-31
+
+- Repair conflicting firewall boot persistence even when UFW is inactive, without stopping services, flushing live rules, or enabling UFW during repair. Preserve rollback records and require a separate reviewed apply step.
+- Resolve systemd service aliases to their canonical unit before checking or disabling boot persistence, avoiding false conflicts from iptables/ip6tables aliases.
+- Stop package setup when any APT repository update fails, rather than proceeding with stale indexes.
+- Clarify the repair menu, stable installation instructions, and maintenance-branch release process.
+
 ## 2.0.0 - 2026-09-22
 
 - Promote the accepted rc.1 functionality to the first stable 2.x release without changing platform or module behavior.
