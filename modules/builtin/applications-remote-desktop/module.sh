@@ -205,7 +205,7 @@ rd_profile_minimums() {
 rd_profile_packages() {
     case ${1:-} in
         lxqt)
-            printf '%s\n' lxqt-core qterminal pcmanfm-qt
+            printf '%s\n' lxqt-core qterminal pcmanfm-qt openbox
             ;;
         xfce)
             printf '%s\n' xfce4 xfce4-terminal mousepad
@@ -744,6 +744,14 @@ export XDG_SESSION_TYPE=x11
 export XDG_CURRENT_DESKTOP=$desktop
 export XDG_SESSION_DESKTOP=$desktop_lower
 export DESKTOP_SESSION=$desktop_lower
+EOF
+    if [[ "$RD_PROFILE" == lxqt ]]; then
+        cat >> "$destination" <<EOF
+# vps-secure-lxqt-fallback: retain user and existing system preferences.
+export XDG_CONFIG_DIRS="\${XDG_CONFIG_DIRS:-/etc/xdg}:$RD_LIB_DIR/xdg"
+EOF
+    fi
+    cat >> "$destination" <<EOF
 
 if command -v dbus-run-session >/dev/null 2>&1; then
     exec dbus-run-session -- $command
@@ -780,6 +788,9 @@ rd_prepare_owned_config() {
     rd_ini_set "$RD_CONFIG_DIR/sesman.ini" Sessions DisconnectedTimeLimit 3600 || return 40
     rd_ini_set "$RD_CONFIG_DIR/sesman.ini" Sessions IdleTimeLimit 14400 || return 40
 
+    if [[ "$RD_PROFILE" == lxqt ]]; then
+        rd_write_lxqt_defaults || return $?
+    fi
     rd_write_session_script "$RD_LIB_DIR/startwm.sh" || return 40
     printf 'XRDP_OPTIONS="--config %s"\n' "$RD_CONFIG_DIR/xrdp.ini" > "$RD_XRDP_ENV" || return 40
     printf 'SESMAN_OPTIONS="--config %s"\n' "$RD_CONFIG_DIR/sesman.ini" > "$RD_SESMAN_ENV" || return 40
@@ -1169,6 +1180,10 @@ rd_verify_core() {
 
 rd_verify() {
     rd_verify_core || return $?
+    rd_lxqt_components_ready || {
+        printf 'LXQt 窗口管理器或默认配置缺失；请运行“补齐必要组件”，再注销图形桌面并重新登录。\n' >&2
+        return 50
+    }
     rd_cjk_font_ready || {
         printf '远程桌面安全配置正常，但中文字体尚未就绪；请运行“补齐必要组件”。\n' >&2
         return 50
@@ -1754,7 +1769,103 @@ rd_apply_interrupted() {
     exit 130
 }
 
+# A system fallback is scoped to module sessions. QSettings keeps user and
+# existing system preferences ahead of this last XDG_CONFIG_DIRS entry.
+rd_lxqt_defaults_ready() {
+    [[ -f "$RD_LIB_DIR/xdg/lxqt/session.conf" && ! -L "$RD_LIB_DIR/xdg/lxqt/session.conf" ]] &&
+        grep -Fxq 'window_manager=openbox' "$RD_LIB_DIR/xdg/lxqt/session.conf" &&
+        grep -Fq 'vps-secure-lxqt-fallback' "$RD_LIB_DIR/startwm.sh"
+}
+
+rd_lxqt_components_ready() {
+    [[ $(rd_state_value profile 2>/dev/null) == lxqt ]] || return 0
+    rd_package_installed openbox && command -v openbox >/dev/null 2>&1 &&
+        rd_lxqt_defaults_ready
+}
+
+rd_write_lxqt_defaults() {
+    local path
+    # Never follow links while writing privileged defaults. No user home writes.
+    for path in "$RD_LIB_DIR" "$RD_LIB_DIR/xdg" "$RD_LIB_DIR/xdg/lxqt" \
+        "$RD_LIB_DIR/xdg/lxqt/session.conf" "$RD_LIB_DIR/startwm.sh"; do
+        [[ ! -L "$path" ]] || return 60
+    done
+    install -d -m 755 "$RD_LIB_DIR/xdg/lxqt" || return 40
+    printf '[General]\nwindow_manager=openbox\n' > "$RD_LIB_DIR/xdg/lxqt/session.conf" || return 40
+    chmod 644 "$RD_LIB_DIR/xdg/lxqt/session.conf" || return 40
+}
+
+rd_record_repair_packages() {
+    local transaction=$1 before=$2 current delta package
+    current="$before.current"
+    delta="$before.new"
+    if ! rd_present_packages > "$current" || ! comm -13 "$before" "$current" > "$delta"; then
+        : > "$transaction/package-inventory-failed"
+        return 40
+    fi
+    while IFS= read -r package; do
+        [[ -z "$package" ]] || rd_record_owned_package "$transaction" "$package" || {
+            : > "$transaction/package-inventory-failed"
+            return 40
+        }
+    done < "$delta"
+    rd_refresh_owned_packages_state "$transaction" || return 40
+}
+
+rd_lxqt_repair_interrupted() {
+    trap - INT TERM
+    rd_record_repair_packages "$1" "$2" || true
+    printf '\n窗口管理器补齐被中断；已保留包清单，请重新运行检查。\n' >&2
+    exit 130
+}
+
+rd_repair_lxqt() {
+    local transaction before install_result=0 RD_PROFILE=lxqt
+    [[ $(rd_state_value profile 2>/dev/null) == lxqt ]] || return 10
+    if rd_lxqt_components_ready; then
+        printf 'LXQt 窗口管理器及默认配置已经就绪。\n'
+        return 10
+    fi
+    transaction=$(rd_managed_transaction) || return $?
+    if ! rd_package_installed openbox; then
+        if rd_package_present openbox; then
+            printf 'Openbox 软件包处于未完成状态，请先修复 APT/dpkg。\n' >&2
+            return 30
+        fi
+        rd_apt_unlocked || return $?
+        before=$(mktemp "$transaction/repair-packages.XXXXXX") || return 40
+        chmod 600 "$before" || return 40
+        rd_present_packages > "$before" || return 40
+        vps_apt_update || return $?
+        trap 'rd_lxqt_repair_interrupted "$transaction" "$before"' INT TERM
+        vps_apt_install --no-install-recommends openbox || install_result=$?
+        rd_record_repair_packages "$transaction" "$before" || {
+            trap - INT TERM
+            printf '软件包归属记录失败；已保留事务证据。\n' >&2
+            return 40
+        }
+        trap - INT TERM
+        (( install_result == 0 )) || return 40
+    fi
+    rd_write_lxqt_defaults || return $?
+    rd_write_session_script "$RD_LIB_DIR/startwm.sh" || return $?
+    rd_lxqt_components_ready || return 50
+    rd_verify_core || return $?
+    printf 'LXQt 窗口管理器已补齐；保留用户偏好，不重启服务或退出当前会话。\n'
+    printf '请保存桌面工作，注销图形桌面后重新登录（仅断开窗口不会建立新会话）。\n'
+}
+
 rd_repair() {
+    local font_result=0 wm_result=0
+    rd_repair_fonts || font_result=$?
+    [[ "$font_result" == 0 || "$font_result" == 10 ]] || return "$font_result"
+    rd_repair_lxqt || wm_result=$?
+    [[ "$wm_result" == 0 || "$wm_result" == 10 ]] || return "$wm_result"
+    [[ "$font_result" != 10 || "$wm_result" != 10 ]] || return 10
+    return 0
+}
+
+rd_repair_fonts() {
     local transaction present_before=no install_result=0
     vps_require_root || return $?
     rd_validate_managed_paths || return $?
@@ -1942,6 +2053,13 @@ rd_status() {
     printf '  用户: %s\n' "$user"
     printf '  浏览器: %s\n' "$browser"
     printf '  中文显示字体: %s\n' "$font_state"
+    if [[ "$profile" == lxqt ]]; then
+        if rd_lxqt_components_ready; then
+            printf '  LXQt 默认窗口管理器: Openbox 已就绪（保留用户偏好；未验证当前图形会话）。\n'
+        else
+            printf '  LXQt 默认窗口管理器: 缺少或未配置；请选择“补齐必要组件”。\n'
+        fi
+    fi
     printf '  xrdp: %s / 开机状态 %s\n' "$active" "$enabled"
     printf '  RDP 监听: %s（必须为 loopback）\n' "$listener"
     case "$listener" in
@@ -1967,6 +2085,10 @@ rd_doctor() {
         return 0
     fi
     if rd_verify_core; then
+        if ! rd_lxqt_components_ready; then
+            printf '检查结论：LXQt 缺少窗口管理器或默认配置。请选择“补齐必要组件”，随后注销图形桌面再登录。\n'
+            return 10
+        fi
         if ! rd_cjk_font_ready; then
             printf '检查结论：远程桌面安全配置健康，但缺少中文字体。\n'
             printf '请选择“补齐必要组件”；无需卸载桌面或重启 xrdp。\n'

@@ -764,7 +764,7 @@ vps_ui_remote_desktop_install() {
 
 vps_ui_remote_desktop_repair() {
     vps_module_run applications.remote-desktop status || return $?
-    printf '\n本操作只补齐模块必需的中文字体，不重装桌面、不重启 xrdp，\n'
+    printf '\n本操作补齐中文字体及 LXQt 必需的窗口管理器，不重装桌面、不重启 xrdp，\n'
     printf '也不改变系统语言、SSH、防火墙或远程连接方式。\n\n'
     vps_ui_confirm '确认补齐必要组件？' || { printf '已取消。\n'; return 90; }
     vps_module_run applications.remote-desktop configure
@@ -781,7 +781,7 @@ vps_ui_remote_desktop_menu() {
         printf '  3. 查看安装与服务状态\n'
         printf '  4. 查看远程连接方法\n'
         printf '  5. 检查故障并给出修复建议\n'
-        printf '  6. 补齐必要组件（中文字体）\n'
+        printf '  6. 补齐必要组件（字体 / LXQt 窗口管理器）\n'
         printf '  7. 撤销上一次安装\n'
         printf '  8. 卸载模块（保留用户和个人资料）\n'
         printf '  0. 返回应用安装\n'
