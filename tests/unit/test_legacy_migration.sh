@@ -10,9 +10,9 @@ source "$PROJECT_ROOT/tests/test_helper.sh"
 
 actual=$("$PROJECT_ROOT/vps_secure.sh" --version)
 assert_contains "$actual" 'legacy migration v1.0.3' "legacy raw entry is a migration assistant"
-assert_contains "$actual" '2.0.2' "legacy migration points directly to the current stable package"
+assert_contains "$actual" '2.0.3' "legacy migration points directly to the current stable package"
 assert_contains "$(<"$PROJECT_ROOT/vps_secure.sh")" \
-    '868e00a39e039621e0916e50960d0176cef5384e7626603dc1395c54704d7e21' \
+    '33107ca41fd6853688a36bda79070039ccd4816863aa68814ffacba9f518446f' \
     "legacy migration pins the verified public archive SHA-256"
 
 actual=$(printf '0\n' | "$PROJECT_ROOT/vps_secure.sh")
@@ -22,9 +22,9 @@ assert_contains "$actual" '不会' "migration notice explains preserved server c
 temporary_root=$(mktemp -d)
 fixture_root="$temporary_root/fixture"
 fake_bin="$temporary_root/bin"
-archive_name='vps-secure-platform-2.0.2.tar.gz'
+archive_name='vps-secure-platform-2.0.3.tar.gz'
 mkdir -p "$fixture_root" "$fake_bin"
-printf '%s\n' '2.0.2' > "$fixture_root/VERSION"
+printf '%s\n' '2.0.3' > "$fixture_root/VERSION"
 cat > "$fixture_root/install.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' installed > "$VPS_MIGRATION_TEST_MARKER"
@@ -72,7 +72,7 @@ actual=$(PATH="$fake_bin:$PATH" \
 assert_file_exists "$marker" "verified migration package runs its installer"
 assert_contains "$actual" '[完成]' "migration reports successful reinstallation"
 assert_contains "$(<"$temporary_root/downloads.log")" \
-    "https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.2/$archive_name" \
+    "https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.3/$archive_name" \
     "legacy migration selects the published stable archive URL"
 
 printf '%064d  %s\n' 0 "$archive_name" > "$temporary_root/$archive_name.sha256"
