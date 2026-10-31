@@ -20,7 +20,10 @@ vps_apt_locks_available() {
 vps_apt_update() {
     vps_require_apt || return $?
     vps_apt_locks_available || return 30
-    DEBIAN_FRONTEND=noninteractive apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get -o APT::Update::Error-Mode=any update || {
+        printf '软件源索引更新失败，已停止后续安装或升级；请先修复上方的软件源错误。\n' >&2
+        return 40
+    }
 }
 
 vps_apt_install() {

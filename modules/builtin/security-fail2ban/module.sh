@@ -8,6 +8,8 @@ source "$VPS_PLATFORM_ROOT/core/platform.sh"
 source "$VPS_PLATFORM_ROOT/core/runtime.sh"
 # shellcheck source=../../../core/ssh.sh
 source "$VPS_PLATFORM_ROOT/core/ssh.sh"
+# shellcheck source=../../../core/packages.sh
+source "$VPS_PLATFORM_ROOT/core/packages.sh"
 
 MODULE_ID=${VPS_MODULE_ID:-security.fail2ban}
 CONFIG_ROOT=${VPS_FAIL2BAN_CONFIG_ROOT:-/etc/fail2ban}
@@ -252,7 +254,7 @@ fail2ban_apply_impl() {
     ports_csv=$(printf '%s\n' "$ports" | paste -sd, -)
 
     if ! command -v fail2ban-client >/dev/null 2>&1; then
-        DEBIAN_FRONTEND=noninteractive apt-get update || return 40
+        vps_apt_update || return 40
         DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban || return 40
     fi
 

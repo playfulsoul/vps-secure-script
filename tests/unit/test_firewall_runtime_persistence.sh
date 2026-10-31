@@ -24,12 +24,23 @@ shift || true
 [[ ${1:-} == --quiet ]] && shift
 unit=${1:-}
 case "$action" in
-    is-enabled) [[ -e "$VPS_TEST_FIREWALL_STATE/enabled-$unit" ]] ;;
+    show)
+        if [[ -e "$VPS_TEST_FIREWALL_STATE/unit-files/$unit" ]]; then
+            printf '%s\n' "$VPS_TEST_FIREWALL_STATE/unit-files/$unit"
+        else
+            exit 1
+        fi
+        ;;
+    is-enabled)
+        case "$unit" in iptables.service|ip6tables.service) exit 0 ;; esac
+        [[ -e "$VPS_TEST_FIREWALL_STATE/enabled-$unit" ]]
+        ;;
     enable)
         : > "$VPS_TEST_FIREWALL_STATE/enabled-$unit"
         printf 'enable %s\n' "$unit" >> "$VPS_TEST_FIREWALL_STATE/systemctl.log"
         ;;
     disable)
+        [[ ! -e "$VPS_TEST_FIREWALL_STATE/fail-disable" ]] || exit 1
         rm -f "$VPS_TEST_FIREWALL_STATE/enabled-$unit"
         printf 'disable %s\n' "$unit" >> "$VPS_TEST_FIREWALL_STATE/systemctl.log"
         ;;
@@ -42,6 +53,10 @@ cat > "$bin_dir/ufw" <<'EOF'
 set -u
 case "$*" in
     status|'status verbose')
+        if [[ -e "$VPS_TEST_FIREWALL_STATE/inactive" ]]; then
+            printf 'Status: inactive\n'
+            exit 0
+        fi
         printf '%s\n' \
             'Status: active' \
             '22/tcp ALLOW IN Anywhere' \
@@ -91,7 +106,7 @@ run_firewall() {
     VPS_STATE_DIR="$runtime_state" \
     VPS_UFW_DEFAULT_FILE="$test_root/ufw-default" \
     VPS_TEST_FIREWALL_STATE="$state_dir" \
-    VPS_FIREWALL_PERSISTENCE_UNITS='netfilter-persistent.service nftables.service' \
+    VPS_FIREWALL_PERSISTENCE_UNITS='netfilter-persistent.service nftables.service iptables.service ip6tables.service' \
         bash -c '
             source "$1" backup >/dev/null
             vps_require_root() { return 0; }
@@ -101,6 +116,17 @@ run_firewall() {
             "$@"
         ' _ "$FIREWALL_MODULE" "$@"
 }
+
+# Real systemd aliases can return success from is-enabled while disabled.
+mkdir -p "$state_dir/unit-files"
+: > "$state_dir/unit-files/netfilter-persistent.service"
+ln -s netfilter-persistent.service "$state_dir/unit-files/iptables.service"
+ln -s netfilter-persistent.service "$state_dir/unit-files/ip6tables.service"
+assert_eq '' "$(run_firewall firewall_persistence_conflicts)" \
+    'disabled canonical owner is not reported through enabled aliases'
+: > "$state_dir/enabled-netfilter-persistent.service"
+assert_eq 'netfilter-persistent.service' "$(run_firewall firewall_persistence_conflicts)" \
+    'aliases resolve by fragment path and report one canonical owner'
 
 # Matrix A: an old persistent snapshot owns boot while UFW is not enabled.
 : > "$state_dir/enabled-netfilter-persistent.service"
@@ -188,6 +214,37 @@ if run_firewall firewall_verify >/dev/null 2>&1; then
 else
     fail "dual-enabled repair remains valid after the reboot simulation"
 fi
+
+# Matrix C: UFW is truly inactive, not just disabled at boot.
+: > "$state_dir/inactive"
+: > "$state_dir/enabled-netfilter-persistent.service"
+: > "$state_dir/ufw.log"
+: > "$state_dir/systemctl.log"
+actual=$(run_firewall firewall_preflight 2>&1)
+assert_eq 30 "$?" 'inactive preflight reports failure'
+assert_contains "$actual" 'netfilter-persistent.service' 'inactive preflight still reports the owner conflict'
+actual=$(run_firewall firewall_plan repair-persistence)
+assert_contains "$actual" '不会启用 UFW' 'repair plan distinguishes preparation from activation'
+actual=$(run_firewall firewall_persistence_configure 2>&1)
+assert_eq 0 "$?" 'inactive repair resolves conflict without requiring apply first'
+assert_contains "$actual" 'UFW 仍未启用' 'inactive repair never claims the firewall is active'
+assert_eq '' "$(cat "$state_dir/ufw.log")" 'inactive repair does not reload, enable, or change UFW rules'
+assert_eq 'disable netfilter-persistent.service' "$(cat "$state_dir/systemctl.log")" \
+    'inactive repair disables only canonical boot loader, without stop or UFW enable'
+transaction=$(VPS_PLATFORM_ROOT="$PROJECT_ROOT" VPS_STATE_DIR="$runtime_state" \
+    bash -c 'source "$1"; vps_last_transaction security.firewall' _ "$PROJECT_ROOT/core/runtime.sh")
+assert_eq no "$(cat "$transaction/original_active")" 'inactive state is recorded for accurate completion reporting'
+actual=$(run_firewall firewall_persistence_configure 2>&1)
+assert_eq 0 "$?" 'inactive repeat repair is a no-op'
+assert_contains "$actual" '未发现开机持久化冲突' 'no-op directs user to review rules before activation'
+run_firewall firewall_rollback_dir "$transaction" >/dev/null
+assert_eq 'netfilter-persistent.service' "$(run_firewall firewall_persistence_conflicts)" \
+    'inactive preparation rollback restores canonical boot loader'
+: > "$state_dir/fail-disable"
+actual=$(run_firewall firewall_persistence_configure 2>&1)
+assert_eq 40 "$?" 'failed inactive preparation reports failure and compensates'
+assert_contains "$actual" '已恢复模块负责的配置' 'failed disable retains rollback semantics'
+assert_eq '' "$(cat "$state_dir/ufw.log")" 'failed preparation never enables or reloads UFW'
 
 rm -rf "$test_root"
 finish_tests
