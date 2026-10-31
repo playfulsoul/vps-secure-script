@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.3 - 2026-10-31
+
+- Include Openbox explicitly in minimal LXQt installations and provide a module-scoped fallback setting without overwriting user or existing system window-manager preferences.
+- Extend desktop component repair to existing LXQt installations, retain newly installed package ownership for rollback, and leave running graphical sessions and services untouched.
+- Report missing LXQt window-manager components through status, verification and diagnostics. Apply session defaults after a graphical logout and new login.
+
 ## 2.0.2 - 2026-10-31
 
 - Distinguish an absent 1Panel service from failed service enumeration on systemd 249, allowing remote desktop setup on hosts without 1Panel.
