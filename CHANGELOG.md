@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0-beta.5.3 - 2026-10-31
+
+- Fix the install/repair loop when UFW is inactive and another firewall persistence service is enabled. The confirmed repair removes conflicting boot loading without enabling UFW, stopping services, or flushing rules; users must review business-port rules before separately enabling UFW.
+- Resolve service aliases to their actual unit before checking ownership, preventing duplicate and false conflicts. Preflight reports conflicts even when UFW is inactive.
+- Show the repair-specific plan and distinguish preparation from active protection.
+- Treat APT index download or signature failures as errors and stop subsequent package installation or upgrade instead of reporting success from stale indexes.
+- Update installation and firewall guidance. A platform update does not automatically modify the server firewall or repair third-party repository signing keys.
+
 ## 2.1.0-beta.5.2 - 2026-10-11
 
 - Restore the original desktop service masks after early installation failures even when the requested desktop user has not yet been created.

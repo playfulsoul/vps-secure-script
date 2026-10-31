@@ -10,13 +10,13 @@
 
 ## 快速安装
 
-**默认选稳定版 2.0.0。** 需要分阶段登录强化、集中监测或独立 REALITY 节点时，可主动选择已发布的 [2.1.0-beta.5 预发布版](https://playfulsoul.github.io/vps-secure-script/#beta-install)；节点流程请再读[节点指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)。预发布不代表所有环境已验收，普通基础管理优先用稳定版。
+**默认选稳定版 2.0.1。** 需要分阶段登录强化、集中监测或独立 REALITY 节点时，可主动选择已发布的 [2.1.0-beta.5.3 预发布版](https://playfulsoul.github.io/vps-secure-script/#beta-install)；节点流程请再读[节点指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)。预发布不代表所有环境已验收，普通基础管理优先用稳定版。
 
 以下是稳定版唯一安装命令段落，在 VPS 的 SSH 窗口执行；不要在自己电脑上直接安装。普通 sudo 管理员先运行 `sudo -i` 进入已授权的 root shell，再复制相同命令；没有 sudo 权限时停止，不为安装放宽登录策略。
 
 <a id="安装正式版-200"></a>
 
-### 安装稳定版 2.0.0
+### 安装稳定版 2.0.1
 
 全新的 Debian/Ubuntu 最小化系统可能没有预装 `curl`。如果命令提示
 `curl: command not found`，先安装下载工具和 HTTPS 证书：
@@ -38,20 +38,20 @@ apt-get install -y ca-certificates curl
   umask 022
   install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
   cd "$install_work"
-  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz
-  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.0/vps-secure-platform-2.0.0.tar.gz.sha256
-  sha256sum -c vps-secure-platform-2.0.0.tar.gz.sha256
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.1/vps-secure-platform-2.0.1.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.1/vps-secure-platform-2.0.1.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.0.1.tar.gz.sha256
   mkdir source
-  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.0.tar.gz -C source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.1.tar.gz -C source
   cd source
-  test "$(cat VERSION)" = 2.0.0
+  test "$(cat VERSION)" = 2.0.1
   ./install.sh
   /usr/local/bin/vps --version
 )
 ```
 
 安装块按 root 编写；普通 sudo 用户先用 `sudo -i`，不要逐行猜改命令。
-校验成功时会显示 `vps-secure-platform-2.0.0.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.1.tar.gz: OK`。
 成功后输入 `vps`（普通管理员输入 `sudo vps`）打开菜单。安装器将程序安装到
 `/usr/lib/vps-secure`，入口为 `/usr/local/bin/vps`，不依赖临时下载目录。
 不要把发布包直接解压到 `/root` 或旧源码目录；压缩包和校验文件不能放进 `source`。
@@ -77,9 +77,9 @@ apt-get install -y ca-certificates curl
 
 📖 **[普通用户操作手册](https://playfulsoul.github.io/vps-secure-script/)**：按菜单学习安装、公钥登录、安全防护、系统优化、应用、网络测试、更新和恢复，支持搜索及打印保存 PDF。正式版与 Beta 功能分开标注。集中监测请看 [监测操作指南](https://playfulsoul.github.io/vps-secure-script/monitoring.html)。网页源码在 [manual](manual/)；下载整个目录可离线阅读。
 
-当前正式版本为 `2.0.0`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前正式版本为 `2.0.1`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
-2.0.0 与 rc.1 的功能代码相同，是完成 Beta、RC、公开发布和真实 VPS 升级恢复验证后的首个稳定版本。预发布用户检查更新后可以确认升级；正式版本默认只接收后续稳定更新。1.x 迁移助手固定下载并校验已经完成发布后验证的 2.0.0 正式归档。
+2.0.1 修复了防火墙启动冲突处理与软件源更新错误提示。此前 2.0.0 与 rc.1 的功能代码相同，是完成 Beta、RC、公开发布和真实 VPS 升级恢复验证后的首个稳定版本。预发布用户检查更新后可以确认升级；正式版本默认只接收后续稳定更新。1.x 迁移助手固定下载并校验已经完成发布后验证的 2.0.0 正式归档。
 
 > 历史 Beta 版本已在 Debian 12、Debian 13、Ubuntu 22.04 和 Ubuntu 24.04 的真实 VPS 上完成主要安全流程测试；这些记录不表示每个新构建都已完成全部系统的实机复测，具体范围见 [兼容性说明](COMPATIBILITY.md)。首次使用仍建议选择有网页控制台、快照或救援模式的测试机。
 
