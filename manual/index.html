@@ -40,17 +40,17 @@
   umask 022
   install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX")
   cd "$install_work"
-  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5.3/vps-secure-platform-2.1.0-beta.5.tar.gz
-  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5.3/vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
-  sha256sum -c vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5.3/vps-secure-platform-2.1.0-beta.5.3.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5.3/vps-secure-platform-2.1.0-beta.5.3.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.1.0-beta.5.3.tar.gz.sha256
   mkdir source
-  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.tar.gz -C source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.3.tar.gz -C source
   cd source
   test "$(cat VERSION)" = 2.1.0-beta.5.3
   ./install.sh
   /usr/local/bin/vps --version
 
-)</code></pre><p>同样在子 shell 内失败即停止，下载与干净源码目录分离，使用 <code>umask 022</code>；不要把归档或校验文件移入源码目录。安装后使用持久入口 <code>/usr/local/bin/vps</code>。</p></details><p>已安装正式版的用户不会通过默认稳定通道收到 Beta。主动安装前确认自己接受预发布版本；完成后重新输入 vps，检查实际版本与更新通道。</p></article><article id="upload-install"><h3>网络受限：可信电脑下载后上传</h3><p>在可信电脑打开同一官方 Release：<a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.0.1">稳定2.0.1</a>或<a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.5.3">预发布beta.5</a>。下载文件名完全相同版本的归档和对应 .sha256，不能混用版本。通过已核验主机指纹的SSH/SFTP上传到VPS一个独立目录，不共享凭据。记下该目录的绝对路径。</p><p>回到VPS的root shell（普通sudo管理员先sudo -i），执行下方命令；它会复制到全新工作目录，先SHA核验再解压和安装。不要把包上传进现有源码或系统安装目录。</p><pre><code>(
+)</code></pre><p>同样在子 shell 内失败即停止，下载与干净源码目录分离，使用 <code>umask 022</code>；不要把归档或校验文件移入源码目录。安装后使用持久入口 <code>/usr/local/bin/vps</code>。</p></details><p>已安装正式版的用户不会通过默认稳定通道收到 Beta。主动安装前确认自己接受预发布版本；完成后重新输入 vps，检查实际版本与更新通道。</p></article><article id="upload-install"><h3>网络受限：可信电脑下载后上传</h3><p>在可信电脑打开同一官方 Release：<a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.0.1">稳定2.0.1</a>或<a href="https://github.com/playfulsoul/vps-secure-script/releases/tag/v2.1.0-beta.5.3">预发布beta.5.3</a>。下载文件名完全相同版本的归档和对应 .sha256，不能混用版本。通过已核验主机指纹的SSH/SFTP上传到VPS一个独立目录，不共享凭据。记下该目录的绝对路径。</p><p>回到VPS的root shell（普通sudo管理员先sudo -i），执行下方命令；它会复制到全新工作目录，先SHA核验再解压和安装。不要把包上传进现有源码或系统安装目录。</p><pre><code>(
   set -eu
   test "$(id -u)" -eq 0
   printf '版本（2.0.1 或 2.1.0-beta.5.3）: '
