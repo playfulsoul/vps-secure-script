@@ -2,7 +2,9 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前正式版本为 `2.0.4`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+当前正式版本为 `2.0.5`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+
+2.0.5 修复远程图形会话中 Firefox 的启动环境与用户服务就绪等待；LXQt 的 Firefox 桌面快捷方式使用原生应用入口，双击直接启动。已安装用户请升级后进入「应用安装 → 远程图形桌面 → 6 补齐必要组件」，保存工作、注销桌面并重新登录；仅断开连接不会建立新会话。
 
 2.0.4 修复了 Firefox 等 Snap 应用已安装、却不出现在远程桌面菜单中的问题，适用于 LXQt、XFCE 和 MATE。已有桌面请在升级后选择“补齐必要组件”，然后保存工作、注销图形桌面并重新登录；仅断开远程窗口不会更新原会话。
 
@@ -30,7 +32,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.4
+  🎯 VPS 管理与安全平台  2.0.5
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -83,7 +85,7 @@ SSH 防暴力破解：运行正常
 
 三个档位都会安装 Noto CJK 字体，中文网页和应用文字可以正常显示；不会强制把系统界面改成中文，也不自动安装中文输入法。
 
-已安装远程桌面的用户可在同一菜单选择“补齐必要组件（字体 / 窗口管理器 / 应用菜单）”，无需卸载桌面；该操作不会重启 xrdp，也不会改变系统语言或远程连接设置。
+已安装远程桌面的用户可在同一菜单选择“补齐必要组件（字体 / 窗口管理器 / Firefox）”，无需卸载桌面；该操作不会重启 xrdp，也不会改变系统语言或远程连接设置。
 
 向导会帮助选择或创建普通桌面用户，并单独询问 sudo 权限、Firefox 和登录密码。它不会开放公网 RDP：xrdp 固定监听 `127.0.0.1:3389`，用户通过既有 SSH 入口建立本地隧道，再用 Windows 远程桌面、macOS Windows App 或 Linux Remmina 连接。root 图形登录被禁止，磁盘、打印和音频重定向默认关闭，剪贴板只允许文本。
 
@@ -122,11 +124,11 @@ apt-get install -y ca-certificates curl
 umask 022 &&
 install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX") &&
 cd "$install_work" &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.4/vps-secure-platform-2.0.4.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.4/vps-secure-platform-2.0.4.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.4.tar.gz.sha256 &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.5/vps-secure-platform-2.0.5.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.5/vps-secure-platform-2.0.5.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.5.tar.gz.sha256 &&
 mkdir source &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.4.tar.gz -C source &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.5.tar.gz -C source &&
 cd source &&
 ./install.sh &&
 vps
@@ -134,7 +136,7 @@ vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.4.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.5.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 
