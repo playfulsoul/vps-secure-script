@@ -30,6 +30,7 @@ chmod +x "$temporary_root/bin/fc-list" "$temporary_root/bin/fc-cache"
 export PATH="$temporary_root/bin:$PATH"
 export VPS_STATE_DIR="$temporary_root/state"
 export VPS_REMOTE_DESKTOP_CONFIG_DIR="$config_dir"
+export VPS_REMOTE_DESKTOP_LIB_DIR="$temporary_root/lib"
 export VPS_REMOTE_DESKTOP_TEST_MODE=yes
 export VPS_REMOTE_DESKTOP_LISTENER_STATE=loopback
 export VPS_TEST_FONT_PRESENT="$temporary_root/font-present"
@@ -40,6 +41,9 @@ export VPS_TEST_APT_LOG="$temporary_root/apt.log"
 # shellcheck source=../../modules/builtin/applications-remote-desktop/module.sh
 source "$PROJECT_ROOT/modules/builtin/applications-remote-desktop/module.sh"
 
+mkdir -p "$RD_LIB_DIR"
+RD_PROFILE=xfce
+rd_write_session_script "$RD_LIB_DIR/startwm.sh"
 printf '%s\n' applications.remote-desktop > "$RD_MARKER"
 cat > "$RD_STATE_FILE" <<EOF
 profile=xfce
