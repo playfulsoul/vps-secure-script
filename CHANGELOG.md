@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.0-beta.5.5 - 2026-10-31
+
+- Make installed Snap applications, including Firefox, discoverable in managed LXQt, XFCE and MATE menus while preserving existing application lookup paths.
+- Extend component repair to refresh the managed session launcher on existing installations without changing home directories or restarting desktop sessions. Log out and log in again after repair.
+
 ## 2.1.0-beta.5.4 - 2026-10-31
 
 - Explicitly install Openbox for LXQt and provide module-scoped defaults while preserving user preferences.
