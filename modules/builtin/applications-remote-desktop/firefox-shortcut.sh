@@ -16,7 +16,7 @@ for candidate in /var/lib/snapd/desktop/applications/firefox_firefox.desktop /us
     while IFS= read -r entry; do
         [[ "$entry" == Exec=* ]] || continue
         exec_count=$((exec_count + 1))
-        if [[ ! "$entry" =~ ^Exec=(env\ BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/firefox_firefox.desktop\ )?(/snap/bin/firefox|firefox-esr|/usr/bin/firefox-esr)(\ (%[uUfF]|--new-window|--private-window|-new-window|-private-window|-ProfileManager))*$ ]]; then
+        if [[ ! "$entry" =~ ^Exec=(env\ BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/firefox_firefox.desktop\ )?(/snap/bin/firefox|firefox-esr|/usr/bin/firefox-esr)(\ (%[uUfF]|--new-window|--private-window|-new-window|-private-window|-ProfileManager|--ProfileManager))*$ ]]; then
             valid=no
         fi
     done < "$candidate"

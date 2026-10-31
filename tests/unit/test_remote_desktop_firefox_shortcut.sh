@@ -73,6 +73,9 @@ class ShortcutTest(unittest.TestCase):
     def test_all_four_observed_official_exec_entries_are_allowed(self):
         self.src.write_text(self.content+'\n[Desktop Action new-window]\nExec=/snap/bin/firefox --new-window %u\n[Desktop Action private-window]\nExec=/snap/bin/firefox --private-window %u\n[Desktop Action profile-manager]\nExec=/snap/bin/firefox -ProfileManager\n')
         self.run_helper(); self.assertTrue(self.target().is_file())
+    def test_snap159_double_dash_profile_manager_is_allowed(self):
+        self.src.write_text(self.content+'\n[Desktop Action new-window]\nExec=/snap/bin/firefox --new-window %u\n[Desktop Action private-window]\nExec=/snap/bin/firefox --private-window %u\n[Desktop Action profile-manager]\nExec=/snap/bin/firefox --ProfileManager\n')
+        self.run_helper(); self.assertTrue(self.target().is_file())
     def test_malicious_secondary_action_is_refused(self):
         self.src.write_text(self.content+'\n[Desktop Action Extra]\nExec=sh -c evil\n'); self.run_helper(); self.assertFalse(self.target().exists())
     def test_conflicting_terminal_key_is_refused(self):
