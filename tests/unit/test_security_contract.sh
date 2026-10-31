@@ -140,7 +140,7 @@ else
 fi
 
 quiesce_line=$(grep -n 'rd_quiesce_xrdp_units ||' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
-session_line=$(grep -n "rd_quiesce_xrdp_sessions \"\$user\" ||" "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
+session_line=$(grep -n "rd_quiesce_transaction_sessions \"\$transaction\" \"\$user\" ||" "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 purge_line=$(grep -n 'apt-get purge -y --no-auto-remove' "$REMOTE_DESKTOP_MODULE" | cut -d: -f1)
 if [[ -n "$quiesce_line" && -n "$session_line" && -n "$purge_line" ]] && \
    (( quiesce_line < session_line && session_line < purge_line )) && \
@@ -169,7 +169,8 @@ fi
 
 # shellcheck disable=SC2016
 if grep -q 'panel_services=$(rd_panel_service_states)' "$REMOTE_DESKTOP_MODULE" && \
-   grep -q "'1panel\*\.service'" "$REMOTE_DESKTOP_MODULE"; then
+   grep -Fq 'systemctl list-unit-files --type=service --no-legend --no-pager' "$REMOTE_DESKTOP_MODULE" && \
+   grep -Fq '[[ "$unit" =~ ^1panel[a-zA-Z0-9_.@-]*\.service$ ]]' "$REMOTE_DESKTOP_MODULE"; then
     pass "remote desktop preserves the deployed 1Panel service layout"
 else
     fail "remote desktop must track the real 1Panel service units"

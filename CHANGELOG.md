@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.2 - 2026-10-31
+
+- Distinguish an absent 1Panel service from failed service enumeration on systemd 249, allowing remote desktop setup on hosts without 1Panel.
+- Restore early remote desktop installation failures before a desktop user exists, while requiring successful package inventory and explicit proof that no affected user/session/process exists.
+- Restart the installed menu after successful platform upgrades or restoration, avoiding stale version displays.
+- Correct advanced-menu result labels and reject incomplete confirmation input; exit common menus when input ends.
+- Align the legacy migration assistant with the already verified stable 2.0.1 archive and document shared-fix review for release branches.
+
 ## 2.0.1 - 2026-10-31
 
 - Repair conflicting firewall boot persistence even when UFW is inactive, without stopping services, flushing live rules, or enabling UFW during repair. Preserve rollback records and require a separate reviewed apply step.
