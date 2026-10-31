@@ -8,6 +8,8 @@ source "$VPS_PLATFORM_ROOT/core/platform.sh"
 source "$VPS_PLATFORM_ROOT/core/runtime.sh"
 # shellcheck source=../../../core/ssh.sh
 source "$VPS_PLATFORM_ROOT/core/ssh.sh"
+# shellcheck source=../../../core/packages.sh
+source "$VPS_PLATFORM_ROOT/core/packages.sh"
 
 MODULE_ID=${VPS_MODULE_ID:-security.firewall}
 UFW_UNIT=${VPS_UFW_UNIT:-ufw.service}
@@ -42,6 +44,18 @@ firewall_check() {
 
 firewall_plan() {
     local ports conflicts
+    if [[ ${1:-} == repair-persistence ]]; then
+        firewall_check || return $?
+        printf '防火墙启动冲突修复计划：\n'
+        printf '  - 备份运行规则，取消冲突服务的开机加载；不停止服务、不清空规则。\n'
+        if command -v ufw >/dev/null 2>&1 && firewall_is_active; then
+            printf '  - 保留 UFW 作为开机所有者，并重新加载已有 UFW 规则。\n'
+        else
+            printf '  - UFW 尚未运行：本步不会启用 UFW，也不会自动开放业务端口。\n'
+            printf '  - 随后先核对并补齐网站、节点等业务放行规则，再单独启用 UFW；完成前不要重启。\n'
+        fi
+        return 0
+    fi
     firewall_check || return $?
     ports=$(firewall_ports)
 
@@ -86,11 +100,28 @@ firewall_ufw_service_enabled() {
     firewall_unit_enabled "$UFW_UNIT"
 }
 
+firewall_canonical_unit() {
+    local unit=$1 fragment resolved
+    # Some systemd versions report aliases as enabled even when their target is
+    # disabled. Id/Names may also retain the alias: resolve the fragment itself.
+    fragment=$(systemctl show "$unit" --property=FragmentPath --value 2>/dev/null || true)
+    if [[ "$fragment" == /* && "$fragment" != *$'\n'* ]]; then
+        resolved=$(readlink -f -- "$fragment" 2>/dev/null || true)
+        if [[ "$resolved" == /* && "$resolved" == *.service ]]; then
+            unit=${resolved##*/}
+        fi
+    fi
+    printf '%s\n' "$unit"
+}
+
 firewall_persistence_conflicts() {
-    local units=() unit
+    local units=() unit canonical seen=$'\n'
     read -r -a units <<< "$PERSISTENCE_UNITS"
     for unit in "${units[@]}"; do
-        firewall_unit_enabled "$unit" && printf '%s\n' "$unit"
+        canonical=$(firewall_canonical_unit "$unit")
+        [[ "$seen" == *$'\n'"$canonical"$'\n'* ]] && continue
+        seen+="$canonical"$'\n'
+        firewall_unit_enabled "$canonical" && printf '%s\n' "$canonical"
     done
 }
 
@@ -188,7 +219,7 @@ firewall_preflight() {
     }
     firewall_is_active || {
         printf 'UFW 配置尚未加载到当前运行规则。\n' >&2
-        return 30
+        result=30
     }
     if ! firewall_ufw_service_enabled; then
         printf '%s 未启用，重启后 UFW 规则可能不会恢复。\n' "$UFW_UNIT" >&2
@@ -198,6 +229,7 @@ firewall_preflight() {
     if [[ -n "$conflicts" ]]; then
         printf '检测到并行的防火墙持久化服务:\n%s\n' "$conflicts" >&2
         printf '请确认后运行 sudo vps firewall repair-persistence --yes；不会自动卸载软件或清空规则表。\n' >&2
+        printf '若 UFW 未运行，修复只取消冲突的开机加载；先补齐业务放行规则，再单独启用 UFW。\n' >&2
         result=30
     fi
     ports=$(firewall_ports 2>/dev/null || true)
@@ -358,17 +390,19 @@ firewall_backup_runtime() {
 }
 
 firewall_persistence_configure_impl() {
-    local transaction_dir original_enabled=no conflicts unit changed=no
+    local transaction_dir original_enabled=no original_active=no conflicts unit changed=no
     vps_require_root || return $?
     firewall_check || return $?
     command -v ufw >/dev/null 2>&1 || {
-        printf '请先安装并启用 UFW。\n' >&2
+        printf '请先安装 UFW（无需启用），再修复启动冲突。\n' >&2
         return 30
     }
-    firewall_is_active || {
-        printf 'UFW 尚未启用；请先运行 sudo vps firewall apply --yes。\n' >&2
-        return 30
-    }
+    firewall_is_active && original_active=yes
+    conflicts=$(firewall_persistence_conflicts)
+    if [[ "$original_active" == no && -z "$conflicts" ]]; then
+        printf '未发现开机持久化冲突。UFW 仍未启用；请先补齐业务放行规则，再运行 sudo vps firewall apply --yes。\n'
+        return 0
+    fi
     if firewall_verify >/dev/null 2>&1; then
         printf 'UFW 开机所有者与运行规则已一致，无需修复。\n'
         return 0
@@ -376,6 +410,7 @@ firewall_persistence_configure_impl() {
 
     transaction_dir=$(firewall_tx_new) || return 40
     printf 'persistence\n' > "$transaction_dir/transaction_kind" || return 40
+    printf '%s\n' "$original_active" > "$transaction_dir/original_active" || return 40
     firewall_ufw_service_enabled && original_enabled=yes
     printf '%s\n' "$original_enabled" > "$transaction_dir/original_ufw_enabled" || return 40
     conflicts=$(firewall_persistence_conflicts)
@@ -383,7 +418,7 @@ firewall_persistence_configure_impl() {
     firewall_backup_runtime "$transaction_dir"
 
     firewall_tx_prepare "$transaction_dir" || return 40
-    if [[ "$original_enabled" == no ]]; then
+    if [[ "$original_active" == yes && "$original_enabled" == no ]]; then
         systemctl enable "$UFW_UNIT" || {
             return 40
         }
@@ -397,6 +432,13 @@ firewall_persistence_configure_impl() {
         changed=yes
     done < "$transaction_dir/disabled_conflicts"
 
+    if [[ "$original_active" == no ]]; then
+        # This is preparation, not activation. Existing listeners may not have
+        # UFW rules; never infer public access from a listening socket.
+        [[ -z "$(firewall_persistence_conflicts)" ]] || return 50
+        vps_set_last_transaction "$MODULE_ID" "$transaction_dir" || return 40
+        return 0
+    fi
     if ! ufw reload; then
         return 40
     fi
@@ -416,7 +458,7 @@ firewall_apply_impl() {
     ports=$(firewall_ports)
 
     if ! command -v ufw >/dev/null 2>&1; then
-        DEBIAN_FRONTEND=noninteractive apt-get update || return 40
+        vps_apt_update || return 40
         DEBIAN_FRONTEND=noninteractive apt-get install -y ufw || return 40
     fi
 
@@ -497,7 +539,7 @@ firewall_persistence_configure() { firewall_tx_run persistence_configure; }
 
 case ${1:-} in
     check) firewall_check ;;
-    plan) firewall_plan ;;
+    plan) shift; firewall_plan "$@" ;;
     preflight) firewall_preflight ;;
     apply) firewall_apply ;;
     configure) firewall_persistence_configure ;;
