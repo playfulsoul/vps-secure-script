@@ -29,6 +29,7 @@ RD_MEMINFO_FILE=${VPS_REMOTE_DESKTOP_MEMINFO_FILE:-/proc/meminfo}
 RD_PROC_ROOT=${VPS_REMOTE_DESKTOP_PROC_ROOT:-/proc}
 RD_LOCAL_PORT=${VPS_REMOTE_DESKTOP_LOCAL_PORT:-13389}
 RD_CJK_FONT_PACKAGE=fonts-noto-cjk
+RD_FIREFOX_APPLICATION=/usr/share/applications/vps-secure-firefox.desktop
 
 RD_PROFILE=auto
 RD_USER=''
@@ -80,7 +81,8 @@ rd_validate_managed_paths() {
        "$RD_SESMAN_UNIT_PATH" == /etc/systemd/system/xrdp-sesman.service && \
        "$RD_XRDP_SOURCE" == /etc/xrdp/xrdp.ini && \
        "$RD_SESMAN_SOURCE" == /etc/xrdp/sesman.ini && \
-       "$RD_PROC_ROOT" == /proc ]] || {
+       "$RD_PROC_ROOT" == /proc && \
+       "$RD_FIREFOX_APPLICATION" == /usr/share/applications/vps-secure-firefox.desktop ]] || {
         printf '拒绝使用非标准远程桌面管理路径。\n' >&2
         return 60
     }
@@ -246,6 +248,9 @@ rd_selected_packages() {
         "$RD_CJK_FONT_PACKAGE"
     rd_profile_packages "$RD_PROFILE" || return $?
     rd_browser_package "$RD_BROWSER" || return $?
+    if [[ "$RD_PROFILE" == lxqt && "$RD_BROWSER" == firefox ]]; then
+        printf '%s\n' xdg-user-dirs
+    fi
     [[ "$RD_GRANT_SUDO" == yes ]] && printf 'sudo\n'
     return 0
 }
@@ -800,6 +805,10 @@ for ((vps_bus_attempt = 0; vps_bus_attempt < 16; vps_bus_attempt++)); do
     sleep 0.25
 done
 EOF
+    if [[ "$RD_PROFILE" == lxqt && "$RD_BROWSER" == firefox ]]; then
+        printf '\n# vps-secure-firefox-shortcut: only verified official entries.\n' >> "$destination"
+        printf '%q || true\n' "$RD_LIB_DIR/firefox-shortcut.sh" >> "$destination"
+    fi
     cat >> "$destination" <<EOF
 
 if [[ -n "\${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
@@ -843,6 +852,7 @@ rd_prepare_owned_config() {
     if [[ "$RD_PROFILE" == lxqt ]]; then
         rd_write_lxqt_defaults || return $?
     fi
+    rd_write_firefox_shortcut_helper || return $?
     rd_write_session_script "$RD_LIB_DIR/startwm.sh" || return 40
     printf 'XRDP_OPTIONS="--config %s"\n' "$RD_CONFIG_DIR/xrdp.ini" > "$RD_XRDP_ENV" || return 40
     printf 'SESMAN_OPTIONS="--config %s"\n' "$RD_CONFIG_DIR/sesman.ini" > "$RD_SESMAN_ENV" || return 40
@@ -1049,6 +1059,9 @@ rd_create_transaction() {
 
     rd_backup_path "$transaction" config "$RD_CONFIG_DIR" || return 40
     rd_backup_path "$transaction" lib "$RD_LIB_DIR" || return 40
+    if [[ "$RD_PROFILE" == lxqt && "$RD_BROWSER" == firefox ]]; then
+        rd_backup_path "$transaction" firefox-application "$RD_FIREFOX_APPLICATION" || return 40
+    fi
     rd_backup_path "$transaction" xrdp-dropin "$RD_XRDP_DROPIN" || return 40
     rd_backup_path "$transaction" sesman-dropin "$RD_SESMAN_DROPIN" || return 40
     rd_backup_path "$transaction" xrdp-unit "$RD_XRDP_UNIT_PATH" || return 40
@@ -1751,6 +1764,7 @@ rd_restore_transaction() {
     rd_restore_path "$transaction" sesman-dropin "$RD_SESMAN_DROPIN" || result=1
     rd_restore_path "$transaction" config "$RD_CONFIG_DIR" || result=1
     rd_restore_path "$transaction" lib "$RD_LIB_DIR" || result=1
+    rd_restore_firefox_application "$transaction" || result=1
     systemctl daemon-reload >/dev/null 2>&1 || result=1
 
     [[ -f "$transaction/packages.new" ]] || result=1
@@ -1907,10 +1921,119 @@ rd_repair_lxqt() {
     printf '请保存桌面工作，注销图形桌面后重新登录（仅断开窗口不会建立新会话）。\n'
 }
 
+rd_write_firefox_shortcut_helper() {
+    [[ "$RD_PROFILE" == lxqt && "$RD_BROWSER" == firefox ]] || return 0
+    [[ -d "$RD_LIB_DIR" && ! -L "$RD_LIB_DIR" && ! -L "$RD_LIB_DIR/firefox-shortcut.sh" ]] || return 60
+    install -m 755 "$VPS_PLATFORM_ROOT/modules/builtin/applications-remote-desktop/firefox-shortcut.sh" \
+        "$RD_LIB_DIR/firefox-shortcut.sh" || return 40
+}
+
+rd_write_firefox_application() {
+    local transaction=$1 generated expected current owned=no
+    [[ "$RD_PROFILE" == lxqt && "$RD_BROWSER" == firefox ]] || return 10
+    [[ ! -L "$RD_FIREFOX_APPLICATION" && ! -L "$(dirname -- "$RD_FIREFOX_APPLICATION")" ]] || return 60
+    generated=$(mktemp "$transaction/firefox-entry.XXXXXX") || return 40
+    if ! bash "$VPS_PLATFORM_ROOT/modules/builtin/applications-remote-desktop/firefox-shortcut.sh" --application > "$generated"; then
+        rm -f -- "$generated"
+        return 50
+    fi
+    expected=$(sha256sum "$generated" | awk '{print $1}')
+    if [[ -e "$RD_FIREFOX_APPLICATION" ]]; then
+        current=$(sha256sum "$RD_FIREFOX_APPLICATION" | awk '{print $1}')
+        if [[ -f "$transaction/firefox-application.sha256" ]] && grep -Fxq "$current" "$transaction/firefox-application.sha256"; then owned=yes; fi
+        if [[ "$current" != "$expected" && "$owned" != yes ]]; then
+            rm -f -- "$generated"
+            printf '受管 Firefox 应用入口存在未知内容，拒绝覆盖。\n' >&2
+            return 60
+        fi
+    fi
+    # Older installs gain this backup once, before the first shared entry write.
+    if ! rd_path_state "$transaction" firefox-application >/dev/null 2>&1; then
+        rd_backup_path "$transaction" firefox-application "$RD_FIREFOX_APPLICATION" || { rm -f -- "$generated"; return 40; }
+    fi
+    if ! grep -Fxq "$expected" "$transaction/firefox-application.sha256" 2>/dev/null; then
+        printf '%s\n' "$expected" >> "$transaction/firefox-application.sha256" || return 40
+    fi
+    chmod 600 "$transaction/firefox-application.sha256" || return 40
+    if [[ -f "$RD_FIREFOX_APPLICATION" ]] && cmp -s "$generated" "$RD_FIREFOX_APPLICATION" && \
+       [[ $(stat -c %u -- "$RD_FIREFOX_APPLICATION") == 0 && $(stat -c %a -- "$RD_FIREFOX_APPLICATION") == 644 ]]; then
+        rm -f -- "$generated"
+        return 10
+    fi
+    if [[ ! -d "$(dirname -- "$RD_FIREFOX_APPLICATION")" ]]; then
+        install -d -m 755 "$(dirname -- "$RD_FIREFOX_APPLICATION")" || return 40
+    fi
+    install -m 644 "$generated" "$RD_FIREFOX_APPLICATION" || return 40
+    rm -f -- "$generated"
+}
+
+rd_restore_firefox_application() {
+    local transaction=$1 current
+    rd_path_state "$transaction" firefox-application >/dev/null 2>&1 || return 0
+    if [[ -e "$RD_FIREFOX_APPLICATION" || -L "$RD_FIREFOX_APPLICATION" ]]; then
+        [[ ! -L "$RD_FIREFOX_APPLICATION" && -f "$RD_FIREFOX_APPLICATION" ]] || return 60
+        if [[ -f "$transaction/firefox-application.sha256" ]]; then
+            current=$(sha256sum "$RD_FIREFOX_APPLICATION" | awk '{print $1}')
+            grep -Fxq "$current" "$transaction/firefox-application.sha256" || { printf 'Firefox 应用入口已被修改，回滚保留该文件。\n' >&2; return 60; }
+        elif ! cmp -s "$RD_FIREFOX_APPLICATION" "$transaction/files/firefox-application"; then
+            return 60
+        fi
+    fi
+    rd_restore_path "$transaction" firefox-application "$RD_FIREFOX_APPLICATION"
+}
+
+rd_repair_firefox_shortcut() {
+    local transaction before package result=0 entry_result=0 changed=no
+    local RD_PROFILE RD_BROWSER
+    RD_PROFILE=$(rd_state_value profile 2>/dev/null) || return 10
+    RD_BROWSER=$(rd_state_value browser 2>/dev/null) || return 10
+    [[ "$RD_PROFILE" == lxqt && "$RD_BROWSER" == firefox ]] || return 10
+    transaction=$(rd_managed_transaction) || return $?
+    local missing=()
+    if ! rd_package_installed xdg-user-dirs; then
+        if rd_package_present xdg-user-dirs; then
+            printf '桌面图标组件处于未完成状态，请先修复 APT/dpkg。\n' >&2
+            return 30
+        fi
+        missing+=(xdg-user-dirs)
+    fi
+    if (( ${#missing[@]} )); then
+        rd_apt_unlocked || return $?
+        before=$(mktemp "$transaction/repair-shortcut-packages.XXXXXX") || return 40
+        chmod 600 "$before" || return 40
+        rd_present_packages > "$before" || return 40
+        vps_apt_update || return $?
+        trap 'rd_lxqt_repair_interrupted "$transaction" "$before"' INT TERM
+        vps_apt_install --no-install-recommends "${missing[@]}" || result=$?
+        rd_record_repair_packages "$transaction" "$before" || {
+            trap - INT TERM
+            return 40
+        }
+        trap - INT TERM
+        (( result == 0 )) || return 40
+        for package in "${missing[@]}"; do
+            rd_package_installed "$package" || return 50
+        done
+        changed=yes
+    fi
+    [[ ! -L "$RD_LIB_DIR/firefox-shortcut.sh" ]] || return 60
+    if ! cmp -s "$VPS_PLATFORM_ROOT/modules/builtin/applications-remote-desktop/firefox-shortcut.sh" "$RD_LIB_DIR/firefox-shortcut.sh"; then
+        rd_write_firefox_shortcut_helper || return $?
+        changed=yes
+    fi
+    rd_write_firefox_application "$transaction" || entry_result=$?
+    [[ "$entry_result" == 0 || "$entry_result" == 10 ]] || return "$entry_result"
+    [[ "$entry_result" != 0 ]] || changed=yes
+    [[ "$changed" == yes ]] || return 10
+    printf 'Firefox 原生桌面快捷方式已准备；注销后重新登录将创建图标，不修改执行信任或挂载设置。\n'
+    printf '自定义图标不会覆盖；卸载或回滚保留桌面文件。\n'
+}
+
 rd_repair_session_launcher() {
-    local temporary RD_PROFILE
+    local temporary RD_PROFILE RD_BROWSER
     rd_is_managed || return 10
     RD_PROFILE=$(rd_state_value profile) || return 50
+    RD_BROWSER=$(rd_state_value browser 2>/dev/null || printf none)
     rd_profile_valid "$RD_PROFILE" && [[ "$RD_PROFILE" != auto ]] || return 50
     [[ -d "$RD_LIB_DIR" && ! -L "$RD_LIB_DIR" &&
        -f "$RD_LIB_DIR/startwm.sh" && ! -L "$RD_LIB_DIR/startwm.sh" ]] || return 60
@@ -1933,14 +2056,16 @@ rd_repair_session_launcher() {
 }
 
 rd_repair() {
-    local font_result=0 wm_result=0 launcher_result=0
+    local font_result=0 wm_result=0 launcher_result=0 shortcut_result=0
     rd_repair_fonts || font_result=$?
     [[ "$font_result" == 0 || "$font_result" == 10 ]] || return "$font_result"
     rd_repair_lxqt || wm_result=$?
     [[ "$wm_result" == 0 || "$wm_result" == 10 ]] || return "$wm_result"
+    rd_repair_firefox_shortcut || shortcut_result=$?
+    [[ "$shortcut_result" == 0 || "$shortcut_result" == 10 ]] || return "$shortcut_result"
     rd_repair_session_launcher || launcher_result=$?
     [[ "$launcher_result" == 0 || "$launcher_result" == 10 ]] || return "$launcher_result"
-    [[ "$font_result" != 10 || "$wm_result" != 10 || "$launcher_result" != 10 ]] || return 10
+    [[ "$font_result" != 10 || "$wm_result" != 10 || "$launcher_result" != 10 || "$shortcut_result" != 10 ]] || return 10
     return 0
 }
 
@@ -2057,6 +2182,12 @@ rd_apply() {
         return $?
     }
     rd_prepare_owned_config || { rd_apply_failure "$transaction" 40; return $?; }
+    local shortcut_entry_result=0
+    rd_write_firefox_application "$transaction" || shortcut_entry_result=$?
+    if [[ "$shortcut_entry_result" != 0 && "$shortcut_entry_result" != 10 ]]; then
+        rd_apply_failure "$transaction" "$shortcut_entry_result"
+        return $?
+    fi
     rd_write_systemd_dropins || { rd_apply_failure "$transaction" 40; return $?; }
     rd_set_install_phase "$transaction" user-setup || { rd_apply_failure "$transaction" 40; return $?; }
     rd_install_user_access || { rd_apply_failure "$transaction" 40; return $?; }
