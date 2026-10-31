@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0-beta.5.6 - 2026-10-31
+
+- Preserve explicit X authority settings and safely inherit the user's authority file when needed for managed desktop applications.
+- Wait briefly for the owned user session bus and systemd manager at login, with a bounded fallback when unavailable.
+- Create native Firefox desktop shortcuts for managed LXQt sessions using the verified system application entry; preserve custom user launchers.
+- Existing installations can apply the fixes through desktop component repair, then save work, log out and log in again. Repair does not restart desktop services or change SSH/firewall access.
+
 ## 2.1.0-beta.5.5 - 2026-10-31
 
 - Make installed Snap applications, including Firefox, discoverable in managed LXQt, XFCE and MATE menus while preserving existing application lookup paths.
