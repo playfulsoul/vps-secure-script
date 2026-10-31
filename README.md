@@ -10,7 +10,7 @@
 
 ## 快速安装
 
-**默认选稳定版 2.0.2。** 需要分阶段登录强化、集中监测或独立 REALITY 节点时，可主动选择已发布的 [2.1.0-beta.5.3 预发布版](https://playfulsoul.github.io/vps-secure-script/#beta-install)；节点流程请再读[节点指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)。预发布不代表所有环境已验收，普通基础管理优先用稳定版。
+**默认选稳定版 2.0.2。** 需要分阶段登录强化、集中监测或独立 REALITY 节点时，可主动选择已发布的 [2.1.0-beta.5.4 预发布版](https://playfulsoul.github.io/vps-secure-script/#beta-install)；节点流程请再读[节点指南](https://playfulsoul.github.io/vps-secure-script/reality-node.html)。预发布不代表所有环境已验收，普通基础管理优先用稳定版。
 
 以下是稳定版唯一安装命令段落，在 VPS 的 SSH 窗口执行；不要在自己电脑上直接安装。普通 sudo 管理员先运行 `sudo -i` 进入已授权的 root shell，再复制相同命令；没有 sudo 权限时停止，不为安装放宽登录策略。
 
@@ -148,9 +148,11 @@ SSH 防暴力破解：运行正常
 - **XFCE 推荐版**：适合约 2 GB 内存，兼顾完整桌面和资源占用；
 - **MATE 完整版**：适合 4 GB 及以上内存，更接近传统完整 Linux 桌面。
 
+LXQt 轻量版会安装 Openbox 窗口管理器。旧安装如出现只有“Other…”的选择框，请先升级平台，再选择“补齐必要组件”，保存工作后注销图形桌面并重新登录；仅关闭远程窗口不会创建新会话。
+
 三个档位都会安装 Noto CJK 字体，中文网页和应用文字可以正常显示；不会强制把系统界面改成中文，也不自动安装中文输入法。
 
-已经使用 beta.7 安装远程桌面的用户可在同一菜单选择“补齐必要组件（中文字体）”，无需卸载桌面；该操作不会重启 xrdp，也不会改变系统语言或远程连接设置。
+已安装远程桌面的用户可在同一菜单选择“补齐必要组件（字体 / LXQt 窗口管理器）”，无需卸载桌面；该操作不会重启 xrdp，也不会改变系统语言或远程连接设置。
 
 向导会帮助选择或创建普通桌面用户，并单独询问 sudo 权限、Firefox 和登录密码。它不会开放公网 RDP：xrdp 固定监听 `127.0.0.1:3389`，用户通过既有 SSH 入口建立本地隧道，再用 Windows 远程桌面、macOS Windows App 或 Linux Remmina 连接。root 图形登录被禁止，磁盘、打印和音频重定向默认关闭，剪贴板只允许文本。
 

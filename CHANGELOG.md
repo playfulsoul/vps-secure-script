@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0-beta.5.4 - 2026-10-31
+
+- Explicitly install Openbox for LXQt and provide module-scoped defaults while preserving user preferences.
+- Extend desktop component repair to existing LXQt installations, track newly installed dependencies for rollback, and report missing window-manager components.
+- Repair does not restart desktop services or close sessions; log out of the graphical desktop and log in again to use the repaired configuration.
+
 ## 2.0.2 - 2026-10-31 (stable maintenance)
 
 - Synchronize shared fixes already available in the development channel: absent 1Panel detection, guarded early desktop-install rollback, package baseline errors, menu restart after platform switch, rejection of incomplete confirmation input, and correct advanced-menu result titles.
