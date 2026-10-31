@@ -93,7 +93,12 @@ firewall_tx_run() (
         rm -f "$tx_state/pending_transaction" || return 40
         tx_armed=no
         if [[ "$action" == persistence_configure ]]; then
-            printf 'UFW 已成为唯一已启用的防火墙开机所有者，运行规则已重新加载。\n'
+            if grep -Fxq no "$tx_transaction/original_active" 2>/dev/null; then
+                printf '已取消冲突服务的开机加载；UFW 仍未启用，当前运行规则未改变。\n'
+                printf '请先核对并补齐业务放行规则，再运行 sudo vps firewall apply --yes；完成前不要重启。\n'
+            else
+                printf 'UFW 已成为唯一已启用的防火墙开机所有者，运行规则已重新加载。\n'
+            fi
         fi
         printf '配置完成。事务记录: %s\n' "$tx_transaction"
     fi

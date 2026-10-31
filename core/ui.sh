@@ -127,7 +127,11 @@ vps_ui_run_action() {
         case "$action" in
             apply|configure)
                 if vps_module_declares_action "$(vps_module_find "$module_id")" plan; then
-                    vps_module_run "$module_id" plan "$@" || return $?
+                    if [[ "$module_id" == security.firewall && "$action" == configure ]]; then
+                        vps_module_run "$module_id" plan repair-persistence || return $?
+                    else
+                        vps_module_run "$module_id" plan "$@" || return $?
+                    fi
                 fi
                 ;;
         esac
