@@ -760,8 +760,38 @@ EOF
 export XDG_CONFIG_DIRS="\${XDG_CONFIG_DIRS:-/etc/xdg}:$RD_LIB_DIR/xdg"
 EOF
     fi
+    cat >> "$destination" <<'EOF'
+
+# Keep an explicit X authority selection. Only inherit a safe per-user default.
+if [[ -z "${XAUTHORITY:-}" && "${HOME:-}" == /* &&
+      -f "$HOME/.Xauthority" && ! -L "$HOME/.Xauthority" && -r "$HOME/.Xauthority" &&
+      $(stat -c %u -- "$HOME/.Xauthority" 2>/dev/null) == "$UID" ]]; then
+    export XAUTHORITY="$HOME/.Xauthority"
+fi
+
+# Use the real user manager bus only when its directory/socket belong to this
+# user and the bus can reach the user systemd manager. Never import environment
+# into the global user manager or change the currently running graphical session.
+vps_user_runtime="/run/user/$UID"
+vps_user_bus="$vps_user_runtime/bus"
+if [[ -d "$vps_user_runtime" && ! -L "$vps_user_runtime" &&
+      -S "$vps_user_bus" && ! -L "$vps_user_bus" &&
+      $(stat -c %u -- "$vps_user_runtime" 2>/dev/null) == "$UID" &&
+      $(stat -c %u -- "$vps_user_bus" 2>/dev/null) == "$UID" ]] &&
+   command -v dbus-send >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 &&
+   vps_bus_reply=$(LC_ALL=C timeout 2s dbus-send --bus="unix:path=$vps_user_bus" \
+       --type=method_call --dest=org.freedesktop.DBus --print-reply \
+       --reply-timeout=1000 /org/freedesktop/DBus \
+       org.freedesktop.DBus.NameHasOwner string:org.freedesktop.systemd1 2>/dev/null) &&
+   grep -Eq '^[[:space:]]*boolean true[[:space:]]*$' <<< "$vps_bus_reply"; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$vps_user_bus"
+fi
+EOF
     cat >> "$destination" <<EOF
 
+if [[ -n "\${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    exec $command
+fi
 if command -v dbus-run-session >/dev/null 2>&1; then
     exec dbus-run-session -- $command
 fi
@@ -1885,8 +1915,8 @@ rd_repair_session_launcher() {
         rm -f -- "$temporary"
         return 40
     fi
-    printf '远程桌面应用菜单路径已更新；未重启服务或结束当前会话。\n'
-    printf '请保存工作，注销图形桌面后重新登录，使 Snap 应用出现在菜单中。\n'
+    printf '远程桌面会话环境与应用菜单路径已更新；未重启服务或结束当前会话。\n'
+    printf '请保存工作，注销图形桌面后重新登录，使修复后的应用启动环境生效。\n'
 }
 
 rd_repair() {
