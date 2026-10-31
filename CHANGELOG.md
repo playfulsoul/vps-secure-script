@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.4 - 2026-10-31
+
+- Include the Snap desktop application directory in managed LXQt, XFCE and MATE sessions, preserving existing XDG lookup precedence and standard defaults without adding duplicate entries.
+- Refresh existing managed session launchers through desktop component repair even when fonts and the window manager are already ready. Updates are atomic and require the original valid transaction.
+- Preserve user home files and running sessions; application-menu changes take effect after graphical logout and a new login.
+
 ## 2.0.3 - 2026-10-31
 
 - Include Openbox explicitly in minimal LXQt installations and provide a module-scoped fallback setting without overwriting user or existing system window-manager preferences.

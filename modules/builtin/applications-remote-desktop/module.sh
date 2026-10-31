@@ -745,6 +745,15 @@ export XDG_CURRENT_DESKTOP=$desktop
 export XDG_SESSION_DESKTOP=$desktop_lower
 export DESKTOP_SESSION=$desktop_lower
 EOF
+    cat >> "$destination" <<'EOF'
+
+# vps-secure-snap-desktop: retain existing application lookup precedence.
+export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+case ":$XDG_DATA_DIRS:" in
+    *:/var/lib/snapd/desktop:*) ;;
+    *) export XDG_DATA_DIRS="$XDG_DATA_DIRS:/var/lib/snapd/desktop" ;;
+esac
+EOF
     if [[ "$RD_PROFILE" == lxqt ]]; then
         cat >> "$destination" <<EOF
 # vps-secure-lxqt-fallback: retain user and existing system preferences.
@@ -1855,13 +1864,40 @@ rd_repair_lxqt() {
     printf '请保存桌面工作，注销图形桌面后重新登录（仅断开窗口不会建立新会话）。\n'
 }
 
+rd_repair_session_launcher() {
+    local temporary RD_PROFILE
+    rd_is_managed || return 10
+    RD_PROFILE=$(rd_state_value profile) || return 50
+    rd_profile_valid "$RD_PROFILE" && [[ "$RD_PROFILE" != auto ]] || return 50
+    [[ -d "$RD_LIB_DIR" && ! -L "$RD_LIB_DIR" &&
+       -f "$RD_LIB_DIR/startwm.sh" && ! -L "$RD_LIB_DIR/startwm.sh" ]] || return 60
+    rd_managed_transaction >/dev/null || return $?
+    temporary=$(mktemp "$RD_LIB_DIR/startwm.XXXXXX") || return 40
+    if ! rd_write_session_script "$temporary"; then
+        rm -f -- "$temporary"
+        return 40
+    fi
+    if cmp -s "$temporary" "$RD_LIB_DIR/startwm.sh"; then
+        rm -f -- "$temporary"
+        return 10
+    fi
+    if ! mv -f -- "$temporary" "$RD_LIB_DIR/startwm.sh"; then
+        rm -f -- "$temporary"
+        return 40
+    fi
+    printf '远程桌面应用菜单路径已更新；未重启服务或结束当前会话。\n'
+    printf '请保存工作，注销图形桌面后重新登录，使 Snap 应用出现在菜单中。\n'
+}
+
 rd_repair() {
-    local font_result=0 wm_result=0
+    local font_result=0 wm_result=0 launcher_result=0
     rd_repair_fonts || font_result=$?
     [[ "$font_result" == 0 || "$font_result" == 10 ]] || return "$font_result"
     rd_repair_lxqt || wm_result=$?
     [[ "$wm_result" == 0 || "$wm_result" == 10 ]] || return "$wm_result"
-    [[ "$font_result" != 10 || "$wm_result" != 10 ]] || return 10
+    rd_repair_session_launcher || launcher_result=$?
+    [[ "$launcher_result" == 0 || "$launcher_result" == 10 ]] || return "$launcher_result"
+    [[ "$font_result" != 10 || "$wm_result" != 10 || "$launcher_result" != 10 ]] || return 10
     return 0
 }
 
@@ -1880,7 +1916,7 @@ rd_repair_fonts() {
         return 50
     }
     if rd_cjk_font_ready; then
-        printf '中文字体已经就绪，无需修改桌面或服务。\n'
+        printf '中文字体已经就绪。\n'
         return 10
     fi
 
