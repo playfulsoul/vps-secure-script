@@ -27,14 +27,26 @@ MOCK
 cat > "$test_root/bin/dbus-send" <<'MOCK'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$VPS_SESSION_FIXTURE_ROOT/probe.log"
+if [[ ${VPS_FIXTURE_DELAY_MANAGER:-0} == 1 && ! -e "$VPS_SESSION_FIXTURE_ROOT/manager-first" ]]; then
+    touch "$VPS_SESSION_FIXTURE_ROOT/manager-first"
+    printf '   boolean false\n'
+    exit "${VPS_FIXTURE_FIRST_EXIT:-0}"
+fi
 printf '   boolean %s\n' "${VPS_FIXTURE_BUS_REPLY:-true}"
 exit "${VPS_FIXTURE_BUS_EXIT:-0}"
 MOCK
 cat > "$test_root/bin/timeout" <<'MOCK'
 #!/usr/bin/env bash
-[[ $1 == 2s ]] || exit 99
-shift
+[[ "$1 $2 $3" == "-k 0.2s 0.5s" ]] || exit 99
+shift 3
 exec "$@"
+MOCK
+cat > "$test_root/bin/sleep" <<'MOCK'
+#!/usr/bin/env bash
+printf 'wait\n' >> "$VPS_SESSION_FIXTURE_ROOT/waits.log"
+if [[ ${VPS_FIXTURE_DELAY_SOCKET:-0} == 1 && -S "$VPS_SESSION_FIXTURE_ROOT/run/user/$UID/bus.saved" ]]; then
+    mv "$VPS_SESSION_FIXTURE_ROOT/run/user/$UID/bus.saved" "$VPS_SESSION_FIXTURE_ROOT/run/user/$UID/bus"
+fi
 MOCK
 cat > "$test_root/bin/desktop" <<'MOCK'
 #!/usr/bin/env bash
@@ -73,11 +85,25 @@ for profile in lxqt xfce mate; do
     actual=$(VPS_FIXTURE_BAD_OWNER="$auth" run_launcher)
     assert_contains "$actual" 'XAUTHORITY=unset' "$profile refuses an authority file owned by another user"
     for path in "$runtime" "$runtime/bus"; do
+        : > "$test_root/probe.log"
         actual=$(VPS_FIXTURE_BAD_OWNER="$path" run_launcher)
+        assert_eq '' "$(cat "$test_root/probe.log")" "$profile never probes a bus with unsafe ownership"
         assert_contains "$actual" 'ENTRY=dbus-run-session' "$profile rejects wrong ownership: ${path##*/}"
         assert_contains "$actual" 'BUS=unset' "$profile discards the previous abstract bus on fallback"
     done
+    rm -f "$test_root/manager-first"
+    actual=$(VPS_FIXTURE_DELAY_MANAGER=1 run_launcher)
+    assert_contains "$actual" "BUS=unix:path=$runtime/bus" "$profile waits for the user manager to become ready"
+    rm -f "$test_root/manager-first"
+    actual=$(VPS_FIXTURE_DELAY_MANAGER=1 VPS_FIXTURE_FIRST_EXIT=124 run_launcher)
+    assert_contains "$actual" "BUS=unix:path=$runtime/bus" "$profile retries a transient probe timeout"
+    mv "$runtime/bus" "$runtime/bus.saved"
+    actual=$(VPS_FIXTURE_DELAY_SOCKET=1 run_launcher)
+    assert_contains "$actual" "BUS=unix:path=$runtime/bus" "$profile waits for a late user socket"
+    : > "$test_root/waits.log"
     actual=$(VPS_FIXTURE_BUS_REPLY=false run_launcher)
+    waits=$(wc -l < "$test_root/waits.log" | tr -d ' ')
+    if (( waits <= 15 )); then pass "$profile permanently unavailable manager has bounded retries"; else fail "$profile exceeds retry bound"; fi
     assert_contains "$actual" 'ENTRY=dbus-run-session' "$profile rejects a bus without the user systemd manager"
     actual=$(VPS_FIXTURE_BUS_EXIT=124 run_launcher)
     assert_contains "$actual" 'ENTRY=dbus-run-session' "$profile rejects a failed probe even if it printed true"
@@ -107,5 +133,16 @@ for profile in lxqt xfce mate; do
 done
 assert_contains "$(cat "$test_root/probe.log")" '--dest=org.freedesktop.DBus' 'probe targets the message bus explicitly'
 assert_contains "$(cat "$test_root/probe.log")" 'org.freedesktop.DBus.NameHasOwner string:org.freedesktop.systemd1' 'probe checks the user service manager'
-assert_eq 'synthetic-cookie-fixture' "$(cat "$auth")" 'session setup does not rewrite X authority cookies'
+# Exercise the real wait clock once, separately from the fast ownership matrix.
+mv "$test_root/bin/sleep" "$test_root/bin/sleep.mock"
+SECONDS=0
+actual=$(VPS_FIXTURE_BUS_REPLY=false run_launcher)
+elapsed=$SECONDS
+assert_contains "$actual" 'ENTRY=dbus-run-session' 'permanently unavailable manager still starts the fallback session'
+if (( elapsed >= 2 && elapsed <= 5 )); then
+    pass 'real retry wait stays within the bounded startup budget'
+else
+    fail "real retry wait is outside the startup budget: $elapsed seconds"
+fi
+assert_eq 'synthetic-cookie-fixture'  "$(cat "$auth")" 'session setup does not rewrite X authority cookies'
 finish_tests
