@@ -774,18 +774,31 @@ fi
 # into the global user manager or change the currently running graphical session.
 vps_user_runtime="/run/user/$UID"
 vps_user_bus="$vps_user_runtime/bus"
-if [[ -d "$vps_user_runtime" && ! -L "$vps_user_runtime" &&
-      -S "$vps_user_bus" && ! -L "$vps_user_bus" &&
-      $(stat -c %u -- "$vps_user_runtime" 2>/dev/null) == "$UID" &&
-      $(stat -c %u -- "$vps_user_bus" 2>/dev/null) == "$UID" ]] &&
-   command -v dbus-send >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 &&
-   vps_bus_reply=$(LC_ALL=C timeout 2s dbus-send --bus="unix:path=$vps_user_bus" \
-       --type=method_call --dest=org.freedesktop.DBus --print-reply \
-       --reply-timeout=1000 /org/freedesktop/DBus \
-       org.freedesktop.DBus.NameHasOwner string:org.freedesktop.systemd1 2>/dev/null) &&
-   grep -Eq '^[[:space:]]*boolean true[[:space:]]*$' <<< "$vps_bus_reply"; then
-    export DBUS_SESSION_BUS_ADDRESS="unix:path=$vps_user_bus"
-fi
+# PAM may start the user manager concurrently with this session. Wait briefly,
+# retaining every ownership check on each attempt; never start a service here.
+vps_bus_deadline=$((SECONDS + 4))
+for ((vps_bus_attempt = 0; vps_bus_attempt < 16; vps_bus_attempt++)); do
+    if [[ -L "$vps_user_runtime" || -L "$vps_user_bus" ]] ||
+       { [[ -e "$vps_user_runtime" ]] && [[ $(stat -c %u -- "$vps_user_runtime" 2>/dev/null) != "$UID" ]]; } ||
+       { [[ -e "$vps_user_bus" ]] && [[ $(stat -c %u -- "$vps_user_bus" 2>/dev/null) != "$UID" ]]; }; then
+        break
+    fi
+    if [[ -d "$vps_user_runtime" && ! -L "$vps_user_runtime" &&
+          -S "$vps_user_bus" && ! -L "$vps_user_bus" &&
+          $(stat -c %u -- "$vps_user_runtime" 2>/dev/null) == "$UID" &&
+          $(stat -c %u -- "$vps_user_bus" 2>/dev/null) == "$UID" ]] &&
+       command -v dbus-send >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 &&
+       vps_bus_reply=$(LC_ALL=C timeout -k 0.2s 0.5s dbus-send --bus="unix:path=$vps_user_bus" \
+           --type=method_call --dest=org.freedesktop.DBus --print-reply \
+           --reply-timeout=500 /org/freedesktop/DBus \
+           org.freedesktop.DBus.NameHasOwner string:org.freedesktop.systemd1 2>/dev/null) &&
+       grep -Eq '^[[:space:]]*boolean true[[:space:]]*$' <<< "$vps_bus_reply"; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$vps_user_bus"
+        break
+    fi
+    (( SECONDS >= vps_bus_deadline || vps_bus_attempt == 15 )) && break
+    sleep 0.25
+done
 EOF
     cat >> "$destination" <<EOF
 
