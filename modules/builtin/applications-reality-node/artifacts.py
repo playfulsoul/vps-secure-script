@@ -5,11 +5,13 @@ from pathlib import Path, PurePosixPath
 import stat
 import zipfile
 
-VERSION = "26.3.27"
-ARCHIVE_URL = "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip"
-ARCHIVE_SHA256 = "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae"
+VERSION = "26.10.31"
+ARCHIVE_URL = "https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip"
+ARCHIVE_SHA256 = "e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214"
 RELEASES = {
     VERSION: ARCHIVE_SHA256,
+    # Previous pins remain recognizable for exact transaction recovery only.
+    "26.3.27": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae",
     "26.2.6": "29ce535b56e207a406ffa1c2d4842dcc410be003eff8ec508bb732abc9f8e385",
 }
 MAX_ARCHIVE = 128 * 1024 * 1024

@@ -13,6 +13,12 @@ spec.loader.exec_module(artifacts)
 
 
 class ArtifactTests(unittest.TestCase):
+    def test_security_pin_and_recovery_versions(self):
+        self.assertEqual(artifacts.VERSION, '26.10.31')
+        self.assertEqual(artifacts.ARCHIVE_SHA256, 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214')
+        self.assertIn('/v26.10.31/', artifacts.ARCHIVE_URL)
+        self.assertEqual(set(artifacts.RELEASES), {'26.10.31', '26.3.27', '26.2.6'})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

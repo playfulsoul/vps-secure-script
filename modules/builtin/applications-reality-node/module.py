@@ -10,8 +10,21 @@ from lifecycle import Node, NodeError, install_signal_handlers
 from target_check import TargetError
 
 
+def security_notice(node):
+    if not node.installed():
+        return
+    version = node.settings()['version']
+    print('XRAY_CONFIGURED_VERSION=' + version + '; CURRENT_PIN=' + artifacts.VERSION)
+    print('以上是模块记录的配置版本；不单独证明当前运行进程版本或整台服务器已安全。')
+    if version != artifacts.VERSION:
+        print('安全提示：当前受管 Xray 不是本版固定核心，请在节点菜单 6 升级；仅更新平台不会更新运行中的 Xray。')
+    print('升级保留现有配置；若显式启用了 tcpMptcp，新版默认关闭不代表该配置已关闭。')
+    print('Linux 内核修复状态未检查；关闭 MPTCP 或更新 Xray 不等于修复 Linux 内核。')
+
+
 def main(argv=None):
     os.umask(0o077)
+    args = None
     try:
         parser = preflight.SafeParser(description=__doc__)
         parser.add_argument('action', choices=('check', 'plan', 'preflight', 'status', 'doctor', 'verify',
@@ -29,7 +42,8 @@ def main(argv=None):
         if args.action == 'plan':
             print('仅管理单个 VLESS + REALITY + Vision 节点；目标必须是已准备好的本机 HTTPS 服务。')
             print('安装新增独立低权限服务及精确防火墙规则；操作前备份，失败恢复。不会更改 SSH、旧面板、网站或证书。')
-            print('卸载保留受保护的恢复资料和已校验内核。备份与客户端导出含凭据，不可公开。')
+            print('卸载保留受保护的恢复资料和已校验 Xray 核心。备份与客户端导出含凭据，不可公开。')
+            print('平台升级不会自动升级已安装的 Xray；请另选节点菜单 6。Linux 内核需按发行版公告单独修复。')
             return 0
         if args.action == 'check':
             return preflight.main(['check'])
@@ -56,6 +70,7 @@ def main(argv=None):
             else:
                 node.firewall_gate()
                 print(node.verify())
+            security_notice(node)
             return 0
         install_signal_handlers()
         with node.locked():
@@ -81,13 +96,24 @@ def main(argv=None):
                 result = node.rollback(args.transaction)
             else:
                 result = node.change_state(args.action)
+        if args.action == 'rollback' or (args.action == 'configure' and args.upgrade):
+            if node.installed():
+                security_notice(node)
         print('NODE_OPERATION=' + ('unchanged' if result == 10 else 'completed') + '; PUBLIC_CLIENT=not_tested')
         return result
     except (NodeError, preflight.PreflightError) as error:
         print('NODE_OPERATION=' + str(error), file=sys.stderr)
+        if str(error) == 'upgrade_failed_previous_core_restored_security_update_incomplete':
+            print('安全升级未完成：已恢复原 Xray 核心以保留服务，旧版本风险仍需处理。', file=sys.stderr)
+        elif args is not None and args.action == 'configure' and args.upgrade:
+            print('升级未完成；旧核心可能仍在运行，请查看节点状态及错误，不要视为已修复。', file=sys.stderr)
         return error.code
     except TargetError as error:
         print('NODE_OPERATION=' + str(error), file=sys.stderr)
+        if str(error) == 'upgrade_failed_previous_core_restored_security_update_incomplete':
+            print('安全升级未完成：已恢复原 Xray 核心以保留服务，旧版本风险仍需处理。', file=sys.stderr)
+        elif args is not None and args.action == 'configure' and args.upgrade:
+            print('升级未完成；旧核心可能仍在运行，请查看节点状态及错误，不要视为已修复。', file=sys.stderr)
         return 30
     except Exception:
         print('NODE_OPERATION=unexpected_failure_redacted; CHECK_PENDING_RECOVERY=required', file=sys.stderr)

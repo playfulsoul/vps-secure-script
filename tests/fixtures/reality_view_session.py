@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / 'modules/builtin/applications-reality-node'))
 import client_view as view
 from client_data import share_uri
 import lifecycle as life
+import artifacts
 
 
 def snapshot(root):
@@ -39,7 +40,7 @@ vps_ui_main_menu
     with tempfile.TemporaryDirectory() as temporary:
         parent = Path(temporary).resolve()
         node = FakeNode(parent)
-        args = argparse.Namespace(core_version='26.2.6', public_address='8.8.8.8', node_port=24443,
+        args = argparse.Namespace(core_version=artifacts.VERSION, public_address='8.8.8.8', node_port=24443,
                                   target_host='127.0.0.1', target_port=8443, server_name='synthetic.example')
         with patch.object(life, 'check_target', return_value='synthetic'), patch.object(life.time, 'sleep'), node.locked():
             node.install(args)

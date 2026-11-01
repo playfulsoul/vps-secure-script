@@ -483,7 +483,9 @@ WantedBy=multi-user.target
             self.write_json(record_path, record)
             durable_unlink(self.pending)
             code = 50 if isinstance(original_error, NodeError) and original_error.code == 50 else 40
-            raise NodeError('operation_failed_previous_state_restored', code) from None
+            reason = ('upgrade_failed_previous_core_restored_security_update_incomplete'
+                      if kind == 'upgrade' else 'operation_failed_previous_state_restored')
+            raise NodeError(reason, code) from None
         record['status'] = 'committed'
         self.write_json(record_path, record)
         self.write_json(self.root / 'last.json', {'id': identifier})
@@ -499,6 +501,8 @@ WantedBy=multi-user.target
         self.ownership()
         if self.pending.exists():
             raise NodeError('pending_recovery_blocks_apply')
+        if args.core_version != artifacts.VERSION:
+            raise NodeError('new_install_requires_current_pinned_core', 64)
         settings = self.fresh_settings(args)
         if settings['target_host'] != '127.0.0.1':
             raise NodeError('ipv4_loopback_required_for_current_lifecycle')
@@ -541,6 +545,8 @@ WantedBy=multi-user.target
         if self.pending.exists():
             raise NodeError('pending_recovery_blocks_upgrade')
         settings = self.settings()
+        if version != artifacts.VERSION:
+            raise NodeError('upgrade_requires_current_pinned_core', 64)
         self.host_gate(settings)
         if version == settings['version']:
             self.verify()
