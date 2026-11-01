@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.6 - 2026-11-01
+
+- Rename desktop menu 6 to clearly describe repair of an existing desktop and explain when it is needed.
+- Clarify that repair is not an optional application installer; update the corresponding user guide and installation examples.
+- No changes to repair actions, desktop startup, installed dependencies or server access settings.
+
 ## 2.0.5 - 2026-10-31
 
 - Preserve explicit X authority settings and safely inherit the user's authority file when needed for managed desktop applications.
