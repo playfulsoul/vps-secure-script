@@ -34,6 +34,9 @@ else
 fi
 
 actual=$(printf '6\ny\n12\ny\n0\n' | vps_ui_reality_menu)
+assert_contains "$actual" '升级 Xray 节点核心' 'menu distinguishes Xray core from Linux kernel'
+assert_contains "$actual" '会短暂重启该节点' 'upgrade explains service interruption before confirmation'
+assert_contains "$actual" '此操作也不会修复 Linux 内核' 'upgrade does not claim Linux kernel remediation'
 assert_contains "$actual" 'ARG:--upgrade' 'upgrade uses configure contract'
 assert_contains "$actual" 'ARG:--export-client' 'protected export uses configure contract'
 finish_tests

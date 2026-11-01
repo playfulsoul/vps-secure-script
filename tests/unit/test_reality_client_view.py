@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / 'modules/builtin/applications-reality-node'))
 sys.path.insert(0, str(ROOT / 'tests/unit'))
 import client_view as view
 import lifecycle as life
+import artifacts
 from client_data import share_uri
 from test_reality_lifecycle import FakeNode
 
@@ -110,7 +111,7 @@ class ClientReadTests(unittest.TestCase):
         for patcher in (patch.object(life, 'check_target', return_value='synthetic'), patch.object(life.time, 'sleep')):
             patcher.start()
             self.addCleanup(patcher.stop)
-        args = argparse.Namespace(core_version='26.2.6', public_address='8.8.8.8', node_port=24443,
+        args = argparse.Namespace(core_version=artifacts.VERSION, public_address='8.8.8.8', node_port=24443,
                                   target_host='127.0.0.1', target_port=8443, server_name='synthetic.example')
         with self.node.locked():
             self.node.install(args)

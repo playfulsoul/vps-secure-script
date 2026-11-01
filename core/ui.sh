@@ -857,6 +857,15 @@ vps_ui_reality_client_view() {
     return 0
 }
 
+vps_ui_reality_upgrade() {
+    vps_module_run applications.reality-node status || return $?
+    printf '本次目标：Xray 26.10.31（上方为模块记录的当前版本）。\n'
+    printf '本操作升级平台管理的 Xray 节点核心，会短暂重启该节点；保留配置和凭据，失败按事务恢复。\n'
+    printf '只更新平台不会更新运行中的 Xray；此操作也不会修复 Linux 内核。\n'
+    printf '请另按发行版公告更新 Linux 内核，并在授权重启后核验；本操作不更改全局 MPTCP 设置。\n'
+    vps_ui_run_action applications.reality-node configure --upgrade
+}
+
 vps_ui_reality_menu() {
     local choice
     while true; do
@@ -865,7 +874,7 @@ vps_ui_reality_menu() {
         printf '\n单节点 · 自有本机 HTTPS 目标 · 不接管旧面板\n\n'
         printf '  1. 显示可复制导入链接\n  2. 显示本机二维码\n'
         printf '  3. 查看节点状态\n  4. 安装节点\n  5. 检查节点（不替代公网客户端验收）\n'
-        printf '  6. 升级到当前已校验内核\n  7. 创建受保护备份\n  8. 撤销最近一次变更\n'
+        printf '  6. 升级 Xray 节点核心（26.10.31）\n  7. 创建受保护备份\n  8. 撤销最近一次变更\n'
         printf '  9. 停止节点\n  10. 启动节点\n  11. 卸载节点（保留恢复资料）\n'
         printf '  12. 导出受保护文件（高级用途，不直接显示）\n  0. 返回\n'
         read -r -p '请选择: ' choice || return 0
@@ -875,7 +884,7 @@ vps_ui_reality_menu() {
             3) vps_ui_show_result '节点状态' vps_module_run applications.reality-node status ;;
             4) vps_ui_show_result '安装节点' vps_ui_reality_install ;;
             5) vps_ui_show_result '检查节点' vps_module_run applications.reality-node verify ;;
-            6) vps_ui_show_result '升级内核' vps_ui_run_action applications.reality-node configure --upgrade ;;
+            6) vps_ui_show_result '升级 Xray 节点核心' vps_ui_reality_upgrade ;;
             7) vps_ui_show_result '节点备份' vps_ui_run_action applications.reality-node backup ;;
             8) vps_ui_show_result '节点回滚' vps_ui_run_action applications.reality-node rollback ;;
             9) vps_ui_show_result '停止节点' vps_ui_run_action applications.reality-node stop ;;

@@ -12,6 +12,10 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'modules/builtin/applications-reality-node'))
 import lifecycle as life
 import artifacts
+import module as node_entry
+import contextlib
+import io
+from types import SimpleNamespace
 
 
 class FakeNode(life.Node):
@@ -113,7 +117,7 @@ class LifecycleTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.node = FakeNode(Path(self.temp.name).resolve())
         self.node.initialize()
-        self.args = argparse.Namespace(core_version='26.2.6', public_address='8.8.8.8', node_port=24443,
+        self.args = argparse.Namespace(core_version=artifacts.VERSION, public_address='8.8.8.8', node_port=24443,
                                        target_host='127.0.0.1', target_port=8443, server_name='target.example')
         for patcher in (patch.object(life, 'check_target', return_value='ok'), patch.object(life.time, 'sleep')):
             patcher.start()
@@ -121,6 +125,53 @@ class LifecycleTests(unittest.TestCase):
 
     def install(self):
         self.assertEqual(self.node.install(self.args), 0)
+
+    def legacy_install(self, version='26.3.27'):
+        # Reconstruct the old installed state using the old platform's pin.
+        self.args.core_version = version
+        with patch.object(artifacts, 'VERSION', version):
+            self.install()
+
+    def test_old_pins_rejected_for_fresh_install(self):
+        before = self.node.capture()
+        for version in ('26.2.6', '26.3.27'):
+            self.args.core_version = version
+            with self.assertRaisesRegex(life.NodeError, 'new_install_requires_current'):
+                self.node.install(self.args)
+            self.assertEqual(self.node.capture(), before)
+
+    def test_both_legacy_versions_upgrade_without_changing_config(self):
+        self.legacy_install('26.2.6')
+        before = self.node.files['config'].read_bytes()
+        with self.assertRaisesRegex(life.NodeError, 'upgrade_requires_current'):
+            self.node.upgrade('26.3.27')
+        self.assertEqual(self.node.upgrade(artifacts.VERSION), 0)
+        self.assertEqual(self.node.files['config'].read_bytes(), before)
+        with self.assertRaisesRegex(life.NodeError, 'upgrade_requires_current'):
+            self.node.upgrade('26.3.27')
+
+    def test_failed_security_upgrade_restores_old_core_but_reports_failure(self):
+        self.legacy_install()
+        before = self.node.capture()
+        self.node.fail_start = 1
+        with self.assertRaisesRegex(life.NodeError, 'upgrade_failed_previous_core_restored_security_update_incomplete') as caught:
+            self.node.upgrade(artifacts.VERSION)
+        self.assertNotEqual(caught.exception.code, 0)
+        self.assertEqual(self.node.capture(), before)
+        self.assertFalse(self.node.pending.exists())
+
+    def test_uninstalled_node_status_checks_do_not_require_settings(self):
+        self.install()
+        self.node.change_state('uninstall')
+        for action in ('status', 'verify', 'doctor'):
+            with patch.object(node_entry.preflight, 'platform_check'), patch.object(node_entry, 'os', SimpleNamespace(umask=lambda value: None, geteuid=lambda: 0)), patch.object(node_entry, 'Node', return_value=self.node), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(node_entry.main([action]), 0)
+
+    def test_installed_node_missing_settings_remains_an_error(self):
+        self.install()
+        self.node.files['settings'].unlink()
+        with self.assertRaises(Exception):
+            node_entry.security_notice(self.node)
 
     def test_install_repeat_and_permissions(self):
         before = self.node.capture()
@@ -165,7 +216,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(self.node.rollback(), 10)
 
     def test_upgrade_and_exact_rollback_preserve_credentials(self):
-        self.install()
+        self.legacy_install()
         before = self.node.capture()
         identifier = self.node.settings()['client_id']
         self.assertEqual(self.node.upgrade(artifacts.VERSION), 0)
@@ -190,7 +241,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(self.node.capture(), before)
 
     def test_backup_restore_after_upgrade(self):
-        self.install()
+        self.legacy_install()
         before = self.node.capture()
         backup = self.node.backup()
         self.node.upgrade(artifacts.VERSION)

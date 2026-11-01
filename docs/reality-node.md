@@ -1,5 +1,7 @@
 # 独立 REALITY 节点（Beta）
 
+先阅读 [CVE-2026-98432 安全处理说明](security-cve-2026-98432.md)。节点菜单 6 升级的是 Xray 核心，不是 Linux 内核；平台更新不会自动升级已有节点。
+
 ## 适用与停止条件
 
 仅适用于 Debian 13、x86_64、systemd、单公网 IPv4、简单 UFW；管理一个 VLESS + REALITY + Vision 节点。不接管现有 x-ui、Xray、网站、复杂路由或容器防火墙。其他系统不属于本模块支持范围。
@@ -12,7 +14,7 @@
 
 **位置：目标 VPS 的 SSH 终端，不是本机电脑终端。以下命令按 root 编写，不要求安装 sudo。** 已有 sudo 权限的普通管理员可先用 `sudo -i` 进入 root shell；没有该权限或没有 sudo 时停止，使用已有授权的 root 登录，不为执行本文放宽登录策略。保持另一条可用管理连接。
 
-本指南对应已发布的 `2.1.0-beta.5` 预发布版；README 的默认稳定版 `2.0.0` 安装块不含节点模块，不能替代。**从官方 Release 下载同版本的归档和校验文件。** 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。
+本指南对应 `2.1.0-beta.5.8` 预发布版；README 的默认稳定版 `2.0.7` 安装块不含节点模块，不能替代。**从官方 Release 下载同版本的归档和校验文件。** 若下载返回 404、版本不符或校验失败，立即停止，不退回 beta.2 或绕过校验。
 
 下载失败时先停止：curl 不存在就安装 curl 与 ca-certificates；连接超时先检查 VPS 到 GitHub 及其下载域名的 HTTPS 可达性，稍后重试，不能仅凭超时认定服务商封锁；404 核对版本和官方 Release 文件名；SHA-256 失败不要安装，重新下载同一版本的两个官方文件。不要关闭防火墙、改 DNS、使用未知镜像或跳过校验。
 
@@ -43,17 +45,17 @@
   umask 022
   node_install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-node-install.XXXXXX")
   cd "$node_install_work"
-  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz
-  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5/vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
-  sha256sum -c vps-secure-platform-2.1.0-beta.5.tar.gz.sha256
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5.8/vps-secure-platform-2.1.0-beta.5.8.tar.gz
+  curl --fail --location --show-error --connect-timeout 10 --max-time 180 --retry 2 --retry-delay 2 --retry-max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 --remote-name https://github.com/playfulsoul/vps-secure-script/releases/download/v2.1.0-beta.5.8/vps-secure-platform-2.1.0-beta.5.8.tar.gz.sha256
+  sha256sum -c vps-secure-platform-2.1.0-beta.5.8.tar.gz.sha256
   mkdir source
-  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.tar.gz -C source
+  tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.1.0-beta.5.8.tar.gz -C source
   cd source
-  test "$(cat VERSION)" = 2.1.0-beta.5
+  test "$(cat VERSION)" = 2.1.0-beta.5.8
   test -f modules/builtin/applications-reality-node/target_service.py
   ./install.sh
   /usr/local/bin/vps --version
-  test "$(cat /usr/lib/vps-secure/VERSION)" = 2.1.0-beta.5
+  test "$(cat /usr/lib/vps-secure/VERSION)" = 2.1.0-beta.5.8
   test "$(cat /usr/lib/vps-secure/BUILD_ID)" = "$(cat BUILD_ID)"
   /usr/local/bin/vps module info applications.reality-node
 )
@@ -184,7 +186,7 @@ set -eu
 
 - 1：显示可复制导入链接；2：显示本机二维码。
 - 3：查看状态；4：安装节点；5：检查节点，不替代公网客户端验收。
-- 6：升级到当前已校验内核；7：创建受保护备份。
+- 6：升级 Xray 节点核心（26.10.31）；7：创建受保护备份。
 - 8：撤销最近一次变更，不是自动恢复刚创建的备份。
 - 9：停止；10：启动；11：卸载节点并保留恢复资料。
 - 12：高级受保护文件导出；0：返回。

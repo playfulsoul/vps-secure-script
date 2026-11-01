@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0-beta.5.8 - 2026-11-01
+
+- Pin managed Xray installs and upgrades to verified upstream v26.10.31, which disables MPTCP by default. Keep previous pins recognizable only for exact recovery.
+- Preserve node configuration and transaction rollback; report a failed security upgrade even when the old core is restored.
+- Identify Xray upgrade explicitly in menu 6 and distinguish platform, node-core and Linux-kernel updates.
+
 ## 2.1.0-beta.5.7 - 2026-11-01
 
 - Rename desktop menu 6 to clearly describe repair of an existing desktop and explain when it is needed.
