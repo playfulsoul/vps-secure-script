@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.7 - 2026-11-01
+
+- Add the CVE-2026-98432 safety guide with official upstream and distribution references.
+- This stable documentation update does not add the REALITY/Xray module, update third-party node services, modify MPTCP settings or repair the Linux kernel.
+
 ## 2.0.6 - 2026-11-01
 
 - Rename desktop menu 6 to clearly describe repair of an existing desktop and explain when it is needed.

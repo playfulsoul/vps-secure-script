@@ -2,7 +2,9 @@
 
 原 VPS Secure Platform。一款安全优先、模块化、可扩展的 VPS 管理工具。安装后只需输入 `vps`，按照中文数字菜单操作，不需要了解 GitHub、Shell 或模块命令。
 
-当前正式版本为 `2.0.6`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
+[CVE-2026-98432 安全处理说明](docs/security-cve-2026-98432.md)：平台更新不等于 Linux 内核修复。稳定版不含独立 REALITY 模块，不会升级第三方 Xray；请按服务来源及发行版公告分别处理。
+
+当前正式版本为 `2.0.7`。它保留了 1.x 简单直观的彩色分区菜单，同时使用 2.x 模块化安全内核：执行前说明变化、保留当前 SSH 端口、执行后自动验证，并为关键操作保存回滚点。
 
 2.0.5 修复远程图形会话中 Firefox 的启动环境与用户服务就绪等待；LXQt 的 Firefox 桌面快捷方式使用原生应用入口，双击直接启动。已安装用户请升级后进入「应用安装 → 远程图形桌面 → 6 修复已安装的桌面」，保存工作、注销桌面并重新登录；仅断开连接不会建立新会话。
 
@@ -32,7 +34,7 @@ vps
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  🎯 VPS 管理与安全平台  2.0.6
+  🎯 VPS 管理与安全平台  2.0.7
      安全优先 · 模块化 · 可扩展
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 系统：Ubuntu 24.04
@@ -126,11 +128,11 @@ apt-get install -y ca-certificates curl
 umask 022 &&
 install_work=$(mktemp -d "${TMPDIR:-/tmp}/vps-secure-install.XXXXXX") &&
 cd "$install_work" &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.6/vps-secure-platform-2.0.6.tar.gz &&
-curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.6/vps-secure-platform-2.0.6.tar.gz.sha256 &&
-sha256sum -c vps-secure-platform-2.0.6.tar.gz.sha256 &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.7/vps-secure-platform-2.0.7.tar.gz &&
+curl -fLO https://github.com/playfulsoul/vps-secure-script/releases/download/v2.0.7/vps-secure-platform-2.0.7.tar.gz.sha256 &&
+sha256sum -c vps-secure-platform-2.0.7.tar.gz.sha256 &&
 mkdir source &&
-tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.6.tar.gz -C source &&
+tar --no-same-owner --no-same-permissions -xzf vps-secure-platform-2.0.7.tar.gz -C source &&
 cd source &&
 ./install.sh &&
 vps
@@ -138,7 +140,7 @@ vps
 ```
 
 普通 sudo 用户应把最后两条命令改为 `sudo ./install.sh` 和 `sudo vps`。
-校验成功时会显示 `vps-secure-platform-2.0.6.tar.gz: OK`。
+校验成功时会显示 `vps-secure-platform-2.0.7.tar.gz: OK`。
 请保留上面的独立安装目录，不要把旧版发布包直接解压到 `/root`；安全解压参数会避免
 归档中的所有者或权限覆盖安装目录。
 
